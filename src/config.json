@@ -1,0 +1,24 @@
+{
+  "globalSurfaceModel": "trava/modely_ctvrtky/objekty1.glb",
+  "islandScaleHorizontal": 2,
+  "cameraFov": 35,
+  "cameraHeight": -0.1,
+  "blurIntensity": 20,
+  "physics": {
+    "mass": 2.5,
+    "tension": 500,
+    "friction": 100,
+    "swipeVelocityThreshold": 0.5,
+    "swipeDistanceThreshold": 0.3
+  },
+  "hdriIntensity": 250,
+  "particlePhysics": {
+    "mouseRadius": 0.15,
+    "floatAmplitude": 0.025,
+    "floatSpeed": 1,
+    "mouseForce": 0.01,
+    "laserLength": 0.3,
+    "laserIntensity": 3,
+    "returnSpeed": 0.02
+  }
+}
