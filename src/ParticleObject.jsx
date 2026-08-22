@@ -29,16 +29,18 @@ void main() {
     
     // MYŠ & TEKUTINA
     float t = dot(pos.xyz - uMousePos, uMouseDir);
-    if (t > 0.0 && t < 15.0) {
+    if (t > 0.0) {
         vec3 closestPt = uMousePos + uMouseDir * t;
         float d = distance(pos.xyz, closestPt);
         
         if (d < uMouseRadius) {
             float f = 1.0 - (d / uMouseRadius);
             f = smoothstep(0.0, 1.0, f);
-            float depthFalloff = 1.0 - (t / 15.0);
             
-            vec3 push = uMouseVel * f * (uMouseForce * 8.0);
+            // Útlum do dálky (např. 1000 jednotek, takže prakticky nekonečný laser)
+            float depthFalloff = 1.0 - clamp(t / 1000.0, 0.0, 1.0);
+            
+            vec3 push = uMouseVel * f * (uMouseForce * 2.0);
             
             vel.xyz += push * depthFalloff;
         }
@@ -207,7 +209,9 @@ const VideoRefractionMaterialImpl = shaderMaterial(
 
 extend({ VideoRefractionMaterialImpl });
 
-export function ParticleMaterial({ settings, videoTexture }) {
+import { a } from '@react-spring/three';
+
+export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
   if (settings.colorMode === 'video' && videoTexture) {
     return (
       <videoRefractionMaterialImpl 
@@ -220,7 +224,7 @@ export function ParticleMaterial({ settings, videoTexture }) {
     );
   }
 
-  const onBeforeCompile = (shader) => {
+  const onBeforeCompile = React.useCallback((shader) => {
     shader.uniforms.tPositions = { value: null };
     
     shader.vertexShader = `
@@ -240,10 +244,10 @@ export function ParticleMaterial({ settings, videoTexture }) {
       transformed += computedPos;
       `
     );
-  };
+  }, []);
 
   return (
-    <meshPhysicalMaterial 
+    <a.meshPhysicalMaterial 
       onBeforeCompile={onBeforeCompile}
       vertexColors={settings.colorMode === 'vertex'}
       color={settings.colorMode === 'single' ? (settings.baseColor || '#3b82f6') : '#ffffff'}
@@ -252,6 +256,8 @@ export function ParticleMaterial({ settings, videoTexture }) {
       transmission={settings.transmission ?? 0.0}
       thickness={settings.thickness ?? 0.0}
       ior={1.5}
+      transparent={true}
+      opacity={opacity}
     />
   );
 }
@@ -286,18 +292,35 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
     // Nové nastavení rychlosti návratu částic
     posUniforms.uReturnSpeed.value = phys.returnSpeed ?? 0.05;
 
-    velUniforms.uMouseRadius.value = phys.mouseRadius ?? 2.0;
-    velUniforms.uMouseForce.value = phys.mouseForce ?? 1.0;
-
-    const planeNormal = new THREE.Vector3(0, 0, 1);
-    planeNormal.transformDirection(meshRef.current.matrixWorld); 
+    // Interakční rovina už není fixovaná na Z osu objektu, ale vždy čelem ke kameře.
+    // Tím zajistíme, že raycaster vždy najde průsečík, i když kamera obíhá objekt (jako u BackgroundCylinder).
+    const planeNormal = state.camera.getWorldDirection(new THREE.Vector3()).negate();
     const planePoint = new THREE.Vector3();
     meshRef.current.getWorldPosition(planePoint); 
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, planePoint);
     const rawTarget = state.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
     
     const invMat = new THREE.Matrix4().copy(meshRef.current.matrixWorld).invert();
-    const localCameraPos = state.camera.position.clone().applyMatrix4(invMat);
+    const worldCameraPos = new THREE.Vector3();
+    state.camera.getWorldPosition(worldCameraPos);
+    const localCameraPos = worldCameraPos.clone().applyMatrix4(invMat);
+
+    // Dynamické škálování "laseru" podle vzdálenosti kamery
+    // Aby divák odháněl vždy stejné množství kuliček na obrazovce bez ohledu na zoom
+    const distanceToCamera = Math.max(0.1, localCameraPos.length());
+    const referenceDistance = 18.0; // Původní Z pozice kamery
+    const scaleFactor = distanceToCamera / referenceDistance;
+    
+    velUniforms.uMouseRadius.value = (phys.mouseRadius ?? 2.0) * scaleFactor;
+    
+    // Sjednocení vizuálního efektu: 
+    // Větší objekty (např. válec s radius 8) potřebují větší absolutní sílu odhození než malé objekty (kostka s radius 2)
+    // Budeme to škálovat úměrně k nastavenému poloměru. (Základní referenční radius je 2.0)
+    const objectRadius = settings.radius ?? 2.0;
+    const sizeScale = objectRadius / 2.0;
+    
+    const forceMultiplier = settings.mouseForceMultiplier ?? 1.0;
+    velUniforms.uMouseForce.value = (phys.mouseForce ?? 1.0) * forceMultiplier * sizeScale;
 
     if (rawTarget) {
       meshRef.current.worldToLocal(rawTarget);
@@ -310,6 +333,12 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
       }
 
       mouseVelocity.subVectors(smoothedMouse.current, prevMouse.current);
+      
+      // Omezení maximální rychlosti myši, aby při pohybu kamery nevznikl gigantický "odfuk"
+      if (mouseVelocity.length() > 1.5) {
+        mouseVelocity.setLength(1.5);
+      }
+      
       prevMouse.current.copy(smoothedMouse.current);
 
       const rayDir = new THREE.Vector3().subVectors(smoothedMouse.current, localCameraPos).normalize();
@@ -351,7 +380,7 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
   });
 }
 
-function StandardParticleObject({ settings, appConfig, videoTexture }) {
+function StandardParticleObject({ settings, appConfig, videoTexture, opacity }) {
   const meshRef = useRef();
   const pointerLightRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -379,10 +408,13 @@ function StandardParticleObject({ settings, appConfig, videoTexture }) {
       } else if (shape === 'cylinder') {
         const u = Math.random();
         const theta = 2 * Math.PI * u;
-        const r = radius * Math.pow(Math.random(), 0.5);
+        // Chceme to jen po povrchu nebo uvnitr?
+        // Nechame r random uvnitr valce jako to bylo, nebo tloustku steny
+        const r = radius + (Math.random() - 0.5) * 2; 
+        const h = settings.height ?? 40;
         x = r * Math.cos(theta);
         z = r * Math.sin(theta);
-        y = (Math.random() - 0.5) * radius * 2;
+        y = (Math.random() - 0.5) * h;
       } else {
         const u = Math.random();
         const v = Math.random();
@@ -464,7 +496,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture }) {
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -474,7 +506,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture }) {
   );
 }
 
-function CustomParticleObject({ settings, appConfig, videoTexture }) {
+function CustomParticleObject({ settings, appConfig, videoTexture, opacity }) {
   const { scene } = useGLTF(`/obsah/${settings.customModel}`);
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -486,11 +518,8 @@ function CustomParticleObject({ settings, appConfig, videoTexture }) {
   const posY = settings.objectY ?? 2.0;
   const posZ = -(settings.objectZ ?? 4.0);
   
-  const { vertices, center } = useMemo(() => {
+  const { vertices, center, maxDim } = useMemo(() => {
     const pts = [];
-    const bbox = new THREE.Box3().setFromObject(scene);
-    const c = new THREE.Vector3();
-    bbox.getCenter(c);
 
     scene.traverse((child) => {
       if ((child.isMesh || child.isPoints) && child.geometry) {
@@ -515,52 +544,56 @@ function CustomParticleObject({ settings, appConfig, videoTexture }) {
       }
     });
 
-    for (let i = pts.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pts[i], pts[j]] = [pts[j], pts[i]];
+    const bbox = new THREE.Box3();
+    pts.forEach(p => bbox.expandByPoint(p.v));
+    
+    const c = new THREE.Vector3();
+    bbox.getCenter(c);
+    
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+    const mDim = Math.max(size.x, size.y, size.z, 0.001);
+
+    const density = settings.densityPercent !== undefined ? settings.densityPercent : 100;
+    const keepRatio = density / 100;
+    
+    const finalPts = [];
+    for (let i = 0; i < pts.length; i++) {
+      if (Math.random() <= keepRatio) {
+        finalPts.push(pts[i]);
+      }
     }
+    
+    return { vertices: finalPts, center: c, maxDim: mDim };
+  }, [scene, settings.densityPercent]);
 
-    return { vertices: pts, center: c };
-  }, [scene]);
-
-  const radiusScale = (settings.radius ?? 2.0) / 2.0;
-  const densityPercent = settings.densityPercent ?? 100;
-  const count = vertices.length > 0 ? Math.max(1, Math.floor(vertices.length * (densityPercent / 100))) : 0;
+  const count = vertices.length;
 
   const particlesData = useMemo(() => {
     const data = [];
     const baseColorObj = new THREE.Color(settings.baseColor || '#3b82f6');
+    
+    // Normalizujeme velikost modelu tak, aby odpovídal nastavenému poloměru (radius)
+    const targetRadius = settings.radius ?? 2.0;
+    // maxDim je průměr (diameter) modelu, takže chceme aby maxDim * scale = targetRadius * 2
+    const scaleMultiplier = (targetRadius * 2.0) / maxDim;
 
     for (let i = 0; i < count; i++) {
-      let x = 0, y = 0, z = 0;
-      let color = baseColorObj;
-      
-      if (vertices.length > 0) {
-        const vIndex = i % vertices.length; 
-        const vertexObj = vertices[vIndex];
-        
-        x = vertexObj.v.x;
-        y = vertexObj.v.y;
-        z = vertexObj.v.z;
+      const vData = vertices[i];
+      let x = (vData.v.x - center.x) * scaleMultiplier;
+      let y = (vData.v.y - center.y) * scaleMultiplier;
+      let z = (vData.v.z - center.z) * scaleMultiplier;
 
-        if (settings.colorMode === 'vertex') {
-          color = vertexObj.c;
-        }
-
-        x *= radiusScale;
-        y *= radiusScale;
-        z *= radiusScale;
-      }
-
-      const baseSize = settings.baseSize ?? 0.1;
+      const baseSize = settings.baseSize ?? 0.05;
       const sizeRandomness = settings.sizeRandomness ?? 0.5;
 
-      const isLarge = Math.random() > 0.95;
       let scale = baseSize * (1.0 + (Math.random() - 0.5) * sizeRandomness);
-      if (isLarge) {
-        scale += baseSize * (2.0 + Math.random()) * sizeRandomness;
-      }
       scale = Math.max(0.001, scale);
+
+      let color = baseColorObj;
+      if (settings.colorMode === 'vertex') {
+        color = vData.c;
+      }
       
       const speed = Math.random() * 0.5 + 0.1;
       const offset = Math.random() * Math.PI * 2;
@@ -568,7 +601,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture }) {
       data.push({ x, y, z, scale, color, speed, offset });
     }
     return data;
-  }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor]);
+  }, [count, vertices, center, maxDim, settings.radius, settings.baseSize, settings.sizeRandomness, settings.colorMode, settings.baseColor]);
 
   const compute = useGPGPU(count, particlesData, gl);
 
@@ -609,11 +642,13 @@ function CustomParticleObject({ settings, appConfig, videoTexture }) {
 
   useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute);
 
+  if (count === 0) return null;
+
   return (
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -623,12 +658,12 @@ function CustomParticleObject({ settings, appConfig, videoTexture }) {
   );
 }
 
-export function ParticleObject({ settings, appConfig, videoTexture }) {
-  if (!settings?.hasParticles) return null;
+export function ParticleObject({ settings, appConfig, videoTexture, opacity = 1 }) {
+  if (!settings || settings.hasParticles === false) return null;
   
   if (settings.shape === 'custom' && settings.customModel) {
-    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} />;
+    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} />;
   }
   
-  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} />;
+  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} />;
 }

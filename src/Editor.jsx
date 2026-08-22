@@ -88,6 +88,172 @@ const DragNumberInput = ({ value, onChange, step = 1, min, max }) => {
   );
 };
 
+// Sdílená komponenta pro nastavení jakýchkoliv GPGPU částic
+export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, openSections, toggleSection }) {
+  const getFilteredAssets = (list, prefix) => list.filter(f => f.startsWith(prefix));
+
+  return (
+    <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid #10b981', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div className="input-group">
+        <label>Tvar částicového oblaku:</label>
+        <select value={settings.shape || 'sphere'} onChange={e => onUpdate('shape', e.target.value)}>
+          <option value="sphere">Koule</option>
+          <option value="cube">Krychle</option>
+          <option value="cylinder">Válec</option>
+          <option value="custom">Vlastní 3D model (z obsahu)</option>
+        </select>
+      </div>
+      
+      {settings.shape === 'custom' && (
+        <div className="input-group">
+          <label>Vyberte model (ze složky obsah/levitate/):</label>
+          <select value={settings.customModel || ''} onChange={e => onUpdate('customModel', e.target.value)}>
+            <option value="">Nevybrán model</option>
+            {getFilteredAssets(assets.models || [], 'obsah/levitate/').map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      )}
+      
+      {/* UMÍSTĚNÍ */}
+      <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+        <h5 
+          onClick={() => toggleSection(`part-pos-${id}`)} 
+          style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
+        >
+          Umístění <span>{openSections[`part-pos-${id}`] ? '▲' : '▼'}</span>
+        </h5>
+        {openSections[`part-pos-${id}`] && (
+          <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="input-group">
+              <label>Vzdálenost od kamery (do hloubky ostrova):</label>
+              <DragNumberInput step={0.1} value={settings.objectZ ?? 4.0} onChange={val => onUpdate('objectZ', val)} />
+            </div>
+            <div className="input-group">
+              <label>Pozice horizontálně (mínus = vlevo, plus = vpravo):</label>
+              <DragNumberInput step={0.1} value={settings.objectX ?? 0.0} onChange={val => onUpdate('objectX', val)} />
+            </div>
+            <div className="input-group">
+              <label>Základní výška (od země):</label>
+              <DragNumberInput step={0.1} value={settings.objectY ?? 2.0} onChange={val => onUpdate('objectY', val)} />
+            </div>
+            <div className="input-group checkbox-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
+              <label style={{ fontSize: '0.9rem', color: '#60a5fa' }}>
+                <input 
+                  type="checkbox" 
+                  checked={settings.isGlobalLevitating ?? false} 
+                  onChange={e => onUpdate('isGlobalLevitating', e.target.checked)} 
+                />
+                Celkové levitování a rotace oblaku
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* MESH (Velikosti a Interakce) */}
+      <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+        <h5 
+          onClick={() => toggleSection(`part-mesh-${id}`)} 
+          style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
+        >
+          Mesh (Velikost a Interakce) <span>{openSections[`part-mesh-${id}`] ? '▲' : '▼'}</span>
+        </h5>
+        {openSections[`part-mesh-${id}`] && (
+          <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="input-group">
+              <label>Počet částic:</label>
+              <DragNumberInput step={100} value={settings.count ?? 2000} onChange={val => onUpdate('count', val)} />
+            </div>
+            <div className="input-group">
+              <label>Násobič síly odfouknutí (1 = Výchozí z globálu):</label>
+              <DragNumberInput step={0.1} value={settings.mouseForceMultiplier ?? 1.0} onChange={val => onUpdate('mouseForceMultiplier', val)} />
+            </div>
+            <div className="input-group">
+              <label>Základní velikost částice:</label>
+              <DragNumberInput step={0.01} value={settings.baseSize ?? 0.1} onChange={val => onUpdate('baseSize', val)} />
+            </div>
+            <div className="input-group">
+              <label>Náhodnost velikosti (0 = stejné, 1 = divoké):</label>
+              <DragNumberInput step={0.05} value={settings.sizeRandomness ?? 0.5} onChange={val => onUpdate('sizeRandomness', val)} />
+            </div>
+            <div className="input-group">
+              <label>Velikost oblaku (Radius / Výška):</label>
+              <DragNumberInput step={0.1} value={settings.radius ?? 2.0} onChange={val => onUpdate('radius', val)} />
+            </div>
+            {settings.shape === 'custom' ? (
+              <div className="input-group">
+                <label>Hustota bodů (0 - 100% z originálu):</label>
+                <DragNumberInput step={1} min={0} max={100} value={settings.densityPercent ?? 100} onChange={val => onUpdate('densityPercent', val)} />
+              </div>
+            ) : (
+              <div className="input-group">
+                <label>Počet částic:</label>
+                <DragNumberInput step={100} value={settings.count ?? 2000} onChange={val => onUpdate('count', val)} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* RENDER (Vzhled materiálu) */}
+      <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+        <h5 
+          onClick={() => toggleSection(`part-render-${id}`)} 
+          style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
+        >
+          Render (Vzhled materiálu) <span>{openSections[`part-render-${id}`] ? '▲' : '▼'}</span>
+        </h5>
+        {openSections[`part-render-${id}`] && (
+          <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="input-group">
+              <label>Mód barev a materiálu:</label>
+              <select value={settings.colorMode || 'single'} onChange={e => onUpdate('colorMode', e.target.value)}>
+                <option value="single">Jedna barva (Metallic)</option>
+                <option value="vertex">Vertex Colors (Z předlohy)</option>
+                <option value="video">Lámat video z pozadí (Sklo)</option>
+              </select>
+            </div>
+            {settings.colorMode === 'single' && (
+              <div className="input-group">
+                <label>Barva kuliček:</label>
+                <input 
+                  type="color" 
+                  value={settings.baseColor || '#3b82f6'} 
+                  onChange={e => onUpdate('baseColor', e.target.value)} 
+                />
+              </div>
+            )}
+            {settings.colorMode === 'video' && (
+              <div className="input-group">
+                <label>Síla refrakce (Deformace obrazu):</label>
+                <DragNumberInput step={0.05} value={settings.refractionDistortion ?? 0.15} onChange={val => onUpdate('refractionDistortion', val)} />
+              </div>
+            )}
+            
+            <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
+              <label>Metalíza (Metalness):</label>
+              <DragNumberInput step={0.05} value={settings.metalness ?? 0.1} onChange={val => onUpdate('metalness', val)} />
+            </div>
+            <div className="input-group">
+              <label>Drsnost (Roughness):</label>
+              <DragNumberInput step={0.05} value={settings.roughness ?? 0.5} onChange={val => onUpdate('roughness', val)} />
+            </div>
+
+            <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
+              <label>Průhlednost / Sklo (Transmission):</label>
+              <DragNumberInput step={0.05} value={settings.transmission ?? 0.0} onChange={val => onUpdate('transmission', val)} />
+            </div>
+            <div className="input-group">
+              <label>Tloušťka hmoty / Želé (Thickness):</label>
+              <DragNumberInput step={0.1} value={settings.thickness ?? 0.0} onChange={val => onUpdate('thickness', val)} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
   const [assets, setAssets] = useState({ models: [], images: [], videos: [] });
   const [saving, setSaving] = useState(false);
@@ -190,6 +356,16 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     });
   };
 
+  const updateCylinderSettings = (field, value) => {
+    setAppConfig({
+      ...appConfig,
+      cylinderSettings: {
+        ...(appConfig.cylinderSettings || {}),
+        [field]: value
+      }
+    });
+  };
+
   const addPage = () => {
     setPages([...pages, {
       id: Date.now().toString(),
@@ -253,16 +429,9 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
             {openSections['global-prostredi'] && (
               <>
                 <div className="input-group">
-                  <label>Základní model světa (Ostrov pro všechny stránky):</label>
-                  <select value={appConfig.globalSurfaceModel || ''} onChange={e => updateConfig('globalSurfaceModel', e.target.value)}>
-                    <option value="">Žádný model povrchu</option>
-                    {getFilteredAssets(assets.models, 'trava/').map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-
-                <div className="input-group">
-                  <label>Velikost ostrova (Horizontální škálování):</label>
-                  <DragNumberInput step={0.1} value={appConfig.islandScaleHorizontal ?? 1.0} onChange={val => updateConfig('islandScaleHorizontal', val)} />
+                  <label style={{ fontStyle: 'italic', color: '#6b7280' }}>
+                    Základní 3D prostředí je nyní abstraktní "Void" (Vesmír) a sloup. Globální model povrchu byl odstraněn.
+                  </label>
                 </div>
               </>
             )}
@@ -358,6 +527,18 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   <DragNumberInput step={0.1} value={appConfig.particlePhysics?.mouseForce ?? 1.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, mouseForce: val })} />
                 </div>
                 <div className="input-group">
+                  <label>Počet částic sloupu:</label>
+                  <DragNumberInput step={1000} value={appConfig.cylinderSettings?.count ?? 30000} onChange={val => updateConfig('cylinderSettings', { ...appConfig.cylinderSettings, count: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Poloměr sloupu:</label>
+                  <DragNumberInput step={0.1} value={appConfig.cylinderSettings?.radius ?? 8.0} onChange={val => updateConfig('cylinderSettings', { ...appConfig.cylinderSettings, radius: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Násobič síly odfouknutí sloupu (1 = Globální hodnota):</label>
+                  <DragNumberInput step={0.1} value={appConfig.cylinderSettings?.mouseForceMultiplier ?? 1.0} onChange={val => updateConfig('cylinderSettings', { ...appConfig.cylinderSettings, mouseForceMultiplier: val })} />
+                </div>
+                <div className="input-group">
                   <label>Průměr efektu myši:</label>
                   <DragNumberInput step={0.1} value={appConfig.particlePhysics?.mouseRadius ?? 2.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, mouseRadius: val })} />
                 </div>
@@ -370,6 +551,42 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   <DragNumberInput step={1} value={appConfig.particlePhysics?.laserIntensity ?? 10.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, laserIntensity: val })} />
                 </div>
               </>
+            )}
+          </div>
+
+          <div className="editor-section">
+            <h4 
+              style={{ color: '#10b981', borderBottomColor: 'rgba(16, 185, 129, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+              onClick={() => toggleSection('global-background-cylinder')}
+            >
+              Pozadí prostoru (Abstraktní Válec)
+              <span>{openSections['global-background-cylinder'] ? '▲' : '▼'}</span>
+            </h4>
+            {openSections['global-background-cylinder'] && (
+              <div style={{ paddingTop: '0.5rem' }}>
+                <div className="input-group checkbox-group">
+                  <label style={{ fontSize: '1rem', color: '#10b981', fontWeight: 'bold' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={appConfig.cylinderSettings?.hasParticles ?? true} 
+                      onChange={e => updateCylinderSettings('hasParticles', e.target.checked)} 
+                      style={{ transform: 'scale(1.2)' }} 
+                    />
+                    Zobrazit částicový sloup v pozadí
+                  </label>
+                </div>
+
+                {appConfig.cylinderSettings?.hasParticles !== false && (
+                  <ParticleSettingsPanel 
+                    settings={{ shape: 'cylinder', count: 10000, radius: 8.0, height: 40.0, objectY: 0, objectZ: 0, colorMode: 'single', baseColor: '#3b82f6', ...appConfig.cylinderSettings }}
+                    onUpdate={updateCylinderSettings}
+                    id="global-cylinder"
+                    assets={assets}
+                    openSections={openSections}
+                    toggleSection={toggleSection}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -401,113 +618,6 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   <option value="">Žádné video</option>
                   {getFilteredAssets(assets.videos, 'video/').map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
-              </div>
-
-              {/* Sekce: MODUL POVRCH */}
-              <div className="editor-section">
-                <h4 
-                  style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-                  onClick={() => toggleSection('page-povrch')}
-                >
-                  Modul: Povrch Ostrova
-                  <span>{openSections['page-povrch'] ? '▲' : '▼'}</span>
-                </h4>
-                
-                {openSections['page-povrch'] && (
-                  <>
-                    <div className="input-group">
-                      <label>Jak obarvit povrch?</label>
-                      <select value={ts.surfaceMode || 'color'} onChange={e => updateTravaSettings(page.id, 'surfaceMode', e.target.value)}>
-                        <option value="color">Jednolitou barvou</option>
-                        <option value="texture">Natažením textury (obrázku)</option>
-                      </select>
-                    </div>
-
-                    {ts.surfaceMode === 'texture' ? (
-                      <div className="input-group">
-                        <label>Vyberte texturu povrchu:</label>
-                        <select value={ts.surfaceTexture || ''} onChange={e => updateTravaSettings(page.id, 'surfaceTexture', e.target.value)}>
-                          <option value="">Žádná textura</option>
-                          {getFilteredAssets(assets.images, 'trava/textury_povrchu').map(img => <option key={img} value={img}>{img}</option>)}
-                        </select>
-                      </div>
-                    ) : (
-                      <div className="input-group">
-                        <label>Vyberte barvu povrchu:</label>
-                        <input type="color" value={ts.surfaceColor || '#4d9900'} onChange={e => updateTravaSettings(page.id, 'surfaceColor', e.target.value)} />
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Sekce: MODUL TRÁVA */}
-              <div className="editor-section">
-                <h4 
-                  style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-                  onClick={() => toggleSection('page-trava')}
-                >
-                  Modul: Porost a Tráva
-                  <span>{openSections['page-trava'] ? '▲' : '▼'}</span>
-                </h4>
-                
-                {openSections['page-trava'] && (
-                  <>
-                    <div className="input-group checkbox-group">
-                      <label style={{ fontSize: '1rem', color: '#10b981', fontWeight: 'bold' }}>
-                        <input type="checkbox" checked={ts.hasBasicGrass || false} onChange={e => updateTravaSettings(page.id, 'hasBasicGrass', e.target.checked)} style={{ transform: 'scale(1.2)' }} />
-                        Vygenerovat porost
-                      </label>
-                    </div>
-
-                    {ts.hasBasicGrass && (
-                      <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid #10b981', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        
-                        <div className="input-group">
-                          <label>Typ modelu porostu:</label>
-                          <select value={ts.grassModelType || 'basic'} onChange={e => updateTravaSettings(page.id, 'grassModelType', e.target.value)}>
-                            <option value="basic">Základní 3D stébla (kužely)</option>
-                            <option value="custom">Vlastní 3D model (.glb / .gltf)</option>
-                          </select>
-                        </div>
-
-                        {ts.grassModelType === 'custom' && (
-                          <div className="input-group">
-                            <label>Vyberte vlastní 3D model (ze složky trava/):</label>
-                            <select value={ts.grassCustomModel || ''} onChange={e => updateTravaSettings(page.id, 'grassCustomModel', e.target.value)}>
-                              <option value="">Nevybrán model</option>
-                              {getFilteredAssets(assets.models, 'trava/').map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                          </div>
-                        )}
-
-                        <div className="input-group">
-                          <label>Jak obarvit porost?</label>
-                          <select value={ts.grassColorMode || 'color'} onChange={e => updateTravaSettings(page.id, 'grassColorMode', e.target.value)}>
-                            <option value="color">Jednolitou barvou</option>
-                            <option value="texture">Natažením textury (obrázku)</option>
-                          </select>
-                        </div>
-
-                        {ts.grassColorMode === 'texture' ? (
-                          <div className="input-group">
-                            <label>Vyberte texturu porostu:</label>
-                            <select value={ts.grassTexture || ''} onChange={e => updateTravaSettings(page.id, 'grassTexture', e.target.value)}>
-                              <option value="">Žádná textura</option>
-                              {getFilteredAssets(assets.images, 'trava/textury_povrchu').map(img => <option key={img} value={img}>{img}</option>)}
-                            </select>
-                          </div>
-                        ) : (
-                          <div className="input-group">
-                            <label>Vyberte barvu porostu:</label>
-                            <input type="color" value={ts.grassColor || '#4a8505'} onChange={e => updateTravaSettings(page.id, 'grassColor', e.target.value)} />
-                          </div>
-                        )}
-                        
-                      </div>
-                    )}
-                  </>
-                )}
               </div>
 
               {/* Sekce: MODUL OBSAH */}
@@ -607,158 +717,14 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                     </div>
 
                     {page.particlesSettings?.hasParticles && (
-                      <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid #10b981', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        
-                        <div className="input-group">
-                          <label>Tvar částicového oblaku:</label>
-                          <select value={page.particlesSettings?.shape || 'sphere'} onChange={e => updateParticlesSettings(page.id, 'shape', e.target.value)}>
-                            <option value="sphere">Koule</option>
-                            <option value="cube">Krychle</option>
-                            <option value="cylinder">Válec</option>
-                            <option value="custom">Vlastní 3D model (z obsahu)</option>
-                          </select>
-                        </div>
-                        
-                        {page.particlesSettings?.shape === 'custom' && (
-                          <div className="input-group">
-                            <label>Vyberte model (ze složky obsah/levitate/):</label>
-                            <select value={page.particlesSettings?.customModel || ''} onChange={e => updateParticlesSettings(page.id, 'customModel', e.target.value)}>
-                              <option value="">Nevybrán model</option>
-                              {getFilteredAssets(assets.models, 'obsah/levitate/').map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                          </div>
-                        )}
-                        
-                        {/* UMÍSTĚNÍ */}
-                        <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
-                          <h5 
-                            onClick={() => toggleSection(`part-pos-${page.id}`)} 
-                            style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
-                          >
-                            Umístění <span>{openSections[`part-pos-${page.id}`] ? '▲' : '▼'}</span>
-                          </h5>
-                          {openSections[`part-pos-${page.id}`] && (
-                            <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                              <div className="input-group">
-                                <label>Vzdálenost od kamery (do hloubky ostrova):</label>
-                                <DragNumberInput step={0.1} value={page.particlesSettings?.objectZ ?? 4.0} onChange={val => updateParticlesSettings(page.id, 'objectZ', val)} />
-                              </div>
-                              <div className="input-group">
-                                <label>Pozice horizontálně (mínus = vlevo, plus = vpravo):</label>
-                                <DragNumberInput step={0.1} value={page.particlesSettings?.objectX ?? 0.0} onChange={val => updateParticlesSettings(page.id, 'objectX', val)} />
-                              </div>
-                              <div className="input-group">
-                                <label>Základní výška (od země):</label>
-                                <DragNumberInput step={0.1} value={page.particlesSettings?.objectY ?? 2.0} onChange={val => updateParticlesSettings(page.id, 'objectY', val)} />
-                              </div>
-                              <div className="input-group checkbox-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-                                <label style={{ fontSize: '0.9rem', color: '#60a5fa' }}>
-                                  <input 
-                                    type="checkbox" 
-                                    checked={page.particlesSettings?.isGlobalLevitating ?? false} 
-                                    onChange={e => updateParticlesSettings(page.id, 'isGlobalLevitating', e.target.checked)} 
-                                  />
-                                  Celkové levitování a rotace oblaku
-                                </label>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* MESH (Velikosti a Hustota) */}
-                        <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
-                          <h5 
-                            onClick={() => toggleSection(`part-mesh-${page.id}`)} 
-                            style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
-                          >
-                            Mesh (Velikost a Hustota) <span>{openSections[`part-mesh-${page.id}`] ? '▲' : '▼'}</span>
-                          </h5>
-                          {openSections[`part-mesh-${page.id}`] && (
-                            <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                              <div className="input-group">
-                                <label>Základní velikost částice:</label>
-                                <DragNumberInput step={0.01} value={page.particlesSettings?.baseSize ?? 0.1} onChange={val => updateParticlesSettings(page.id, 'baseSize', val)} />
-                              </div>
-                              <div className="input-group">
-                                <label>Náhodnost velikosti (0 = stejné, 1 = divoké):</label>
-                                <DragNumberInput step={0.05} value={page.particlesSettings?.sizeRandomness ?? 0.5} onChange={val => updateParticlesSettings(page.id, 'sizeRandomness', val)} />
-                              </div>
-                              <div className="input-group">
-                                <label>Velikost oblaku (Radius):</label>
-                                <DragNumberInput step={0.1} value={page.particlesSettings?.radius ?? 2.0} onChange={val => updateParticlesSettings(page.id, 'radius', val)} />
-                              </div>
-                              {page.particlesSettings?.shape === 'custom' ? (
-                                <div className="input-group">
-                                  <label>Hustota bodů (0 - 100% z originálu):</label>
-                                  <DragNumberInput step={1} min={0} max={100} value={page.particlesSettings?.densityPercent ?? 100} onChange={val => updateParticlesSettings(page.id, 'densityPercent', val)} />
-                                </div>
-                              ) : (
-                                <div className="input-group">
-                                  <label>Počet částic:</label>
-                                  <DragNumberInput step={100} value={page.particlesSettings?.count ?? 2000} onChange={val => updateParticlesSettings(page.id, 'count', val)} />
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* RENDER (Vzhled materiálu) */}
-                        <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
-                          <h5 
-                            onClick={() => toggleSection(`part-render-${page.id}`)} 
-                            style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
-                          >
-                            Render (Vzhled materiálu) <span>{openSections[`part-render-${page.id}`] ? '▲' : '▼'}</span>
-                          </h5>
-                          {openSections[`part-render-${page.id}`] && (
-                            <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                              <div className="input-group">
-                                <label>Mód barev a materiálu:</label>
-                                <select value={page.particlesSettings?.colorMode || 'single'} onChange={e => updateParticlesSettings(page.id, 'colorMode', e.target.value)}>
-                                  <option value="single">Jedna barva (Metallic)</option>
-                                  <option value="vertex">Vertex Colors (Z předlohy)</option>
-                                  <option value="video">Lámat video z pozadí (Sklo)</option>
-                                </select>
-                              </div>
-                              {page.particlesSettings?.colorMode === 'single' && (
-                                <div className="input-group">
-                                  <label>Barva kuliček:</label>
-                                  <input 
-                                    type="color" 
-                                    value={page.particlesSettings?.baseColor || '#3b82f6'} 
-                                    onChange={e => updateParticlesSettings(page.id, 'baseColor', e.target.value)} 
-                                  />
-                                </div>
-                              )}
-                              {page.particlesSettings?.colorMode === 'video' && (
-                                <div className="input-group">
-                                  <label>Síla refrakce (Deformace obrazu):</label>
-                                  <DragNumberInput step={0.05} value={page.particlesSettings?.refractionDistortion ?? 0.15} onChange={val => updateParticlesSettings(page.id, 'refractionDistortion', val)} />
-                                </div>
-                              )}
-                              
-                              <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-                                <label>Metalíza (Metalness):</label>
-                                <DragNumberInput step={0.05} value={page.particlesSettings?.metalness ?? 0.1} onChange={val => updateParticlesSettings(page.id, 'metalness', val)} />
-                              </div>
-                              <div className="input-group">
-                                <label>Drsnost (Roughness):</label>
-                                <DragNumberInput step={0.05} value={page.particlesSettings?.roughness ?? 0.5} onChange={val => updateParticlesSettings(page.id, 'roughness', val)} />
-                              </div>
-
-                              <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-                                <label>Průhlednost / Sklo (Transmission):</label>
-                                <DragNumberInput step={0.05} value={page.particlesSettings?.transmission ?? 0.0} onChange={val => updateParticlesSettings(page.id, 'transmission', val)} />
-                              </div>
-                              <div className="input-group">
-                                <label>Tloušťka hmoty / Želé (Thickness):</label>
-                                <DragNumberInput step={0.1} value={page.particlesSettings?.thickness ?? 0.0} onChange={val => updateParticlesSettings(page.id, 'thickness', val)} />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                      </div>
+                      <ParticleSettingsPanel 
+                        settings={page.particlesSettings}
+                        onUpdate={(field, value) => updateParticlesSettings(page.id, field, value)}
+                        id={`page-${page.id}`}
+                        assets={assets}
+                        openSections={openSections}
+                        toggleSection={toggleSection}
+                      />
                     )}
                   </>
                 )}
