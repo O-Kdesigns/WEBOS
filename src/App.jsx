@@ -11,24 +11,21 @@ import { Editor } from './Editor';
 import { ParticleObject } from './ParticleObject';
 import './App.css';
 
-// --- Background Cylinder (Nyní používá reálné GPGPU částice) ---
 function BackgroundCylinder({ appConfig, visible }) {
-  const { opacity } = useSpring({
-    opacity: visible ? 1 : 0,
+  const { scale } = useSpring({
+    scale: visible ? 1 : 0.00001,
     config: { duration: 1000 }
   });
 
   if (appConfig.cylinderSettings?.hasParticles === false) return null;
 
   return (
-    <group>
+    <a.group scale={scale}>
       <ParticleObject 
-        opacity={opacity}
         settings={{ 
           shape: 'cylinder', 
           count: 10000, 
           radius: 8.0, 
-          height: 40.0, 
           objectY: 0, 
           objectZ: 0, 
           colorMode: 'single', 
@@ -39,21 +36,21 @@ function BackgroundCylinder({ appConfig, visible }) {
         appConfig={appConfig} 
         videoTexture={null} 
       />
-    </group>
+    </a.group>
   );
 }
 
 // --- Orbital Boards (Desky s portfoliem) ---
 function OrbitalBoards({ pagesData, onSelect, visible }) {
-  const radius = 10.0; 
+  const radius = 10;
   
-  const { opacity } = useSpring({
-    opacity: visible ? 1 : 0,
+  const { scale } = useSpring({
+    scale: visible ? 1 : 0.00001,
     config: { duration: 1000 }
   });
 
   return (
-    <group>
+    <a.group scale={scale}>
       {pagesData.map((page, i) => {
         const angle = i * (Math.PI / 2);
         return (
@@ -61,59 +58,56 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
             <group position-z={radius}>
               {/* Zástupná černá deska */}
               <mesh 
-                onClick={() => { if (visible) onSelect(i); }}
-                onPointerOver={(e) => { if (visible) document.body.style.cursor = 'pointer'; }}
-                onPointerOut={(e) => { document.body.style.cursor = 'auto'; }}
+                onClick={() => onSelect(i)}
+                onPointerOver={(e) => document.body.style.cursor = 'pointer'}
+                onPointerOut={(e) => document.body.style.cursor = 'auto'}
               >
                 <boxGeometry args={[4, 6, 0.1]} />
-                <a.meshPhysicalMaterial 
+                <meshPhysicalMaterial 
                   color="#000000" 
                   metalness={0.9} 
                   roughness={0.1} 
                   transmission={0.5} 
                   thickness={0.5} 
-                  transparent={true}
-                  opacity={opacity}
                 />
               </mesh>
 
               {/* Title na desce */}
-              <Text position={[0, 3.5, 0]} fontSize={0.5} color="white" anchorX="center" anchorY="bottom" fillOpacity={visible ? 1 : 0}>
+              <Text position={[0, 3.5, 0]} fontSize={0.5} color="white" anchorX="center" anchorY="bottom">
                 {page.title || `Project ${i + 1}`}
               </Text>
             </group>
           </group>
         );
       })}
-    </group>
+    </a.group>
   );
 }
 
 // --- Projekt Content (To co je vidět po kliknutí) ---
 function ProjectContent({ page, visible, appConfig }) {
-  const { opacity } = useSpring({
-    opacity: visible ? 1 : 0,
+  const { scale } = useSpring({
+    scale: visible ? 1 : 0.00001,
     config: { duration: 1000 }
   });
 
   if (!page || !page.particlesSettings?.hasParticles) return null;
 
   return (
-    <group>
+    <a.group scale={scale}>
       <ParticleObject 
-        opacity={opacity}
         settings={page.particlesSettings}
         appConfig={appConfig} 
         videoTexture={null} 
       />
-    </group>
+    </a.group>
   );
 }
 
 // --- Kamerový Rig ---
 function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
   const { springZ } = useSpring({
-    springZ: viewMode === 'ORBIT' ? (appConfig.cameraRadius || 18.0) : 9.0,
+    springZ: viewMode === 'ORBIT' ? (appConfig.cameraRadius || 18) : 7.0,
     config: { duration: 1000 }
   });
 
@@ -286,27 +280,27 @@ function App() {
             pagesData={pagesData} 
             visible={viewMode === 'ORBIT'} 
             onSelect={(idx) => {
+              // Nezměníme rotaci (zůstane tam kde je), jen se ponoříme
               setViewMode('INSIDE');
             }} 
           />
-
+          
           {/* 3. Obsah projektu uvnitř - VYKRESLÍ SE JEN KDYŽ JSME INSIDE A JEN PRO AKTIVNÍ PROJEKT */}
-          {viewMode === 'INSIDE' && (
-            <group rotation-y={currentIndex * -(Math.PI / 2)}>
-               <ProjectContent 
-                 page={pagesData[currentIndex]} 
-                 appConfig={appConfig}
-                 visible={viewMode === 'INSIDE'} 
-               />
-            </group>
-          )}
+          {/* Natáčíme obsah s kamerou, aby byl vždy čelem ke kameře (protože osa Z kamery rotuje) */}
+          <group rotation-y={currentIndex * -(Math.PI / 2)}>
+             <ProjectContent 
+               page={pagesData[currentIndex]} 
+               visible={viewMode === 'INSIDE'} 
+               appConfig={appConfig}
+             />
+          </group>
 
-        <CameraRig 
+          <CameraRig 
             appConfig={appConfig} 
             rotationY={rotationY} 
             viewMode={viewMode} 
             currentIndex={currentIndex} 
-        />
+          />
         </Canvas>
       </div>
 

@@ -150,24 +150,16 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
         )}
       </div>
 
-      {/* MESH (Velikosti a Interakce) */}
+      {/* MESH (Velikosti a Hustota) */}
       <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
         <h5 
           onClick={() => toggleSection(`part-mesh-${id}`)} 
           style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
         >
-          Mesh (Velikost a Interakce) <span>{openSections[`part-mesh-${id}`] ? '▲' : '▼'}</span>
+          Mesh (Velikost a Hustota) <span>{openSections[`part-mesh-${id}`] ? '▲' : '▼'}</span>
         </h5>
         {openSections[`part-mesh-${id}`] && (
           <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div className="input-group">
-              <label>Počet částic:</label>
-              <DragNumberInput step={100} value={settings.count ?? 2000} onChange={val => onUpdate('count', val)} />
-            </div>
-            <div className="input-group">
-              <label>Násobič síly odfouknutí (1 = Výchozí z globálu):</label>
-              <DragNumberInput step={0.1} value={settings.mouseForceMultiplier ?? 1.0} onChange={val => onUpdate('mouseForceMultiplier', val)} />
-            </div>
             <div className="input-group">
               <label>Základní velikost částice:</label>
               <DragNumberInput step={0.01} value={settings.baseSize ?? 0.1} onChange={val => onUpdate('baseSize', val)} />
@@ -417,25 +409,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
             <h3 style={{ color: '#3b82f6' }}>Globální nastavení (config.json)</h3>
           </div>
           
-          <div className="editor-section">
-            <h4 
-              style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-              onClick={() => toggleSection('global-prostredi')}
-            >
-              Prostředí a 3D svět
-              <span>{openSections['global-prostredi'] ? '▲' : '▼'}</span>
-            </h4>
-            
-            {openSections['global-prostredi'] && (
-              <>
-                <div className="input-group">
-                  <label style={{ fontStyle: 'italic', color: '#6b7280' }}>
-                    Základní 3D prostředí je nyní abstraktní "Void" (Vesmír) a sloup. Globální model povrchu byl odstraněn.
-                  </label>
-                </div>
-              </>
-            )}
-          </div>
+
 
           <div className="editor-section">
             <h4 
@@ -527,18 +501,6 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   <DragNumberInput step={0.1} value={appConfig.particlePhysics?.mouseForce ?? 1.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, mouseForce: val })} />
                 </div>
                 <div className="input-group">
-                  <label>Počet částic sloupu:</label>
-                  <DragNumberInput step={1000} value={appConfig.cylinderSettings?.count ?? 30000} onChange={val => updateConfig('cylinderSettings', { ...appConfig.cylinderSettings, count: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Poloměr sloupu:</label>
-                  <DragNumberInput step={0.1} value={appConfig.cylinderSettings?.radius ?? 8.0} onChange={val => updateConfig('cylinderSettings', { ...appConfig.cylinderSettings, radius: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Násobič síly odfouknutí sloupu (1 = Globální hodnota):</label>
-                  <DragNumberInput step={0.1} value={appConfig.cylinderSettings?.mouseForceMultiplier ?? 1.0} onChange={val => updateConfig('cylinderSettings', { ...appConfig.cylinderSettings, mouseForceMultiplier: val })} />
-                </div>
-                <div className="input-group">
                   <label>Průměr efektu myši:</label>
                   <DragNumberInput step={0.1} value={appConfig.particlePhysics?.mouseRadius ?? 2.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, mouseRadius: val })} />
                 </div>
@@ -619,6 +581,8 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   {getFilteredAssets(assets.videos, 'video/').map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
+
+
 
               {/* Sekce: MODUL OBSAH */}
               <div className="editor-section">

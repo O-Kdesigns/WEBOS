@@ -29,7 +29,7 @@
       },
       "particlesSettings": {
         "hasParticles": true,
-        "radius": 0.7,
+        "radius": 2.4,
         "objectX": 0,
         "objectZ": 1.7,
         "objectY": 0,

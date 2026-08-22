@@ -17,7 +17,7 @@
     "floatAmplitude": 0.025,
     "floatSpeed": 1,
     "mouseForce": 0.01,
-    "laserLength": 10,
+    "laserLength": 62.1,
     "laserIntensity": 3,
     "returnSpeed": 0.02
   },
@@ -33,6 +33,7 @@
     "transmission": 3.1,
     "roughness": -0.57,
     "metalness": 0.12,
-    "refractionDistortion": 0
+    "refractionDistortion": 0,
+    "mouseForceMultiplier": 1
   }
 }
