@@ -220,6 +220,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
         uOpacity={opacity}
         uColor={new THREE.Color(settings.baseColor || '#ffffff')}
         transparent={true}
+        depthWrite={false}
       />
     );
   }
@@ -258,6 +259,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
       thickness={settings.thickness ?? 0.0}
       ior={1.5}
       transparent={true}
+      depthWrite={false}
       opacity={opacity}
     />
   );
@@ -358,7 +360,7 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
   });
 }
 
-function StandardParticleObject({ settings, appConfig, videoTexture, opacity }) {
+function StandardParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
   const meshRef = useRef();
   const pointerLightRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -386,8 +388,6 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity }) 
       } else if (shape === 'cylinder') {
         const u = Math.random();
         const theta = 2 * Math.PI * u;
-        // Chceme to jen po povrchu nebo uvnitr?
-        // Nechame r random uvnitr valce jako to bylo, nebo tloustku steny
         const r = radius + (Math.random() - 0.5) * 2; 
         const h = settings.height ?? 40;
         x = r * Math.cos(theta);
@@ -472,7 +472,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity }) 
 
   return (
     <group position={[posX, 0, posZ]}>
-      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow>
+      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
       </instancedMesh>
@@ -484,7 +484,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity }) 
   );
 }
 
-function CustomParticleObject({ settings, appConfig, videoTexture, opacity }) {
+function CustomParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
   const { scene } = useGLTF(`/obsah/${settings.customModel}`);
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -621,7 +621,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity }) {
 
   return (
     <group position={[posX, 0, posZ]}>
-      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow>
+      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
       </instancedMesh>
@@ -633,7 +633,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity }) {
   );
 }
 
-function GeometryParticleObject({ settings, appConfig, videoTexture, opacity }) {
+function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);
@@ -764,7 +764,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity }) 
 
   return (
     <group {...transform}>
-      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow>
+      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
       </instancedMesh>
@@ -776,17 +776,17 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity }) 
   );
 }
 
-export function ParticleObject({ settings, appConfig, videoTexture, opacity }) {
+export function ParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder = 0 }) {
   if (!settings?.hasParticles) return null;
   
   if (settings.shape === 'custom' && settings.customModel) {
-    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} />;
+    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
   }
 
   if (settings.shape === 'geometry' && settings.customGeometry) {
-    return <GeometryParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} />;
+    return <GeometryParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
   }
   
-  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} />;
+  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
 }
 

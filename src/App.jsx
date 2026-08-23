@@ -26,34 +26,7 @@ function VideoTextureLoader({ url, children }) {
   return <>{children(texture)}</>;
 }
 
-function BackgroundCylinder({ appConfig, visible }) {
-  const { scale } = useSpring({
-    scale: visible ? 1 : 0.00001,
-    config: { duration: 1000 }
-  });
 
-  if (appConfig.cylinderSettings?.hasParticles === false) return null;
-
-  return (
-    <a.group scale={scale}>
-      <ParticleObject 
-        settings={{ 
-          shape: 'cylinder', 
-          count: 10000, 
-          radius: 8.0, 
-          objectY: 0, 
-          objectZ: 0, 
-          colorMode: 'single', 
-          baseColor: '#3b82f6', 
-          hasParticles: true,
-          ...appConfig.cylinderSettings 
-        }}
-        appConfig={appConfig} 
-        videoTexture={null} 
-      />
-    </a.group>
-  );
-}
 
 // --- Orbital Boards (Desky s portfoliem) ---
 function OrbitalBoards({ pagesData, onSelect, visible }) {
@@ -99,26 +72,16 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
   );
 }
 
-function ProjectContent({ page, visible, appConfig, videoTexture }) {
+function ProjectContent({ page, appConfig, videoTexture }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
-  // Skryjeme to jen přes condition, nebo vůbec neskrýváme.
-  // Jelikož uživatel chce "seamless zoom", necháme particles prostě na místě!
   if (!page || !page.particlesSettings?.hasParticles) return null;
 
-  // Renderujeme je POUZE, pokud jsme ve stavu INSIDE, nebo trvale?
-  // Pokud jen INSIDE, bliknou. Uživatel nechce přeblikávání.
-  // Změníme to tak, že ProjectContent se vykreslí bez animace scale.
   const settings = page.particlesSettings;
   const selected = settings.selectedNodes || [];
 
-  const { fade } = useSpring({
-    fade: visible ? 1 : 0,
-    config: { duration: 1000 }
-  });
-
   return (
-    <a.group visible={fade.to(v => v > 0)}>
+    <group>
       {selected.length > 0 ? selected.map(nodeName => {
         const node = nodes[nodeName];
         if (!node) return null;
@@ -137,7 +100,7 @@ function ProjectContent({ page, visible, appConfig, videoTexture }) {
               }}
               appConfig={appConfig} 
               videoTexture={videoTexture} 
-              opacity={fade}
+              opacity={1}
             />
           </group>
         );
@@ -147,40 +110,48 @@ function ProjectContent({ page, visible, appConfig, videoTexture }) {
             settings={settings}
             appConfig={appConfig} 
             videoTexture={videoTexture} 
-            opacity={fade}
+            opacity={1}
           />
         </group>
       )}
-    </a.group>
+    </group>
   );
 }
 
-export function GlobalBackground({ appConfig, videoTexture }) {
+export function GlobalBackground({ appConfig, videoTexture, visible }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
   
+  const { fade } = useSpring({
+    fade: visible ? 1 : 0,
+    config: { duration: 1000 }
+  });
+
   if (!nodes.Cylinder) return null;
   
   return (
-    <group position={nodes.Cylinder.getWorldPosition(new THREE.Vector3())} quaternion={nodes.Cylinder.getWorldQuaternion(new THREE.Quaternion())}>
-      <ParticleObject 
-        settings={{ 
-          shape: 'geometry', 
-          customGeometry: nodes.Cylinder.geometry,
-          transform: {
-            position: new THREE.Vector3(0,0,0),
-            quaternion: new THREE.Quaternion(),
-            scale: nodes.Cylinder.getWorldScale(new THREE.Vector3())
-          },
-          count: 10000, 
-          hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
-          baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
-          colorMode: appConfig.cylinderSettings?.colorMode || 'single'
-        }}
-        appConfig={appConfig} 
-        videoTexture={videoTexture} 
-        opacity={1}
-      />
-    </group>
+    <a.group visible={fade.to(v => v > 0)}>
+      <group position={nodes.Cylinder.getWorldPosition(new THREE.Vector3())} quaternion={nodes.Cylinder.getWorldQuaternion(new THREE.Quaternion())}>
+        <ParticleObject 
+          settings={{ 
+            shape: 'geometry', 
+            customGeometry: nodes.Cylinder.geometry,
+            transform: {
+              position: new THREE.Vector3(0,0,0),
+              quaternion: new THREE.Quaternion(),
+              scale: nodes.Cylinder.getWorldScale(new THREE.Vector3())
+            },
+            count: 10000, 
+            hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
+            baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
+            colorMode: appConfig.cylinderSettings?.colorMode || 'single'
+          }}
+          appConfig={appConfig} 
+          videoTexture={videoTexture} 
+          opacity={fade}
+          renderOrder={1}
+        />
+      </group>
+    </a.group>
   );
 }
 
@@ -192,53 +163,61 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, c
     config: { duration: 1000 }
   });
 
+  const deskTex = useMemo(() => {
+    if (!videoTexture) return null;
+    const tex = videoTexture.clone();
+    tex.center.set(0.5, 0.5);
+    tex.rotation = Math.PI; // Otočení o 180 stupňů
+    tex.needsUpdate = true;
+    return tex;
+  }, [videoTexture]);
+
   return (
     <a.group visible={fade.to(v => v > 0)}>
       {/* Skleněné desky pro projekty */}
       {pagesData.map((page, idx) => {
         const deskNode = nodes[`GlassDesk-${page.title}`] || (idx === 0 ? nodes.GlassDesk : null);
         if (!deskNode) return null;
-        
-        let centerX = 0;
-        let centerY = 0;
-        let maxZ = 0.5;
-        let deskSizeX = 1;
-        let deskSizeY = 1;
-        if (deskNode.geometry) {
-          deskNode.geometry.computeBoundingBox();
-          const bbox = deskNode.geometry.boundingBox;
-          deskSizeX = bbox.max.x - bbox.min.x;
-          deskSizeY = bbox.max.y - bbox.min.y;
-          centerX = (bbox.max.x + bbox.min.x) / 2;
-          centerY = (bbox.max.y + bbox.min.y) / 2;
-          maxZ = bbox.max.z;
-        }
+        const deskPos = deskNode.getWorldPosition(new THREE.Vector3());
+        const deskRot = deskNode.getWorldQuaternion(new THREE.Quaternion());
+        const deskScale = deskNode.getWorldScale(new THREE.Vector3());
         
         return (
-          <group key={page.id} position={deskNode.getWorldPosition(new THREE.Vector3())} quaternion={deskNode.getWorldQuaternion(new THREE.Quaternion())} scale={deskNode.getWorldScale(new THREE.Vector3())}>
-            <mesh 
+          <group 
+            key={page.id}
+            onClick={() => onSelect(idx)}
+            onPointerOver={(e) => document.body.style.cursor = 'pointer'}
+            onPointerOut={(e) => document.body.style.cursor = 'auto'}
+          >
+            <a.mesh 
+              position={deskPos}
+              quaternion={deskRot}
+              scale={deskScale}
               geometry={deskNode.geometry} 
-              onClick={() => onSelect(idx)}
-              onPointerOver={(e) => document.body.style.cursor = 'pointer'}
-              onPointerOut={(e) => document.body.style.cursor = 'auto'}
+              renderOrder={10}
             >
-              <a.meshPhysicalMaterial 
-                color="#000000" 
-                metalness={0.9} 
-                roughness={0.1} 
-                transmission={0.5} 
-                thickness={0.5} 
-                transparent={true}
-                opacity={fade}
-              />
-            </mesh>
-            
-            {videoTexture && idx === currentIndex && (
-              <mesh position={[centerX, centerY, maxZ + 0.001]}>
-                <planeGeometry args={[deskSizeX, deskSizeY]} />
-                <meshBasicMaterial map={videoTexture} toneMapped={false} />
-              </mesh>
-            )}
+              {deskTex && idx === currentIndex ? (
+                <a.meshBasicMaterial 
+                  map={deskTex} 
+                  toneMapped={false} 
+                  transparent={true} 
+                  depthWrite={false}
+                  opacity={fade} 
+                  side={THREE.DoubleSide} 
+                />
+              ) : (
+                <a.meshPhysicalMaterial 
+                  color="#000000" 
+                  metalness={0.9} 
+                  roughness={0.1} 
+                  transmission={0.5} 
+                  thickness={0.5} 
+                  transparent={true}
+                  depthWrite={false}
+                  opacity={fade}
+                />
+              )}
+            </a.mesh>
           </group>
         )
       })}
@@ -457,7 +436,7 @@ function App() {
           <VideoTextureProvider url={pagesData[currentIndex]?.videoUrl || pagesData[currentIndex]?.particlesSettings?.videoUrl}>
             {(videoTex) => (
               <>
-                <GlobalBackground appConfig={appConfig} videoTexture={videoTex} />
+                <GlobalBackground appConfig={appConfig} videoTexture={videoTex} visible={viewMode === 'ORBIT'} />
                 <BlenderScene 
                   appConfig={appConfig} 
                   pagesData={pagesData}
@@ -474,12 +453,9 @@ function App() {
                     setViewMode('INSIDE');
                   }} 
                 />
-                
-                {/* 3. Obsah projektu uvnitř - VYKRESLÍ SE JEN KDYŽ JSME INSIDE A JEN PRO AKTIVNÍ PROJEKT */}
-                {/* Už to nenatáčíme přes group rotation-y, protože částice mají svou absolutní pozici z Blenderu! */}
+                {/* 3. Obsah projektu uvnitř - VYKRESLÍ SE VŽDY PRO AKTIVNÍ PROJEKT */}
                 <ProjectContent 
                   page={pagesData[currentIndex]} 
-                  visible={viewMode === 'INSIDE'} 
                   appConfig={appConfig}
                   videoTexture={videoTex}
                 />
