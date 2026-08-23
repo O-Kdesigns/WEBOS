@@ -208,11 +208,13 @@ const VideoRefractionMaterialImpl = shaderMaterial(
 
 extend({ VideoRefractionMaterialImpl });
 
+const AnimatedVideoRefractionMaterial = a('videoRefractionMaterialImpl');
+
 export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
   if (settings.colorMode === 'video' && videoTexture) {
     // Pro vlastní shader musíme zajistit, že react-spring správně updatuje uniform
     return (
-      <a.videoRefractionMaterialImpl 
+      <AnimatedVideoRefractionMaterial 
         tVideo={videoTexture} 
         uDistortion={settings.refractionDistortion ?? 0.15}
         uOpacity={opacity}
@@ -221,6 +223,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
       />
     );
   }
+
 
   const onBeforeCompile = React.useCallback((shader) => {
     shader.uniforms.tPositions = { value: null };

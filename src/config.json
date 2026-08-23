@@ -36,6 +36,8 @@
     "refractionDistortion": 0,
     "mouseForceMultiplier": 1,
     "sizeRandomness": 0,
-    "baseSize": 0
+    "baseSize": 0.25,
+    "shape": "cylinder",
+    "hasParticles": true
   }
 }

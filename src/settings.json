@@ -48,13 +48,13 @@
         "useVideoRefraction": true,
         "backgroundVideoOpacity": 0.3,
         "refractionDistortion": 0.15,
-        "videoUrl": "/obsah/particles/video/reklama xelith.mp4",
+        "videoUrl": "/obsah/video/reklama xelith.mp4",
         "selectedNodes": [
           "Particles_Xelith_Backround",
           "Particles_Xelith_Obsah"
         ]
       },
-      "videoUrl": "video/reklama xelith.mp4"
+      "videoUrl": "/obsah/video/reklama xelith.mp4"
     },
     {
       "id": "1784290179745",

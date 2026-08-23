@@ -9,7 +9,22 @@ import settings from './settings.json';
 import config from './config.json';
 import { Editor } from './Editor';
 import { ParticleObject } from './ParticleObject';
+import { useVideoTexture } from '@react-three/drei';
 import './App.css';
+
+function VideoTextureProvider({ url, children }) {
+  if (!url) return <>{children(null)}</>;
+  return (
+    <Suspense fallback={<>{children(null)}</>}>
+      <VideoTextureLoader url={url}>{children}</VideoTextureLoader>
+    </Suspense>
+  );
+}
+
+function VideoTextureLoader({ url, children }) {
+  const texture = useVideoTexture(url, { muted: true, loop: true, start: true, crossOrigin: 'Anonymous' });
+  return <>{children(texture)}</>;
+}
 
 function BackgroundCylinder({ appConfig, visible }) {
   const { scale } = useSpring({
@@ -84,8 +99,7 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
   );
 }
 
-// --- Projekt Content (To co je vidět po kliknutí) ---
-function ProjectContent({ page, visible, appConfig }) {
+function ProjectContent({ page, visible, appConfig, videoTexture }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   // Skryjeme to jen přes condition, nebo vůbec neskrýváme.
@@ -122,7 +136,7 @@ function ProjectContent({ page, visible, appConfig }) {
                 }
               }}
               appConfig={appConfig} 
-              videoTexture={null} 
+              videoTexture={videoTexture} 
               opacity={fade}
             />
           </group>
@@ -132,7 +146,7 @@ function ProjectContent({ page, visible, appConfig }) {
           <ParticleObject 
             settings={settings}
             appConfig={appConfig} 
-            videoTexture={null} 
+            videoTexture={videoTexture} 
             opacity={fade}
           />
         </group>
@@ -141,7 +155,36 @@ function ProjectContent({ page, visible, appConfig }) {
   );
 }
 
-function BlenderScene({ visible, onSelect, appConfig, pagesData }) {
+export function GlobalBackground({ appConfig, videoTexture }) {
+  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  
+  if (!nodes.Cylinder) return null;
+  
+  return (
+    <group position={nodes.Cylinder.getWorldPosition(new THREE.Vector3())} quaternion={nodes.Cylinder.getWorldQuaternion(new THREE.Quaternion())}>
+      <ParticleObject 
+        settings={{ 
+          shape: 'geometry', 
+          customGeometry: nodes.Cylinder.geometry,
+          transform: {
+            position: new THREE.Vector3(0,0,0),
+            quaternion: new THREE.Quaternion(),
+            scale: nodes.Cylinder.getWorldScale(new THREE.Vector3())
+          },
+          count: 10000, 
+          hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
+          baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
+          colorMode: appConfig.cylinderSettings?.colorMode || 'single'
+        }}
+        appConfig={appConfig} 
+        videoTexture={videoTexture} 
+        opacity={1}
+      />
+    </group>
+  );
+}
+
+function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, currentIndex }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   const { fade } = useSpring({
@@ -151,39 +194,30 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData }) {
 
   return (
     <a.group visible={fade.to(v => v > 0)}>
-      {/* Válec z Blenderu jako částice! */}
-      {nodes.Cylinder && (
-        <group position={nodes.Cylinder.getWorldPosition(new THREE.Vector3())} quaternion={nodes.Cylinder.getWorldQuaternion(new THREE.Quaternion())}>
-          <ParticleObject 
-            settings={{ 
-              shape: 'geometry', 
-              customGeometry: nodes.Cylinder.geometry,
-              transform: {
-                position: new THREE.Vector3(0,0,0),
-                quaternion: new THREE.Quaternion(),
-                scale: nodes.Cylinder.getWorldScale(new THREE.Vector3())
-              },
-              count: 10000, 
-              hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
-              baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
-              colorMode: appConfig.cylinderSettings?.colorMode || 'single'
-            }}
-            appConfig={appConfig} 
-            videoTexture={null} 
-            opacity={fade}
-          />
-        </group>
-      )}
-
       {/* Skleněné desky pro projekty */}
       {pagesData.map((page, idx) => {
         const deskNode = nodes[`GlassDesk-${page.title}`] || (idx === 0 ? nodes.GlassDesk : null);
         if (!deskNode) return null;
+        
+        let centerX = 0;
+        let centerY = 0;
+        let maxZ = 0.5;
+        let deskSizeX = 1;
+        let deskSizeY = 1;
+        if (deskNode.geometry) {
+          deskNode.geometry.computeBoundingBox();
+          const bbox = deskNode.geometry.boundingBox;
+          deskSizeX = bbox.max.x - bbox.min.x;
+          deskSizeY = bbox.max.y - bbox.min.y;
+          centerX = (bbox.max.x + bbox.min.x) / 2;
+          centerY = (bbox.max.y + bbox.min.y) / 2;
+          maxZ = bbox.max.z;
+        }
+        
         return (
-          <group key={page.id} position={deskNode.getWorldPosition(new THREE.Vector3())} quaternion={deskNode.getWorldQuaternion(new THREE.Quaternion())}>
+          <group key={page.id} position={deskNode.getWorldPosition(new THREE.Vector3())} quaternion={deskNode.getWorldQuaternion(new THREE.Quaternion())} scale={deskNode.getWorldScale(new THREE.Vector3())}>
             <mesh 
               geometry={deskNode.geometry} 
-              scale={deskNode.getWorldScale(new THREE.Vector3())}
               onClick={() => onSelect(idx)}
               onPointerOver={(e) => document.body.style.cursor = 'pointer'}
               onPointerOut={(e) => document.body.style.cursor = 'auto'}
@@ -198,6 +232,13 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData }) {
                 opacity={fade}
               />
             </mesh>
+            
+            {videoTexture && idx === currentIndex && (
+              <mesh position={[centerX, centerY, maxZ + 0.001]}>
+                <planeGeometry args={[deskSizeX, deskSizeY]} />
+                <meshBasicMaterial map={videoTexture} toneMapped={false} />
+              </mesh>
+            )}
           </group>
         )
       })}
@@ -413,28 +454,38 @@ function App() {
           
           <BlurController rotationY={rotationY} appConfig={appConfig} viewMode={viewMode} />
           
-          <BlenderScene 
-            appConfig={appConfig} 
-            pagesData={pagesData}
-            visible={viewMode === 'ORBIT'} 
-            onSelect={(idx) => {
-              const targetIndex = idx;
-              setAbsoluteIndex(targetIndex);
-              api.start({ 
-                rotationY: targetIndex * -(Math.PI / 2), 
-                immediate: false 
-              });
-              setViewMode('INSIDE');
-            }} 
-          />
-          
-          {/* 3. Obsah projektu uvnitř - VYKRESLÍ SE JEN KDYŽ JSME INSIDE A JEN PRO AKTIVNÍ PROJEKT */}
-          {/* Už to nenatáčíme přes group rotation-y, protože částice mají svou absolutní pozici z Blenderu! */}
-          <ProjectContent 
-            page={pagesData[currentIndex]} 
-            visible={viewMode === 'INSIDE'} 
-            appConfig={appConfig}
-          />
+          <VideoTextureProvider url={pagesData[currentIndex]?.videoUrl || pagesData[currentIndex]?.particlesSettings?.videoUrl}>
+            {(videoTex) => (
+              <>
+                <GlobalBackground appConfig={appConfig} videoTexture={videoTex} />
+                <BlenderScene 
+                  appConfig={appConfig} 
+                  pagesData={pagesData}
+                  visible={viewMode === 'ORBIT'} 
+                  videoTexture={videoTex}
+                  currentIndex={currentIndex}
+                  onSelect={(idx) => {
+                    const targetIndex = idx;
+                    setAbsoluteIndex(targetIndex);
+                    api.start({ 
+                      rotationY: targetIndex * -(Math.PI / 2), 
+                      immediate: false 
+                    });
+                    setViewMode('INSIDE');
+                  }} 
+                />
+                
+                {/* 3. Obsah projektu uvnitř - VYKRESLÍ SE JEN KDYŽ JSME INSIDE A JEN PRO AKTIVNÍ PROJEKT */}
+                {/* Už to nenatáčíme přes group rotation-y, protože částice mají svou absolutní pozici z Blenderu! */}
+                <ProjectContent 
+                  page={pagesData[currentIndex]} 
+                  visible={viewMode === 'INSIDE'} 
+                  appConfig={appConfig}
+                  videoTexture={videoTex}
+                />
+              </>
+            )}
+          </VideoTextureProvider>
 
           <CameraRig 
             appConfig={appConfig} 
