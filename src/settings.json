@@ -2,7 +2,7 @@
   "pages": [
     {
       "id": "1",
-      "title": "1",
+      "title": "Xelith",
       "description": "Základní 3D prostředí",
       "travaSettings": {
         "surfaceModel": "trava/modely_povrchu/ostrov.glb",
@@ -34,11 +34,11 @@
         "objectZ": 1.7,
         "objectY": 0,
         "shape": "custom",
-        "sizeRandomness": 1.27,
-        "baseSize": 0.05,
+        "sizeRandomness": 0,
+        "baseSize": 0.01,
         "customModel": "obsah/levitate/xelith1.glb",
         "count": 2000,
-        "densityPercent": 17,
+        "densityPercent": 100,
         "colorMode": "video",
         "metalness": 1,
         "roughness": 1,
@@ -48,7 +48,11 @@
         "useVideoRefraction": true,
         "backgroundVideoOpacity": 0.3,
         "refractionDistortion": 0.15,
-        "videoUrl": "/obsah/particles/video/reklama xelith.mp4"
+        "videoUrl": "/obsah/particles/video/reklama xelith.mp4",
+        "selectedNodes": [
+          "Particles_Xelith_Backround",
+          "Particles_Xelith_Obsah"
+        ]
       },
       "videoUrl": "video/reklama xelith.mp4"
     },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import './Editor.css';
 
 const DragNumberInput = ({ value, onChange, step = 1, min, max }) => {
@@ -89,67 +90,55 @@ const DragNumberInput = ({ value, onChange, step = 1, min, max }) => {
 };
 
 // Sdílená komponenta pro nastavení jakýchkoliv GPGPU částic
-export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, openSections, toggleSection }) {
+export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, openSections, toggleSection, pageTitle, blenderNodes }) {
   const getFilteredAssets = (list, prefix) => list.filter(f => f.startsWith(prefix));
+
+  let matchedNodes = [];
+  if (pageTitle && blenderNodes) {
+     matchedNodes = blenderNodes.filter(n => n.startsWith('Particles_' + pageTitle));
+  }
 
   return (
     <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid #10b981', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div className="input-group">
-        <label>Tvar částicového oblaku:</label>
-        <select value={settings.shape || 'sphere'} onChange={e => onUpdate('shape', e.target.value)}>
-          <option value="sphere">Koule</option>
-          <option value="cube">Krychle</option>
-          <option value="cylinder">Válec</option>
-          <option value="custom">Vlastní 3D model (z obsahu)</option>
-        </select>
-      </div>
       
-      {settings.shape === 'custom' && (
+      {pageTitle && matchedNodes.length > 0 ? (
         <div className="input-group">
-          <label>Vyberte model (ze složky obsah/levitate/):</label>
-          <select value={settings.customModel || ''} onChange={e => onUpdate('customModel', e.target.value)}>
-            <option value="">Nevybrán model</option>
-            {getFilteredAssets(assets.models || [], 'obsah/levitate/').map(m => <option key={m} value={m}>{m}</option>)}
+          <label>Zvolte objekty z Blenderu ({matchedNodes.length} nalezeno pro '{pageTitle}'):</label>
+          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {matchedNodes.map(nodeName => {
+              const isChecked = settings.selectedNodes ? settings.selectedNodes.includes(nodeName) : true;
+              return (
+                <label key={nodeName} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#60a5fa', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={isChecked}
+                    onChange={e => {
+                      let current = settings.selectedNodes || matchedNodes;
+                      if (e.target.checked) {
+                        current = [...current, nodeName];
+                      } else {
+                        current = current.filter(n => n !== nodeName);
+                      }
+                      onUpdate('selectedNodes', current);
+                    }} 
+                  />
+                  {nodeName}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="input-group">
+          <label>Tvar částicového oblaku (Základní):</label>
+          <select value={settings.shape || 'sphere'} onChange={e => onUpdate('shape', e.target.value)}>
+            <option value="sphere">Koule</option>
+            <option value="cube">Krychle</option>
+            <option value="cylinder">Válec</option>
           </select>
         </div>
       )}
       
-      {/* UMÍSTĚNÍ */}
-      <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
-        <h5 
-          onClick={() => toggleSection(`part-pos-${id}`)} 
-          style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
-        >
-          Umístění <span>{openSections[`part-pos-${id}`] ? '▲' : '▼'}</span>
-        </h5>
-        {openSections[`part-pos-${id}`] && (
-          <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div className="input-group">
-              <label>Vzdálenost od kamery (do hloubky ostrova):</label>
-              <DragNumberInput step={0.1} value={settings.objectZ ?? 4.0} onChange={val => onUpdate('objectZ', val)} />
-            </div>
-            <div className="input-group">
-              <label>Pozice horizontálně (mínus = vlevo, plus = vpravo):</label>
-              <DragNumberInput step={0.1} value={settings.objectX ?? 0.0} onChange={val => onUpdate('objectX', val)} />
-            </div>
-            <div className="input-group">
-              <label>Základní výška (od země):</label>
-              <DragNumberInput step={0.1} value={settings.objectY ?? 2.0} onChange={val => onUpdate('objectY', val)} />
-            </div>
-            <div className="input-group checkbox-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-              <label style={{ fontSize: '0.9rem', color: '#60a5fa' }}>
-                <input 
-                  type="checkbox" 
-                  checked={settings.isGlobalLevitating ?? false} 
-                  onChange={e => onUpdate('isGlobalLevitating', e.target.checked)} 
-                />
-                Celkové levitování a rotace oblaku
-              </label>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* MESH (Velikosti a Hustota) */}
       <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
         <h5 
@@ -169,20 +158,9 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
               <DragNumberInput step={0.05} value={settings.sizeRandomness ?? 0.5} onChange={val => onUpdate('sizeRandomness', val)} />
             </div>
             <div className="input-group">
-              <label>Velikost oblaku (Radius / Výška):</label>
-              <DragNumberInput step={0.1} value={settings.radius ?? 2.0} onChange={val => onUpdate('radius', val)} />
+              <label>Hustota bodů z modelu (0 - 100% z originálu):</label>
+              <DragNumberInput step={1} min={0} max={100} value={settings.densityPercent ?? 100} onChange={val => onUpdate('densityPercent', val)} />
             </div>
-            {settings.shape === 'custom' ? (
-              <div className="input-group">
-                <label>Hustota bodů (0 - 100% z originálu):</label>
-                <DragNumberInput step={1} min={0} max={100} value={settings.densityPercent ?? 100} onChange={val => onUpdate('densityPercent', val)} />
-              </div>
-            ) : (
-              <div className="input-group">
-                <label>Počet částic:</label>
-                <DragNumberInput step={100} value={settings.count ?? 2000} onChange={val => onUpdate('count', val)} />
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -251,6 +229,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
   const [saving, setSaving] = useState(false);
   const [openSections, setOpenSections] = useState({});
   const [isTransparent, setIsTransparent] = useState(false);
+  const [blenderNodes, setBlenderNodes] = useState([]);
 
   const toggleSection = (sectionId) => {
     setOpenSections(prev => ({
@@ -263,6 +242,16 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     fetch('/api/assets')
       .then(r => r.json())
       .then(data => setAssets(data));
+      
+    const loader = new GLTFLoader();
+    // Přidáme timestamp, aby prohlížeč nečetl starou verzi z cache
+    loader.load('/obsah/everything/newworldorder.glb?v=' + Date.now(), (gltf) => {
+       const names = [];
+       gltf.scene.traverse(child => {
+          if (child.name && child.name.includes('Particles_')) names.push(child.name);
+       });
+       setBlenderNodes(names);
+    });
       
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -688,6 +677,8 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                         assets={assets}
                         openSections={openSections}
                         toggleSection={toggleSection}
+                        pageTitle={page.title}
+                        blenderNodes={blenderNodes}
                       />
                     )}
                   </>

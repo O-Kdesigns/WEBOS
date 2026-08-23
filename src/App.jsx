@@ -86,39 +86,180 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
 
 // --- Projekt Content (To co je vidět po kliknutí) ---
 function ProjectContent({ page, visible, appConfig }) {
-  const { scale } = useSpring({
-    scale: visible ? 1 : 0.00001,
+  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+
+  // Skryjeme to jen přes condition, nebo vůbec neskrýváme.
+  // Jelikož uživatel chce "seamless zoom", necháme particles prostě na místě!
+  if (!page || !page.particlesSettings?.hasParticles) return null;
+
+  // Renderujeme je POUZE, pokud jsme ve stavu INSIDE, nebo trvale?
+  // Pokud jen INSIDE, bliknou. Uživatel nechce přeblikávání.
+  // Změníme to tak, že ProjectContent se vykreslí bez animace scale.
+  const settings = page.particlesSettings;
+  const selected = settings.selectedNodes || [];
+
+  const { fade } = useSpring({
+    fade: visible ? 1 : 0,
     config: { duration: 1000 }
   });
 
-  if (!page || !page.particlesSettings?.hasParticles) return null;
-
   return (
-    <a.group scale={scale}>
-      <ParticleObject 
-        settings={page.particlesSettings}
-        appConfig={appConfig} 
-        videoTexture={null} 
-      />
+    <a.group visible={fade.to(v => v > 0)}>
+      {selected.length > 0 ? selected.map(nodeName => {
+        const node = nodes[nodeName];
+        if (!node) return null;
+        return (
+          <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
+            <ParticleObject 
+              settings={{ 
+                ...settings,
+                shape: 'geometry', 
+                customGeometry: node.geometry,
+                transform: {
+                  position: new THREE.Vector3(0,0,0),
+                  quaternion: new THREE.Quaternion(),
+                  scale: node.getWorldScale(new THREE.Vector3())
+                }
+              }}
+              appConfig={appConfig} 
+              videoTexture={null} 
+              opacity={fade}
+            />
+          </group>
+        );
+      }) : (
+        <group>
+          <ParticleObject 
+            settings={settings}
+            appConfig={appConfig} 
+            videoTexture={null} 
+            opacity={fade}
+          />
+        </group>
+      )}
     </a.group>
   );
 }
 
+function BlenderScene({ visible, onSelect, appConfig, pagesData }) {
+  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+
+  const { fade } = useSpring({
+    fade: visible ? 1 : 0,
+    config: { duration: 1000 }
+  });
+
+  return (
+    <a.group visible={fade.to(v => v > 0)}>
+      {/* Válec z Blenderu jako částice! */}
+      {nodes.Cylinder && (
+        <group position={nodes.Cylinder.getWorldPosition(new THREE.Vector3())} quaternion={nodes.Cylinder.getWorldQuaternion(new THREE.Quaternion())}>
+          <ParticleObject 
+            settings={{ 
+              shape: 'geometry', 
+              customGeometry: nodes.Cylinder.geometry,
+              transform: {
+                position: new THREE.Vector3(0,0,0),
+                quaternion: new THREE.Quaternion(),
+                scale: nodes.Cylinder.getWorldScale(new THREE.Vector3())
+              },
+              count: 10000, 
+              hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
+              baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
+              colorMode: appConfig.cylinderSettings?.colorMode || 'single'
+            }}
+            appConfig={appConfig} 
+            videoTexture={null} 
+            opacity={fade}
+          />
+        </group>
+      )}
+
+      {/* Skleněné desky pro projekty */}
+      {pagesData.map((page, idx) => {
+        const deskNode = nodes[`GlassDesk-${page.title}`] || (idx === 0 ? nodes.GlassDesk : null);
+        if (!deskNode) return null;
+        return (
+          <group key={page.id} position={deskNode.getWorldPosition(new THREE.Vector3())} quaternion={deskNode.getWorldQuaternion(new THREE.Quaternion())}>
+            <mesh 
+              geometry={deskNode.geometry} 
+              scale={deskNode.getWorldScale(new THREE.Vector3())}
+              onClick={() => onSelect(idx)}
+              onPointerOver={(e) => document.body.style.cursor = 'pointer'}
+              onPointerOut={(e) => document.body.style.cursor = 'auto'}
+            >
+              <a.meshPhysicalMaterial 
+                color="#000000" 
+                metalness={0.9} 
+                roughness={0.1} 
+                transmission={0.5} 
+                thickness={0.5} 
+                transparent={true}
+                opacity={fade}
+              />
+            </mesh>
+          </group>
+        )
+      })}
+    </a.group>
+  );
+}
+
+const AnimatedCamera = a(PerspectiveCamera);
+
 // --- Kamerový Rig ---
 function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
-  const { springZ } = useSpring({
-    springZ: viewMode === 'ORBIT' ? (appConfig.cameraRadius || 18) : 7.0,
+  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  
+  const camChoose = nodes.Camera_CHoose || nodes.Camera_Choose || nodes.Camera || nodes['Camera.001'];
+  const camIn = nodes.Camera_In || nodes.Camera_IN;
+
+  // Nastavení pro ORBIT (rotování kolem válce)
+  let orbitZ = appConfig.cameraRadius || 18;
+  let orbitY = appConfig.cameraHeight ?? 1.5;
+  let orbitFov = appConfig.cameraFov || 60;
+  let orbitAngle = 0;
+  
+  if (camChoose) {
+     const worldPos = camChoose.getWorldPosition(new THREE.Vector3());
+     orbitZ = Math.sqrt(worldPos.x**2 + worldPos.z**2) || orbitZ;
+     orbitY = worldPos.y !== undefined ? worldPos.y : orbitY;
+     orbitFov = camChoose.fov || orbitFov;
+     orbitAngle = Math.atan2(worldPos.x, worldPos.z);
+  }
+
+  // Nastavení pro INSIDE (pohled na detail projektu)
+  let inZ = 3.0;
+  let inY = orbitY;
+  let inFov = orbitFov;
+  let inAngle = orbitAngle;
+
+  if (camIn) {
+      const worldPos = camIn.getWorldPosition(new THREE.Vector3());
+      inZ = Math.sqrt(worldPos.x**2 + worldPos.z**2) || inZ;
+      inY = worldPos.y !== undefined ? worldPos.y : inY;
+      inFov = camIn.fov || inFov;
+      inAngle = Math.atan2(worldPos.x, worldPos.z);
+  }
+
+  const { springZ, springY, springFov, springBaseAngle } = useSpring({
+    springZ: viewMode === 'ORBIT' ? orbitZ : inZ,
+    springY: viewMode === 'ORBIT' ? orbitY : inY,
+    springFov: viewMode === 'ORBIT' ? orbitFov : inFov,
+    springBaseAngle: viewMode === 'ORBIT' ? orbitAngle : inAngle,
     config: { duration: 1000 }
   });
 
   return (
     <a.group rotation-y={rotationY}>
-      <a.group position-z={springZ}>
-        <PerspectiveCamera 
-          makeDefault 
-          fov={appConfig.cameraFov || 60} 
-          position={[0, appConfig.cameraHeight ?? 1.5, 0]} 
-        />
+      <a.group rotation-y={springBaseAngle}>
+        <a.group position-z={springZ} position-y={springY}>
+          <AnimatedCamera 
+            makeDefault 
+            fov={springFov} 
+            position={[0, 0, 0]} 
+          />
+        </a.group>
       </a.group>
     </a.group>
   );
@@ -272,28 +413,28 @@ function App() {
           
           <BlurController rotationY={rotationY} appConfig={appConfig} viewMode={viewMode} />
           
-          {/* 1. Obrovský středový sloup částic, který rotuješ (Zmizí když jsi INSIDE) */}
-          <BackgroundCylinder appConfig={appConfig} visible={viewMode === 'ORBIT'} />
-
-          {/* 2. Prstenec portfoliových desek, rotuješ kamerou kolem nich */}
-          <OrbitalBoards 
-            pagesData={pagesData} 
+          <BlenderScene 
+            appConfig={appConfig} 
+            pagesData={pagesData}
             visible={viewMode === 'ORBIT'} 
             onSelect={(idx) => {
-              // Nezměníme rotaci (zůstane tam kde je), jen se ponoříme
+              const targetIndex = idx;
+              setAbsoluteIndex(targetIndex);
+              api.start({ 
+                rotationY: targetIndex * -(Math.PI / 2), 
+                immediate: false 
+              });
               setViewMode('INSIDE');
             }} 
           />
           
           {/* 3. Obsah projektu uvnitř - VYKRESLÍ SE JEN KDYŽ JSME INSIDE A JEN PRO AKTIVNÍ PROJEKT */}
-          {/* Natáčíme obsah s kamerou, aby byl vždy čelem ke kameře (protože osa Z kamery rotuje) */}
-          <group rotation-y={currentIndex * -(Math.PI / 2)}>
-             <ProjectContent 
-               page={pagesData[currentIndex]} 
-               visible={viewMode === 'INSIDE'} 
-               appConfig={appConfig}
-             />
-          </group>
+          {/* Už to nenatáčíme přes group rotation-y, protože částice mají svou absolutní pozici z Blenderu! */}
+          <ProjectContent 
+            page={pagesData[currentIndex]} 
+            visible={viewMode === 'INSIDE'} 
+            appConfig={appConfig}
+          />
 
           <CameraRig 
             appConfig={appConfig} 

@@ -1,8 +1,8 @@
 {
   "globalSurfaceModel": "trava/modely_ctvrtky/objekty1.glb",
   "islandScaleHorizontal": 2,
-  "cameraFov": 54,
-  "cameraHeight": -0.8,
+  "cameraFov": 5450,
+  "cameraHeight": 0,
   "blurIntensity": 19,
   "physics": {
     "mass": 2.5,
@@ -34,6 +34,8 @@
     "roughness": -0.57,
     "metalness": 0.12,
     "refractionDistortion": 0,
-    "mouseForceMultiplier": 1
+    "mouseForceMultiplier": 1,
+    "sizeRandomness": 0,
+    "baseSize": 0
   }
 }

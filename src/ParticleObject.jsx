@@ -4,6 +4,7 @@ import { useGLTF, shaderMaterial, useVideoTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { extend } from '@react-three/fiber';
 import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRenderer.js';
+import { a } from '@react-spring/three';
 
 // Pomocná funkce pro vygenerování palety
 const getColors = () => [
@@ -207,13 +208,14 @@ const VideoRefractionMaterialImpl = shaderMaterial(
 
 extend({ VideoRefractionMaterialImpl });
 
-export function ParticleMaterial({ settings, videoTexture }) {
+export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
   if (settings.colorMode === 'video' && videoTexture) {
+    // Pro vlastní shader musíme zajistit, že react-spring správně updatuje uniform
     return (
-      <videoRefractionMaterialImpl 
+      <a.videoRefractionMaterialImpl 
         tVideo={videoTexture} 
         uDistortion={settings.refractionDistortion ?? 0.15}
-        uOpacity={1.0}
+        uOpacity={opacity}
         uColor={new THREE.Color(settings.baseColor || '#ffffff')}
         transparent={true}
       />
@@ -243,7 +245,7 @@ export function ParticleMaterial({ settings, videoTexture }) {
   }, []);
 
   return (
-    <meshPhysicalMaterial 
+    <a.meshPhysicalMaterial 
       onBeforeCompile={onBeforeCompile}
       vertexColors={settings.colorMode === 'vertex'}
       color={settings.colorMode === 'single' ? (settings.baseColor || '#3b82f6') : '#ffffff'}
@@ -252,6 +254,8 @@ export function ParticleMaterial({ settings, videoTexture }) {
       transmission={settings.transmission ?? 0.0}
       thickness={settings.thickness ?? 0.0}
       ior={1.5}
+      transparent={true}
+      opacity={opacity}
     />
   );
 }
@@ -351,7 +355,7 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
   });
 }
 
-function StandardParticleObject({ settings, appConfig, videoTexture }) {
+function StandardParticleObject({ settings, appConfig, videoTexture, opacity }) {
   const meshRef = useRef();
   const pointerLightRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -467,7 +471,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture }) {
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -477,7 +481,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture }) {
   );
 }
 
-function CustomParticleObject({ settings, appConfig, videoTexture }) {
+function CustomParticleObject({ settings, appConfig, videoTexture, opacity }) {
   const { scene } = useGLTF(`/obsah/${settings.customModel}`);
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -616,7 +620,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture }) {
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -626,12 +630,160 @@ function CustomParticleObject({ settings, appConfig, videoTexture }) {
   );
 }
 
-export function ParticleObject({ settings, appConfig, videoTexture }) {
+function GeometryParticleObject({ settings, appConfig, videoTexture, opacity }) {
+  const meshRef = useRef();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const colors = useMemo(getColors, []);
+  const pointerLightRef = useRef();
+  const { gl } = useThree();
+
+  const posX = settings.objectX ?? 0.0;
+  const posY = settings.objectY ?? 0.0;
+  const posZ = settings.objectZ ?? 0.0;
+  
+  const { vertices, center } = useMemo(() => {
+    const pts = [];
+    const c = new THREE.Vector3();
+    const geom = settings.customGeometry;
+    
+    if (geom) {
+      geom.computeBoundingBox();
+      geom.boundingBox.getCenter(c);
+
+      const posAttribute = geom.attributes.position;
+      const colorAttribute = geom.attributes.color;
+      const v = new THREE.Vector3();
+      const col = new THREE.Color();
+      
+      for (let i = 0; i < posAttribute.count; i++) {
+        v.fromBufferAttribute(posAttribute, i);
+        
+        let pointColor = new THREE.Color('#ffffff');
+        if (colorAttribute) {
+          col.fromBufferAttribute(colorAttribute, i);
+          pointColor = col.clone();
+        }
+        
+        pts.push({ v: v.clone(), c: pointColor });
+      }
+
+      for (let i = pts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pts[i], pts[j]] = [pts[j], pts[i]];
+      }
+    }
+
+    return { vertices: pts, center: c };
+  }, [settings.customGeometry]);
+
+  const radiusScale = settings.radius ?? 1.0;
+  const densityPercent = settings.densityPercent ?? 100;
+  const count = vertices.length > 0 ? Math.max(1, Math.floor(vertices.length * (densityPercent / 100))) : 0;
+
+  const particlesData = useMemo(() => {
+    const data = [];
+    const baseColorObj = new THREE.Color(settings.baseColor || '#3b82f6');
+
+    for (let i = 0; i < count; i++) {
+      let x = 0, y = 0, z = 0;
+      let color = baseColorObj;
+      
+      if (vertices.length > 0) {
+        const vIndex = i % vertices.length; 
+        const vertexObj = vertices[vIndex];
+        
+        x = vertexObj.v.x;
+        y = vertexObj.v.y;
+        z = vertexObj.v.z;
+
+        if (settings.colorMode === 'vertex') {
+          color = vertexObj.c;
+        }
+      }
+
+      const baseSize = settings.baseSize ?? 0.1;
+      const sizeRandomness = settings.sizeRandomness ?? 0.5;
+
+      const isLarge = Math.random() > 0.95;
+      let scale = baseSize * (1.0 + (Math.random() - 0.5) * sizeRandomness);
+      if (isLarge) {
+        scale += baseSize * (2.0 + Math.random()) * sizeRandomness;
+      }
+      scale = Math.max(0.001, scale);
+      
+      const speed = Math.random() * 0.5 + 0.1;
+      const offset = Math.random() * Math.PI * 2;
+
+      data.push({ x, y, z, scale, color, speed, offset });
+    }
+    return data;
+  }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor]);
+
+  const compute = useGPGPU(count, particlesData, gl);
+
+  const computeUVs = useMemo(() => {
+     if (!compute) return new Float32Array(0);
+     const size = compute.size;
+     const uvs = new Float32Array(count * 2);
+     let i = 0;
+     for(let y = 0; y < size; y++) {
+         for(let x = 0; x < size; x++) {
+             if (i < count) {
+                 uvs[i * 2] = (x + 0.5) / size;
+                 uvs[i * 2 + 1] = (y + 0.5) / size;
+             }
+             i++;
+         }
+     }
+     return uvs;
+  }, [count, compute]);
+
+  useEffect(() => {
+    if (!meshRef.current || !compute) return;
+
+    for (let i = 0; i < count; i++) {
+      dummy.position.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+      meshRef.current.setColorAt(i, particlesData[i].color);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
+    meshRef.current.frustumCulled = false;
+    
+    meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
+  }, [count, particlesData, dummy, compute, computeUVs]);
+
+  const transform = settings.transform || { position: [posX, 0, posZ] };
+  useParticleLogic(meshRef, pointerLightRef, settings, appConfig, 0, compute);
+
+  return (
+    <group {...transform}>
+      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow>
+        <sphereGeometry args={[1, 16, 16]} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
+      </instancedMesh>
+      
+      <group ref={pointerLightRef}>
+        <pointLight distance={15} intensity={appConfig?.particlePhysics?.laserIntensity ?? 10} color="#60a5fa" />
+      </group>
+    </group>
+  );
+}
+
+export function ParticleObject({ settings, appConfig, videoTexture, opacity }) {
   if (!settings?.hasParticles) return null;
   
   if (settings.shape === 'custom' && settings.customModel) {
-    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} />;
+    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} />;
+  }
+
+  if (settings.shape === 'geometry' && settings.customGeometry) {
+    return <GeometryParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} />;
   }
   
-  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} />;
+  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} />;
 }
+
