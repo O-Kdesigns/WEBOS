@@ -79,44 +79,6 @@
         "hasParticles": false
       },
       "videoUrl": "video/Video pribeh.mp4"
-    },
-    {
-      "id": "1784301144221",
-      "title": "3",
-      "description": "",
-      "travaSettings": {
-        "surfaceModel": "",
-        "surfaceMode": "color",
-        "surfaceTexture": "",
-        "surfaceColor": "#000599",
-        "hasBasicGrass": false,
-        "grassModelType": "custom",
-        "grassCustomModel": "trava/modely_povrchu/ostrov.glb"
-      },
-      "image": "",
-      "color": "#ffffff",
-      "obsahSettings": {
-        "hasLevitate": true,
-        "levitateModel": "obsah/levitate/xelith.glb"
-      }
-    },
-    {
-      "id": "1784301146247",
-      "title": "4",
-      "description": "",
-      "travaSettings": {
-        "surfaceModel": "",
-        "surfaceMode": "color",
-        "surfaceTexture": "",
-        "surfaceColor": "#996100",
-        "hasBasicGrass": false
-      },
-      "image": "",
-      "color": "#ffffff",
-      "obsahSettings": {
-        "hasLevitate": true,
-        "levitateModel": "obsah/levitate/xelith.glb"
-      }
     }
   ]
 }

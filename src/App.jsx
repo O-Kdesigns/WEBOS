@@ -31,6 +31,8 @@ function VideoTextureLoader({ url, children }) {
 // --- Orbital Boards (Desky s portfoliem) ---
 function OrbitalBoards({ pagesData, onSelect, visible }) {
   const radius = 10;
+  const totalPages = Math.max(pagesData.length, 1);
+  const pageDistance = (Math.PI * 2) / totalPages;
   
   const { scale } = useSpring({
     scale: visible ? 1 : 0.00001,
@@ -40,7 +42,7 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
   return (
     <a.group scale={scale}>
       {pagesData.map((page, i) => {
-        const angle = i * (Math.PI / 2);
+        const angle = i * pageDistance;
         return (
           <group key={page.id} rotation-y={angle}>
             <group position-z={radius}>
@@ -173,28 +175,39 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, c
     if (!videoTexture) return null;
     const tex = videoTexture.clone();
     tex.center.set(0.5, 0.5);
-    tex.rotation = Math.PI; // Otočení o 180 stupňů
+    tex.rotation = Math.PI; 
     tex.needsUpdate = true;
     return tex;
   }, [videoTexture]);
+
+  const totalPages = Math.max(pagesData.length, 1);
+  const pageDistance = (Math.PI * 2) / totalPages;
+
+  let baseDeskNode = nodes.GlassDesk || nodes['GlassDesk-Xelith'];
+  if (!baseDeskNode) {
+    const glassKey = Object.keys(nodes).find(k => k.startsWith('GlassDesk'));
+    if (glassKey) baseDeskNode = nodes[glassKey];
+  }
 
   return (
     <a.group visible={fade.to(v => v > 0)}>
       {/* Skleněné desky pro projekty */}
       {pagesData.map((page, idx) => {
-        const deskNode = nodes[`GlassDesk-${page.title}`] || (idx === 0 ? nodes.GlassDesk : null);
-        if (!deskNode) return null;
-        const deskPos = deskNode.getWorldPosition(new THREE.Vector3());
-        const deskRot = deskNode.getWorldQuaternion(new THREE.Quaternion());
-        const deskScale = deskNode.getWorldScale(new THREE.Vector3());
+        if (!baseDeskNode) return null;
+        const deskPos = baseDeskNode.getWorldPosition(new THREE.Vector3());
+        const deskRot = baseDeskNode.getWorldQuaternion(new THREE.Quaternion());
+        const deskScale = baseDeskNode.getWorldScale(new THREE.Vector3());
         
         return (
           <group 
             key={page.id}
-            onClick={() => onSelect(idx)}
-            onPointerOver={(e) => document.body.style.cursor = 'pointer'}
-            onPointerOut={(e) => document.body.style.cursor = 'auto'}
+            rotation-y={idx * pageDistance}
           >
+            <group
+              onClick={() => onSelect(idx)}
+              onPointerOver={(e) => document.body.style.cursor = 'pointer'}
+              onPointerOut={(e) => document.body.style.cursor = 'auto'}
+            >
             <a.mesh 
               position={deskPos}
               quaternion={deskRot}
@@ -224,6 +237,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, c
                 />
               )}
             </a.mesh>
+            </group>
           </group>
         )
       })}
@@ -291,7 +305,7 @@ function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
   );
 }
 
-function BlurController({ rotationY, appConfig, viewMode }) {
+function BlurController({ rotationY, appConfig, viewMode, totalPages }) {
   const lastRot = useRef(rotationY.get());
   
   useFrame(() => {
@@ -305,12 +319,12 @@ function BlurController({ rotationY, appConfig, viewMode }) {
     const velocity = Math.abs(currentRot - lastRot.current);
     lastRot.current = currentRot;
     
-    const pageDistance = Math.PI / 2;
+    const pageDistance = (Math.PI * 2) / totalPages;
     const adjustedRot = Math.abs(currentRot);
     const normalizedAngle = adjustedRot % pageDistance;
     const distanceFromPage = Math.min(normalizedAngle, pageDistance - normalizedAngle);
     
-    const middleFactor = distanceFromPage / (Math.PI / 4);
+    const middleFactor = distanceFromPage / (pageDistance / 2);
     const intensity = appConfig.blurIntensity ?? 300;
     
     const velocityBlur = velocity * 300;
@@ -338,6 +352,7 @@ function App() {
   const [viewMode, setViewMode] = useState('ORBIT'); // 'ORBIT' or 'INSIDE'
 
   const totalPages = Math.max(pagesData.length, 1);
+  const pageDistance = (Math.PI * 2) / totalPages;
   const dragStartRotRef = useRef(0);
   const wheelLockRef = useRef(false);
   
@@ -363,7 +378,7 @@ function App() {
     setAbsoluteIndex(prev => {
       const nextIndex = prev + direction;
       api.start({ 
-        rotationY: nextIndex * -(Math.PI / 2), 
+        rotationY: nextIndex * -pageDistance, 
         immediate: false 
       });
       return nextIndex;
@@ -377,7 +392,7 @@ function App() {
       dragStartRotRef.current = rotationY.get();
     }
 
-    const offsetAngle = (mx / (window.innerWidth / 3)) * (Math.PI / 2);
+    const offsetAngle = (mx / (window.innerWidth / 3)) * pageDistance;
 
     if (active) {
       api.start({ 
@@ -386,19 +401,19 @@ function App() {
       });
     } else {
       const finalAngle = dragStartRotRef.current + offsetAngle;
-      const exactFloatIndex = finalAngle / -(Math.PI / 2);
+      const exactFloatIndex = finalAngle / -pageDistance;
       
       let targetIndex = Math.round(exactFloatIndex);
       
       if (vx > (appConfig.physics?.swipeVelocityThreshold ?? 0.5)) {
         const dir = mx < 0 ? 1 : -1;
-        const startingIndex = Math.round(dragStartRotRef.current / -(Math.PI / 2));
+        const startingIndex = Math.round(dragStartRotRef.current / -pageDistance);
         targetIndex = startingIndex + dir;
       }
       
       setAbsoluteIndex(targetIndex);
       api.start({ 
-        rotationY: targetIndex * -(Math.PI / 2), 
+        rotationY: targetIndex * -pageDistance, 
         immediate: false 
       });
     }
@@ -437,7 +452,7 @@ function App() {
           />
           <ambientLight intensity={0.2} />
           
-          <BlurController rotationY={rotationY} appConfig={appConfig} viewMode={viewMode} />
+          <BlurController rotationY={rotationY} appConfig={appConfig} viewMode={viewMode} totalPages={totalPages} />
           
           <VideoTextureProvider url={pagesData[currentIndex]?.videoUrl || pagesData[currentIndex]?.particlesSettings?.videoUrl}>
             {(videoTex) => (
@@ -453,7 +468,7 @@ function App() {
                     const targetIndex = idx;
                     setAbsoluteIndex(targetIndex);
                     api.start({ 
-                      rotationY: targetIndex * -(Math.PI / 2), 
+                      rotationY: targetIndex * -pageDistance, 
                       immediate: false 
                     });
                     setViewMode('INSIDE');
