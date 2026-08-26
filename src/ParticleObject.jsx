@@ -28,16 +28,22 @@ void main() {
     vec4 pos = texture2D(texturePosition, uv);
     vec4 vel = texture2D(textureVelocity, uv);
     
+    // AGENT NOTE (from User): 
+    // ALWAYS USE VELOCITY BRUSH. NEVER USE REPULSIVE FORCE.
+    // Standing still must do NOTHING. Only mouse velocity (uMouseVel) pushes particles.
+    
     // MYŠ & TEKUTINA
     float t = dot(pos.xyz - uMousePos, uMouseDir);
-    if (t > 0.0 && t < 15.0) {
+    if (t > 0.0 && t < 100.0) {
         vec3 closestPt = uMousePos + uMouseDir * t;
         float d = distance(pos.xyz, closestPt);
         
         if (d < uMouseRadius) {
             float f = 1.0 - (d / uMouseRadius);
             f = smoothstep(0.0, 1.0, f);
-            float depthFalloff = 1.0 - (t / 15.0);
+            
+            // Síla slábne s hloubkou, ale dosáhne až na konec válce (100.0)
+            float depthFalloff = 1.0 - (t / 100.0);
             
             vec3 push = uMouseVel * f * (uMouseForce * 8.0);
             
@@ -57,6 +63,7 @@ uniform float uTime;
 uniform float uFloatSpeed;
 uniform float uFloatAmplitude;
 uniform float uReturnSpeed;
+uniform float uScatter;
 uniform sampler2D tBasePosition;
 
 void main() {
@@ -72,6 +79,19 @@ void main() {
     vec3 targetPos = base.xyz; 
     float offset = base.w;
     targetPos.y += sin(uTime * uFloatSpeed + offset) * uFloatAmplitude;
+    
+    // --- SCATTER EFFECT ---
+    // Roztrháme částice do stran
+    vec3 radial = normalize(base.xyz + vec3(0.001));
+    vec3 randomDir = normalize(vec3(
+        sin(offset * 132.34) * cos(offset * 342.12),
+        cos(offset * 112.54),
+        sin(offset * 211.11) * sin(offset * 313.22)
+    ));
+    // Vytvoříme chaos pozici hodně daleko od středu
+    vec3 scatterTarget = targetPos + (radial + randomDir) * 300.0; 
+    
+    targetPos = mix(targetPos, scatterTarget, uScatter);
     
     // 3. Hladký návrat s nastavitelnou rychlostí
     pos.xyz += (targetPos - pos.xyz) * uReturnSpeed;
@@ -130,6 +150,7 @@ function useGPGPU(count, particlesData, gl) {
       posVar.material.uniforms.uFloatSpeed = { value: 1.0 };
       posVar.material.uniforms.uFloatAmplitude = { value: 0.1 };
       posVar.material.uniforms.uReturnSpeed = { value: 0.05 };
+      posVar.material.uniforms.uScatter = { value: 0.0 };
       posVar.material.uniforms.tBasePosition = { value: basePos };
       
       const error = gpuCompute.init();
@@ -294,19 +315,33 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
     posUniforms.uFloatAmplitude.value = phys.floatAmplitude ?? 0.1;
     // Nové nastavení rychlosti návratu částic
     posUniforms.uReturnSpeed.value = phys.returnSpeed ?? 0.05;
+    
+    if (settings.scatterSpring) {
+      // Umocněním na třetí získáme extrémně pomalý rozjezd (0.1^3 = 0.001) a rychlý konec
+      posUniforms.uScatter.value = Math.pow(settings.scatterSpring.get(), 3.0);
+    } else {
+      posUniforms.uScatter.value = 0.0;
+    }
 
     velUniforms.uMouseRadius.value = phys.mouseRadius ?? 2.0;
     velUniforms.uMouseForce.value = phys.mouseForce ?? 1.0;
 
-    const planeNormal = new THREE.Vector3(0, 0, 1);
-    planeNormal.transformDirection(meshRef.current.matrixWorld); 
+    // Rovina pro raycaster musí VŽDY směřovat ke kameře, jinak se při rotaci rozbije interakce
+    const planeNormal = new THREE.Vector3();
+    state.camera.getWorldDirection(planeNormal);
+    planeNormal.negate(); // Normála směřuje proti pohledu kamery
+    
     const planePoint = new THREE.Vector3();
     meshRef.current.getWorldPosition(planePoint); 
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, planePoint);
     const rawTarget = state.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
     
     const invMat = new THREE.Matrix4().copy(meshRef.current.matrixWorld).invert();
-    const localCameraPos = state.camera.position.clone().applyMatrix4(invMat);
+    
+    // Získat SKUTEČNOU světovou pozici kamery, ne její lokální [0,0,0] z rigu!
+    const worldCameraPos = new THREE.Vector3();
+    state.camera.getWorldPosition(worldCameraPos);
+    const localCameraPos = worldCameraPos.applyMatrix4(invMat);
 
     if (rawTarget) {
       meshRef.current.worldToLocal(rawTarget);

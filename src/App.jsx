@@ -121,15 +121,20 @@ function ProjectContent({ page, appConfig, videoTexture }) {
 export function GlobalBackground({ appConfig, videoTexture, visible }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
   
-  const { fade } = useSpring({
-    fade: visible ? 1 : 0,
-    config: { duration: 1000 }
+  // Místo mizení (fade) animujeme scatter (rozlet)
+  const { scatter } = useSpring({
+    scatter: visible ? 0 : 1, 
+    // Při skládání zpět (visible=true) použijeme původní rychlejší pružinu.
+    // Při rozletu (visible=false) použijeme těžší a volnější pružinu, která začne pomaleji a trvá déle.
+    config: visible 
+      ? { mass: 1, tension: 120, friction: 30 } 
+      : { mass: 15, tension: 10, friction: 60 } 
   });
 
   if (!nodes.Cylinder) return null;
   
   return (
-    <a.group visible={fade.to(v => v > 0)}>
+    <group>
       <group position={nodes.Cylinder.getWorldPosition(new THREE.Vector3())} quaternion={nodes.Cylinder.getWorldQuaternion(new THREE.Quaternion())}>
         <ParticleObject 
           settings={{ 
@@ -143,15 +148,16 @@ export function GlobalBackground({ appConfig, videoTexture, visible }) {
             count: 10000, 
             hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
             baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
-            colorMode: appConfig.cylinderSettings?.colorMode || 'single'
+            colorMode: appConfig.cylinderSettings?.colorMode || 'single',
+            scatterSpring: scatter // Předáme spring hodnotu pro animaci shaderu
           }}
           appConfig={appConfig} 
           videoTexture={videoTexture} 
-          opacity={fade}
+          opacity={1} // Válec už nezmizí, jen se rozletí
           renderOrder={1}
         />
       </group>
-    </a.group>
+    </group>
   );
 }
 
