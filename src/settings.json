@@ -58,7 +58,7 @@
     },
     {
       "id": "1784290179745",
-      "title": "2",
+      "title": "Doomsday",
       "description": "",
       "travaSettings": {
         "surfaceModel": "trava/modely_povrchu/ostrov.glb",
@@ -77,7 +77,8 @@
       },
       "particlesSettings": {
         "hasParticles": false
-      }
+      },
+      "videoUrl": "video/Video pribeh.mp4"
     },
     {
       "id": "1784301144221",

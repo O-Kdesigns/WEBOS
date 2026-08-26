@@ -32,3 +32,11 @@ Tento soubor slou≈æ√≠ jako sd√≠len√° pamƒõ≈• pro v≈°echny budouc√≠ konverzace s 
 - **Sloûky pro komponenty:** 3D modely pro volnÈ objekty (stromy, budovy) se neukl·dajÌ p¯Ìmo do sloûek str·nek, ale do sdÌlenÈ sloûky public/obsah/obsah/levitate/ (pro objekty) nebo public/obsah/trava/ (pro povrchy). Odtud je CMS dynamicky naËÌt· do roletek.
 - **Optimalizace real-time updat˘ (textureCache):** Protoûe Editor umoûÚuje mÏnit hodnoty taûenÌm 60kr·t za vte¯inu, nelze aplikovat novÈ textury uvnit¯ useMemo. Aplikace barev a materi·l˘ je p¯esunuta do useEffect a textury jsou cachov·ny v glob·lnÌm objektu 	extureCache, aby nedoch·zelo k propadu framerate a neust·lÈmu stahov·nÌ.
 - **Event propagation:** Editor m· na svÈm rootu onWheel={(e) => e.stopPropagation()}, aby p¯i scrollov·nÌ nabÌdkami neodrotov·vala scÈna na pozadÌ.
+
+## 6. Zaji≈°tƒõn√≠ responzivn√≠ho horizont√°ln√≠ho FOV (Three.js kamery)
+- **Probl√©m:** V Three.js je FOV v≈ædy vertik√°ln√≠. Na ultrawide monitorech je vidƒõt p≈ô√≠li≈° mnoho do stran, na u≈æ≈°√≠ch displej√≠ch (16:10) jsou naopak o≈ô√≠znut√© boky.
+- **≈òe≈°en√≠:** Nepou≈æ√≠vej fixn√≠ ov pro kameru, ale vypoƒç√≠tej vertik√°ln√≠ FOV dynamicky v useFrame tak, aby zachovalo fixn√≠ horizont√°ln√≠ √∫hel (podle zadan√© reference, nap≈ô. 16:9).
+- **Postup (Active Theory styl):** V useFrame si naƒçti aktu√°ln√≠ aspect ratio z rendereru (state.size.width / state.size.height) a aplikuj vzorec:
+  	argetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (REFERENCE_ASPECT / currentAspect))
+- **Plynulost vs. Animace (Kritick√©):** Zmƒõna aspect ratia (resizing okna) se nesm√≠ animovat p≈ôes useSpring. Pokud po≈°le≈° dynamick√© FOV rovnou do springu, animace zp≈Øsob√≠ pomal√© "dotahov√°n√≠" zobrazen√≠ p≈ôi p≈ôesunu okna na jin√Ω monitor. 
+- **Spr√°vn√° implementace:** P≈ôes useSpring animuj pouze logick√Ω p≈ôechod (nap≈ô. z 0 do 1) mezi stavy (z orbitFov do insideFov). Tento meziv√Ωsledek (p≈ôes lerp) pak aplikuj do v√Ω≈°e uveden√©ho vzorce a okam≈æitƒõ zapi≈° do cameraRef.current.fov uvnit≈ô useFrame.
