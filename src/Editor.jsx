@@ -569,6 +569,16 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   <option value="">Žádné video</option>
                   {getFilteredAssets(assets.videos, 'video/').map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
+                {page.videoUrl && (
+                  <div style={{ marginTop: '10px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: '#000', display: 'flex', justifyContent: 'center' }}>
+                    <video 
+                      src={encodeURI(`/obsah/${page.videoUrl.replace(/^\/?(obsah\/)?/, '')}`)}
+                      controls 
+                      muted 
+                      style={{ width: '100%', maxHeight: '150px', objectFit: 'contain' }}
+                    />
+                  </div>
+                )}
               </div>
 
 

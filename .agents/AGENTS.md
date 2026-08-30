@@ -40,3 +40,10 @@ Tento soubor slouží jako sdílená paměť pro všechny budoucí konverzace s 
   	argetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (REFERENCE_ASPECT / currentAspect))
 - **Plynulost vs. Animace (Kritické):** Změna aspect ratia (resizing okna) se nesmí animovat přes useSpring. Pokud pošleš dynamické FOV rovnou do springu, animace způsobí pomalé "dotahování" zobrazení při přesunu okna na jiný monitor. 
 - **Správná implementace:** Přes useSpring animuj pouze logický přechod (např. z 0 do 1) mezi stavy (z orbitFov do insideFov). Tento mezivýsledek (přes lerp) pak aplikuj do výše uvedeného vzorce a okamžitě zapiš do cameraRef.current.fov uvnitř useFrame.
+
+
+## 7. Zpracování cest k assetům a dynamické klonování
+- **Cesty k assetům (Editor vs. Aplikace):** Editor ukládá cesty k souborům z API relativně k adresáři `public/obsah` (např. `video/file.mp4`). Samotná aplikace ale běží z rootu a potřebuje k nim absolutní prefix (např. `/obsah/video/file.mp4`), jinak dojde k chybám (černé obrazovky, nenačtené textury).
+- **Pravidlo (resolveAssetUrl):** Vždy používej pomocnou funkci v `App.jsx` (např. `resolveAssetUrl`), která zajistí dynamické a bezpečné připojení prefixu `/obsah/` na frontendu (pokud tam chybí). Neupravuj/neukládej absolutní cesty přímo do `settings.json`, rozbil bys tím spárování s hodnotami v dropdown polích Editoru.
+- **Dynamické klonování 3D modelů:** Při rozmisťování objektů (televize, portály apod.) do kruhu kolem scény se nespoléhej na fixní počet stránek (např. `Math.PI / 2` pro 4 stránky) ani na to, že uživatel v Blenderu ručně vytvořil instance pro každou stránku (např. `GlassDesk-Xelith`, `GlassDesk-Doomsday`).
+- **Pravidlo (Procedurální rozmisťování):** Aplikace si musí najít jeden referenční objekt v GLB (např. první nalezený `GlassDesk`), zjistit počet stránek `totalPages = Math.max(pagesData.length, 1)` a automaticky rozprostřít klony do kruhu tak, že mesh obalí do grupy rotující o `i * (Math.PI * 2) / totalPages`.

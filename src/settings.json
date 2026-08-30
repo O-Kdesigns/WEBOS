@@ -2,7 +2,7 @@
   "pages": [
     {
       "id": "1",
-      "title": "Xelith",
+      "title": "Xelith hovnogiii",
       "description": "Základní 3D prostředí",
       "travaSettings": {
         "surfaceModel": "trava/modely_povrchu/ostrov.glb",
@@ -54,11 +54,11 @@
           "Particles_Xelith_Obsah"
         ]
       },
-      "videoUrl": "/obsah/video/reklama xelith.mp4"
+      "videoUrl": "video/reklama xelith.mp4"
     },
     {
       "id": "1784290179745",
-      "title": "Doomsday",
+      "title": "doomsday",
       "description": "",
       "travaSettings": {
         "surfaceModel": "trava/modely_povrchu/ostrov.glb",
@@ -78,7 +78,7 @@
       "particlesSettings": {
         "hasParticles": false
       },
-      "videoUrl": "video/Video pribeh.mp4"
+      "videoUrl": "video/doomsday.mp4"
     }
   ]
 }
