@@ -177,7 +177,7 @@ function SolidObject({ node }) {
   );
 }
 
-function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, rotationY, insideRotationY }) {
+function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   if (!page || !page.particlesSettings?.hasParticles) return null;
@@ -609,7 +609,6 @@ function App() {
                   videoTexture={activeVideoTex}
                   currentIndex={closestIndex}
                   pageDistance={pageDistance}
-                  rotationY={rotationY}
                   insideRotationY={insideRotationY}
                 />
               </>

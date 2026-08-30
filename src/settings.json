@@ -81,7 +81,15 @@
         "levitateModel": "obsah/levitate/xelith.glb"
       },
       "particlesSettings": {
-        "hasParticles": false
+        "hasParticles": true,
+        "selectedNodes": [
+          "Particles_Xelith_Backround",
+          "articles_Xelith_Obsah_starej",
+          "Particles_Xelith_Obsah1"
+        ],
+        "baseSize": 0.01,
+        "sizeRandomness": 0.5,
+        "colorMode": "video"
       },
       "videoUrl": "video/doomsday.mp4"
     },

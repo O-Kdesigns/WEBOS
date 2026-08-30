@@ -189,7 +189,7 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     vec4 instancePosition = instanceMatrix * vec4(transformed, 1.0);
     vec4 mvPosition = viewMatrix * modelMatrix * instancePosition;
     
-    mat3 m = mat3(modelMatrix * instanceMatrix);
+    mat3 m = mat3(instanceMatrix);
     vNormal = normalize(normalMatrix * m * normal);
     
     gl_Position = projectionMatrix * mvPosition;
@@ -217,11 +217,9 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(vViewPosition);
-    float fresnel = dot(normal, viewDir);
-    fresnel = clamp(1.0 - fresnel, 0.0, 1.0);
+    float fresnel = clamp(1.0 - max(dot(normal, viewDir), 0.0), 0.0, 1.0);
     fresnel = pow(fresnel, 3.0);
     
-    // Čisté zabarvení videa barvou uColor
     vec3 baseVideoColor = texColor.rgb * uColor;
     vec3 finalColor = baseVideoColor + (vec3(1.0) * fresnel * 0.5);
     
@@ -233,8 +231,6 @@ const VideoRefractionMaterialImpl = shaderMaterial(
 extend({ VideoRefractionMaterialImpl });
 
 export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
-  const matRef = useRef();
-
   const onBeforeCompile = React.useCallback((shader) => {
     shader.uniforms.tPositions = { value: null };
     
@@ -260,7 +256,6 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
   if (settings.colorMode === 'video' && videoTexture) {
     return (
       <videoRefractionMaterialImpl 
-        ref={matRef}
         tVideo={videoTexture} 
         uDistortion={settings.refractionDistortion ?? 0.15}
         uOpacity={opacity}
@@ -296,16 +291,26 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
 
   useFrame((state) => {
     if (!meshRef.current || !compute) return;
-
     const time = state.clock.getElapsedTime();
-    const phys = appConfig.particlePhysics || {};
     
+    if (settings.isGlobalLevitating) {
+      meshRef.current.rotation.y = time * 0.15;
+      meshRef.current.rotation.z = Math.sin(time * 0.05) * 0.1;
+      meshRef.current.position.y = posY + Math.sin(time * 0.5) * 0.2;
+    } else {
+      meshRef.current.rotation.y = 0;
+      meshRef.current.rotation.z = 0;
+      meshRef.current.position.y = posY;
+    }
+
+    const phys = appConfig?.particlePhysics || {};
     const velUniforms = compute.velVar.material.uniforms;
     const posUniforms = compute.posVar.material.uniforms;
     
     posUniforms.uTime.value = time;
     posUniforms.uFloatSpeed.value = phys.floatSpeed ?? 1.0;
     posUniforms.uFloatAmplitude.value = phys.floatAmplitude ?? 0.1;
+    // Nové nastavení rychlosti návratu částic
     posUniforms.uReturnSpeed.value = phys.returnSpeed ?? 0.05;
     
     if (settings.scatterSpring) {
@@ -361,6 +366,9 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
     } else {
       velUniforms.uMousePos.value.set(9999,9999,9999);
       velUniforms.uMouseVel.value.set(0,0,0);
+      if (pointerLightRef.current) {
+        pointerLightRef.current.position.set(9999, 9999, 9999);
+      }
     }
     
     compute.gpuCompute.compute();
@@ -387,7 +395,7 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
   });
 }
 
-function StandardParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance }) {
+function StandardParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
   const meshRef = useRef();
   const pointerLightRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -495,7 +503,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
   }, [count, particlesData, dummy, compute, computeUVs]);
 
-  useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute, rotationY, pageDistance);
+  useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute);
 
   return (
     <group position={[posX, 0, posZ]}>

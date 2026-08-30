@@ -4,7 +4,7 @@
   "cameraFov": 5450,
   "cameraHeight": 0,
   "scrollStepsPerPortfolio": 5,
-  "scrollSpeed": 1.0,
+  "scrollSpeed": 1,
   "physics": {
     "mass": 2.5,
     "tension": 500,
