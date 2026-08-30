@@ -500,6 +500,37 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   <label>Citlivost tahu (Velocity):</label>
                   <DragNumberInput step={0.1} value={appConfig.physics?.swipeVelocityThreshold || 0.5} onChange={val => updatePhysics('swipeVelocityThreshold', val)} />
                 </div>
+                <div className="input-group">
+                  <label>Kroků scrollu na portfolio:</label>
+                  <DragNumberInput step={1} min={1} value={appConfig.scrollStepsPerPortfolio ?? 5} onChange={val => updateConfig('scrollStepsPerPortfolio', Math.max(1, Math.round(val)))} />
+                </div>
+                <div className="input-group">
+                  <label>Rychlost / citlivost scrollu:</label>
+                  <DragNumberInput step={0.1} min={0.1} value={appConfig.scrollSpeed ?? 1.0} onChange={val => updateConfig('scrollSpeed', val)} />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="editor-section">
+            <h4 
+              style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+              onClick={() => toggleSection('global-hudba')}
+            >
+              Hudební přehrávač (HUD)
+              <span>{openSections['global-hudba'] ? '▲' : '▼'}</span>
+            </h4>
+            
+            {openSections['global-hudba'] && (
+              <>
+                <div className="input-group">
+                  <label>Hlasitost hudby (0 - 1):</label>
+                  <DragNumberInput step={0.05} min={0} max={1} value={appConfig.musicVolume ?? 0.4} onChange={val => updateConfig('musicVolume', val)} />
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#9ca3af', marginTop: '0.4rem', lineHeight: '1.4' }}>
+                  📁 <b>Složka pro hudbu:</b> <code>/public/music/</code><br/>
+                  📝 <b>Seznam a názvy skladeb:</b> <code>src/tracks.json</code>
+                </div>
               </>
             )}
           </div>

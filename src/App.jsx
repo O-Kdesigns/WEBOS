@@ -9,6 +9,7 @@ import settings from './settings.json';
 import config from './config.json';
 import { Editor } from './Editor';
 import { ParticleObject } from './ParticleObject';
+import { MusicPlayer } from './MusicPlayer';
 import './App.css';
 
 const resolveAssetUrl = (url) => {
@@ -176,7 +177,7 @@ function SolidObject({ node }) {
   );
 }
 
-function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, rotationY }) {
+function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, rotationY, insideRotationY }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   if (!page || !page.particlesSettings?.hasParticles) return null;
@@ -186,49 +187,47 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
 
   return (
     <group rotation-y={currentIndex * -pageDistance}>
-      {selected.length > 0 ? selected.map(nodeName => {
-        const node = nodes[nodeName];
-        if (!node) return null;
+      <a.group rotation-y={insideRotationY}>
+        {selected.length > 0 ? selected.map(nodeName => {
+          const node = nodes[nodeName];
+          if (!node) return null;
 
-        if (isSolidNode(nodeName)) {
-          return <SolidObject key={nodeName} node={node} />;
-        }
+          if (isSolidNode(nodeName)) {
+            return <SolidObject key={nodeName} node={node} />;
+          }
 
-        return (
-          <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
+          return (
+            <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
+              <ParticleObject 
+                settings={{ 
+                  ...settings,
+                  shape: 'geometry', 
+                  customGeometry: node.geometry,
+                  transform: {
+                    position: new THREE.Vector3(0,0,0),
+                    quaternion: new THREE.Quaternion(),
+                    scale: node.getWorldScale(new THREE.Vector3())
+                  }
+                }}
+                appConfig={appConfig} 
+                videoTexture={videoTexture} 
+                opacity={1}
+                renderOrder={3}
+              />
+            </group>
+          );
+        }) : (
+          <group>
             <ParticleObject 
-              settings={{ 
-                ...settings,
-                shape: 'geometry', 
-                customGeometry: node.geometry,
-                transform: {
-                  position: new THREE.Vector3(0,0,0),
-                  quaternion: new THREE.Quaternion(),
-                  scale: node.getWorldScale(new THREE.Vector3())
-                }
-              }}
+              settings={settings}
               appConfig={appConfig} 
               videoTexture={videoTexture} 
               opacity={1}
-              rotationY={rotationY}
-              pageDistance={pageDistance}
               renderOrder={3}
             />
           </group>
-        );
-      }) : (
-        <group>
-          <ParticleObject 
-            settings={settings}
-            appConfig={appConfig} 
-            videoTexture={videoTexture} 
-            opacity={1}
-            rotationY={rotationY}
-              pageDistance={pageDistance}
-              renderOrder={3}
-            />
-        </group>
-      )}
+        )}
+      </a.group>
     </group>
   );
 }
@@ -494,6 +493,16 @@ function App() {
     }
   }));
 
+  const insideRotRef = useRef(0);
+  const [{ insideRotationY }, insideApi] = useSpring(() => ({
+    insideRotationY: 0,
+    config: { 
+      mass: appConfig.physics?.mass ?? 1, 
+      tension: appConfig.physics?.tension ?? 170, 
+      friction: appConfig.physics?.friction ?? 26 
+    }
+  }));
+
   const bindDrag = useDrag(({ active, movement: [mx], delta: [dx], velocity: [vx] }) => {
     if (totalPages <= 1 || viewMode === 'INSIDE') return;
     const sensitivity = pageDistance / (window.innerWidth / 1.5);
@@ -507,10 +516,46 @@ function App() {
     }
   }, { axis: 'x' });
 
+  const wheelAccumulatorRef = useRef(0);
+  const wheelTimeoutRef = useRef(null);
+
   const bindWheel = useWheel(({ delta: [, dy] }) => {
-     if (viewMode === 'INSIDE' || totalPages <= 1) return;
-     currentRotRef.current -= dy * 0.005 * (appConfig.scrollSpeed || 1.0);
-     api.start({ rotationY: currentRotRef.current, immediate: false });
+    if (totalPages <= 1) return;
+
+    if (viewMode === 'INSIDE') {
+      // Rotace objektu uvnitř portfolia při scrollu
+      insideRotRef.current -= dy * 0.005 * (appConfig.scrollSpeed || 1.0);
+      insideApi.start({ insideRotationY: insideRotRef.current, immediate: false });
+      return;
+    }
+    
+    if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current);
+    wheelTimeoutRef.current = setTimeout(() => {
+      wheelAccumulatorRef.current = 0;
+    }, 250);
+
+    const stepsPerPortfolio = appConfig.scrollStepsPerPortfolio || 5;
+    const stepAngle = pageDistance / stepsPerPortfolio;
+    const threshold = 60 / (appConfig.scrollSpeed || 1.0);
+
+    wheelAccumulatorRef.current += dy;
+
+    if (Math.abs(wheelAccumulatorRef.current) >= threshold) {
+      const stepCount = Math.floor(Math.abs(wheelAccumulatorRef.current) / threshold);
+      const direction = Math.sign(wheelAccumulatorRef.current);
+      wheelAccumulatorRef.current -= direction * stepCount * threshold;
+
+      const currentStep = currentRotRef.current / -stepAngle;
+      let targetStep;
+      if (direction > 0) {
+        targetStep = Math.floor(currentStep + 1e-4) + stepCount;
+      } else {
+        targetStep = Math.ceil(currentStep - 1e-4) - stepCount;
+      }
+
+      currentRotRef.current = targetStep * -stepAngle;
+      api.start({ rotationY: currentRotRef.current, immediate: false });
+    }
   });
 
   return (
@@ -565,6 +610,7 @@ function App() {
                   currentIndex={closestIndex}
                   pageDistance={pageDistance}
                   rotationY={rotationY}
+                  insideRotationY={insideRotationY}
                 />
               </>
             )}}
@@ -585,6 +631,8 @@ function App() {
       >
         ⚙️ Editor
       </button>
+
+      <MusicPlayer tracks={appConfig.musicTracks} volume={appConfig.musicVolume ?? 0.4} />
 
       {isEditorOpen && <Editor 
         pages={pagesData} 
