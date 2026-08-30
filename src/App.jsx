@@ -128,7 +128,7 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
   return (
     <a.group scale={scale}>
       {pagesData.map((page, i) => {
-        const angle = i * pageDistance;
+        const angle = i * -pageDistance;
         return (
           <group key={page.id} rotation-y={angle}>
             <group position-z={radius}>
@@ -160,7 +160,7 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
   );
 }
 
-function ProjectContent({ page, appConfig, videoTexture }) {
+function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   if (!page || !page.particlesSettings?.hasParticles) return null;
@@ -169,7 +169,7 @@ function ProjectContent({ page, appConfig, videoTexture }) {
   const selected = settings.selectedNodes || [];
 
   return (
-    <group>
+    <group rotation-y={currentIndex * -pageDistance}>
       {selected.length > 0 ? selected.map(nodeName => {
         const node = nodes[nodeName];
         if (!node) return null;
@@ -287,7 +287,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, c
         return (
           <group 
             key={page.id}
-            rotation-y={idx * pageDistance}
+            rotation-y={idx * -pageDistance}
           >
             <group
               onClick={() => onSelect(idx)}
@@ -368,6 +368,12 @@ function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
       inFov = camIn.fov || inFov;
       inAngle = Math.atan2(worldPos.x, worldPos.z);
   }
+
+  // Zajistíme nejkratší cestu pro rotaci kamery
+  let angleDiff = inAngle - orbitAngle;
+  while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+  while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+  inAngle = orbitAngle + angleDiff;
 
   // Animujeme pouze přechod (0 až 1) mezi ORBIT a INSIDE pohledem
   const { springZ, springY, baseFovProgress, springBaseAngle } = useSpring({
@@ -582,11 +588,17 @@ function App() {
                   videoTexture={videoTex}
                   currentIndex={currentIndex}
                   onSelect={(idx) => {
-                    const targetIndex = idx;
-                    setAbsoluteIndex(targetIndex);
-                    api.start({ 
-                      rotationY: targetIndex * -pageDistance, 
-                      immediate: false 
+                    setAbsoluteIndex(prev => {
+                      const currentVisual = ((prev % totalPages) + totalPages) % totalPages;
+                      let diff = idx - currentVisual;
+                      if (diff > totalPages / 2) diff -= totalPages;
+                      if (diff < -totalPages / 2) diff += totalPages;
+                      const targetIndex = prev + diff;
+                      api.start({ 
+                        rotationY: targetIndex * -pageDistance, 
+                        immediate: false 
+                      });
+                      return targetIndex;
                     });
                     setViewMode('INSIDE');
                   }} 
@@ -596,6 +608,8 @@ function App() {
                   page={pagesData[currentIndex]} 
                   appConfig={appConfig}
                   videoTexture={videoTex}
+                  currentIndex={currentIndex}
+                  pageDistance={pageDistance}
                 />
               </>
             )}
