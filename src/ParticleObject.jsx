@@ -167,7 +167,9 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     uDistortion: 0.1,
     uOpacity: 1.0,
     uColor: new THREE.Color("#ffffff"),
-    tPositions: null
+    tPositions: null,
+    uNoiseAmount: 0.0,
+    uTime: 0.0
   },
   `
   uniform sampler2D tPositions;
@@ -202,15 +204,49 @@ const VideoRefractionMaterialImpl = shaderMaterial(
   uniform float uDistortion;
   uniform float uOpacity;
   uniform vec3 uColor;
+  uniform float uNoiseAmount;
+  uniform float uTime;
   
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec4 vScreenPos;
   varying vec3 vViewPosition;
 
+  vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+  float snoise(vec2 v){
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+             -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy) );
+    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 i1;
+    i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod(i, 289.0);
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+    + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+      dot(x12.zw,x12.zw)), 0.0);
+    m = m*m ;
+    m = m*m ;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+
   void main() {
     vec2 screenUv = (vScreenPos.xy / vScreenPos.w) * 0.5 + 0.5;
     vec2 distortedUv = screenUv + (vNormal.xy * uDistortion);
+    
+    // Noise pro jelly efekt
+    float n = snoise(vNormal.xy * 3.0 + uTime * 1.5);
+    distortedUv += n * (uNoiseAmount * 0.5);
     distortedUv = clamp(distortedUv, 0.0, 1.0);
     
     vec4 texColor = texture2D(tVideo, distortedUv);
@@ -221,7 +257,16 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     fresnel = clamp(1.0 - fresnel, 0.0, 1.0);
     fresnel = pow(fresnel, 3.0);
     
-    vec3 finalColor = (texColor.rgb * uColor) + (vec3(1.0) * fresnel * 0.5);
+    // Obnovení původního kontrastu a modré barvy (násobení uColor)
+    vec3 baseVideoColor = texColor.rgb * uColor;
+    
+    float mixFactor = clamp(uNoiseAmount + (n * uNoiseAmount * 0.5), 0.0, 1.0);
+    if (uNoiseAmount >= 0.99) mixFactor = 1.0; 
+    
+    // Přechod ze zabarveného videa do solidní želé barvy
+    vec3 mixedColor = mix(baseVideoColor, uColor, mixFactor);
+    vec3 finalColor = mixedColor + (vec3(1.0) * fresnel * 0.5);
+    
     gl_FragColor = vec4(finalColor, uOpacity);
   }
   `
@@ -229,23 +274,30 @@ const VideoRefractionMaterialImpl = shaderMaterial(
 
 extend({ VideoRefractionMaterialImpl });
 
-const AnimatedVideoRefractionMaterial = a('videoRefractionMaterialImpl');
+// Removed AnimatedVideoRefractionMaterial to ensure direct Three.js access
 
-export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
-  if (settings.colorMode === 'video' && videoTexture) {
-    // Pro vlastní shader musíme zajistit, že react-spring správně updatuje uniform
-    return (
-      <AnimatedVideoRefractionMaterial 
-        tVideo={videoTexture} 
-        uDistortion={settings.refractionDistortion ?? 0.15}
-        uOpacity={opacity}
-        uColor={new THREE.Color(settings.baseColor || '#ffffff')}
-        transparent={true}
-        depthWrite={false}
-      />
-    );
-  }
+export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotationY, pageDistance }) {
+  const matRef = useRef();
 
+  useFrame(() => {
+    if (!matRef.current || !rotationY || !pageDistance) return;
+    const val = rotationY.get();
+    const exactIdx = val / -pageDistance;
+    const remainder = Math.abs(exactIdx - Math.round(exactIdx));
+    const amt = Math.min(remainder * 2.0, 1.0);
+    
+    // Extrémně agresivní a garantovaný update
+    if (matRef.current.uniforms && matRef.current.uniforms.uNoiseAmount) {
+      matRef.current.uniforms.uNoiseAmount.value = amt;
+    }
+    if ('uNoiseAmount' in matRef.current) {
+      matRef.current.uNoiseAmount = amt;
+    }
+    // Pro absolutní jistotu zkusíme nastavit oba způsoby:
+    if (matRef.current.uniforms && matRef.current.uniforms.uNoiseAmount) {
+      matRef.current.uniforms.uNoiseAmount.value = amt;
+    }
+  });
 
   const onBeforeCompile = React.useCallback((shader) => {
     shader.uniforms.tPositions = { value: null };
@@ -269,6 +321,20 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
     );
   }, []);
 
+  if (settings.colorMode === 'video' && videoTexture) {
+    return (
+      <videoRefractionMaterialImpl 
+        ref={matRef}
+        tVideo={videoTexture} 
+        uDistortion={settings.refractionDistortion ?? 0.15}
+        uOpacity={opacity}
+        uColor={new THREE.Color(settings.colorMode === 'single' ? (settings.baseColor || '#3b82f6') : (settings.baseColor || '#3b82f6'))}
+        transparent={true}
+        depthWrite={false}
+      />
+    );
+  }
+
   return (
     <a.meshPhysicalMaterial 
       onBeforeCompile={onBeforeCompile}
@@ -287,7 +353,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
 }
 
 // --- LOGIKA ---
-function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute) {
+function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute, rotationY, pageDistance) {
   const prevMouse = useRef(new THREE.Vector3(9999, 9999, 9999));
   const smoothedMouse = useRef(new THREE.Vector3(9999, 9999, 9999));
   const mouseVelocity = useMemo(() => new THREE.Vector3(), []);
@@ -374,6 +440,21 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
     compute.gpuCompute.compute();
     
     const tex = compute.gpuCompute.getCurrentRenderTarget(compute.posVar).texture;
+
+    let noiseAmount = 0.0;
+    if (rotationY && pageDistance) {
+       const val = rotationY.get();
+       const exactIdx = val / -pageDistance;
+       const remainder = Math.abs(exactIdx - Math.round(exactIdx));
+       noiseAmount = Math.min(remainder * 2.0, 1.0);
+    }
+    
+    if (meshRef.current.material && meshRef.current.material.uniforms) {
+       if (meshRef.current.material.uniforms.uNoiseAmount) {
+           meshRef.current.material.uniforms.uNoiseAmount.value = noiseAmount;
+           meshRef.current.material.uniforms.uTime.value = time;
+       }
+    }
     
     if (meshRef.current.material) {
         if (meshRef.current.material.uniforms && meshRef.current.material.uniforms.tPositions) {
@@ -395,7 +476,7 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
   });
 }
 
-function StandardParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
+function StandardParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance }) {
   const meshRef = useRef();
   const pointerLightRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -503,13 +584,13 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
   }, [count, particlesData, dummy, compute, computeUVs]);
 
-  useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute);
+  useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute, rotationY, pageDistance);
 
   return (
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -519,7 +600,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
   );
 }
 
-function CustomParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
+function CustomParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance }) {
   const { scene } = useGLTF(`/obsah/${settings.customModel}`);
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -658,7 +739,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -668,7 +749,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
   );
 }
 
-function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
+function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);
@@ -801,7 +882,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
     <group {...transform}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -811,17 +892,17 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
   );
 }
 
-export function ParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder = 0 }) {
+export function ParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder = 0, rotationY, pageDistance }) {
   if (!settings?.hasParticles) return null;
   
   if (settings.shape === 'custom' && settings.customModel) {
-    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
+    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} rotationY={rotationY} pageDistance={pageDistance} />;
   }
 
   if (settings.shape === 'geometry' && settings.customGeometry) {
-    return <GeometryParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
+    return <GeometryParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} rotationY={rotationY} pageDistance={pageDistance} />;
   }
   
-  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
+  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} rotationY={rotationY} pageDistance={pageDistance} />;
 }
 

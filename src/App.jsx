@@ -57,9 +57,9 @@ function ensureVideoEntry(url, gl) {
   return entry;
 }
 
-function VideoManager({ allUrls, activeUrl, children }) {
+function VideoManager({ allUrls, children }) {
   const gl = useThree(state => state.gl);
-  const [activeTexture, setActiveTexture] = useState(null);
+  const [textures, setTextures] = useState({});
 
   const urlsKey = allUrls.filter(Boolean).join('|');
   useMemo(() => {
@@ -70,48 +70,29 @@ function VideoManager({ allUrls, activeUrl, children }) {
     });
   }, [urlsKey, gl]);
 
-  const resolvedActive = activeUrl ? resolveAssetUrl(activeUrl) : null;
-
   useEffect(() => {
-    videoTextureCache.forEach((entry, url) => {
-      if (url === resolvedActive) {
-        entry.isActive = true;
-        
-        console.log(`[VideoManager] Zkouším přehrát: ${url} (readyState: ${entry.video.readyState}, networkState: ${entry.video.networkState}, error: ${entry.video.error ? entry.video.error.code : 'none'})`);
-        
-        entry.video.play().catch((e) => {
-           console.warn(`[VideoManager] play() error pro ${url}:`, e);
-        });
-        
-        // Zabráníme pádu WebGL (INVALID_VALUE: texImage2D: no video) tím,
-        // že texturu pošleme do scény až ve chvíli, kdy má video aspoň metadata/snímky.
+    const updateTextures = () => {
+      const newTex = {};
+      videoTextureCache.forEach((entry, url) => {
         if (entry.video.readyState >= 2) {
-          console.log(`[VideoManager] Video je připraveno (${entry.video.readyState}), posílám do scény: ${url}`);
-          setActiveTexture(entry.texture);
-        } else {
-          console.log(`[VideoManager] Čekám na načtení dat pro: ${url}`);
-          const onReady = () => {
-            console.log(`[VideoManager] Událost loadeddata spuštěna pro: ${url}`);
-            if (entry.isActive) setActiveTexture(entry.texture);
-          };
-          entry.video.addEventListener('loadeddata', onReady, { once: true });
-          // Fallback, pokud by se video nechtělo načíst (např. poškozený soubor jako test2.mp4)
-          entry.video.addEventListener('error', (e) => {
-             console.error(`[VideoManager] Video ${url} vyhodilo CHYBU:`, entry.video.error);
-          }, { once: true });
+          newTex[url] = entry.texture;
         }
+      });
+      setTextures(newTex);
+    };
 
+    videoTextureCache.forEach((entry, url) => {
+      entry.isActive = true;
+      entry.video.play().catch(() => {});
+      if (entry.video.readyState >= 2) {
+        updateTextures();
       } else {
-        entry.isActive = false;
-        entry.video.pause();
-        entry.video.currentTime = 0; 
+        entry.video.addEventListener('loadeddata', updateTextures, { once: true });
       }
     });
-    
-    if (!resolvedActive) setActiveTexture(null);
-  }, [resolvedActive]);
+  }, [urlsKey]);
 
-  return <>{children(activeTexture)}</>;
+  return <>{children(textures)}</>;
 }
 
 // --- Orbital Boards (Desky s portfoliem) ---
@@ -160,7 +141,7 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
   );
 }
 
-function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance }) {
+function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, rotationY }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   if (!page || !page.particlesSettings?.hasParticles) return null;
@@ -189,6 +170,8 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
               appConfig={appConfig} 
               videoTexture={videoTexture} 
               opacity={1}
+              rotationY={rotationY}
+              pageDistance={pageDistance}
             />
           </group>
         );
@@ -199,6 +182,8 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
             appConfig={appConfig} 
             videoTexture={videoTexture} 
             opacity={1}
+            rotationY={rotationY}
+            pageDistance={pageDistance}
           />
         </group>
       )}
@@ -249,7 +234,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible }) {
   );
 }
 
-function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, currentIndex }) {
+function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   const { fade } = useSpring({
@@ -257,14 +242,17 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, c
     config: { duration: 1000 }
   });
 
-  const deskTex = useMemo(() => {
-    if (!videoTexture) return null;
-    const tex = videoTexture.clone();
-    tex.center.set(0.5, 0.5);
-    tex.rotation = Math.PI; 
-    tex.needsUpdate = true;
-    return tex;
-  }, [videoTexture]);
+  const processedTextures = useMemo(() => {
+    const res = {};
+    Object.keys(textures).forEach(url => {
+      const tex = textures[url].clone();
+      tex.center.set(0.5, 0.5);
+      tex.rotation = Math.PI;
+      tex.needsUpdate = true;
+      res[url] = tex;
+    });
+    return res;
+  }, [textures]);
 
   const totalPages = Math.max(pagesData.length, 1);
   const pageDistance = (Math.PI * 2) / totalPages;
@@ -284,6 +272,10 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, c
         const deskRot = baseDeskNode.getWorldQuaternion(new THREE.Quaternion());
         const deskScale = baseDeskNode.getWorldScale(new THREE.Vector3());
         
+        const rawUrl = page.videoUrl || page.particlesSettings?.videoUrl;
+        const resolvedUrl = rawUrl ? resolveAssetUrl(rawUrl) : null;
+        const currentDeskTex = resolvedUrl ? processedTextures[resolvedUrl] : null;
+
         return (
           <group 
             key={page.id}
@@ -301,9 +293,9 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, videoTexture, c
               geometry={baseDeskNode.geometry} 
               renderOrder={10}
             >
-              {deskTex && idx === currentIndex ? (
+              {currentDeskTex ? (
                 <a.meshBasicMaterial 
-                  map={deskTex} 
+                  map={currentDeskTex} 
                   toneMapped={false} 
                   transparent={true} 
                   depthWrite={false}
@@ -460,6 +452,16 @@ function BlurController({ rotationY, appConfig, viewMode, totalPages }) {
   return null;
 }
 
+function RotationController({ rotationY, pageDistance, totalPages, setClosestIndex }) {
+  useFrame(() => {
+    const val = rotationY.get();
+    let idx = Math.round(val / -pageDistance) % totalPages;
+    if (idx < 0) idx += totalPages;
+    setClosestIndex(prev => prev !== idx ? idx : prev);
+  });
+  return null;
+}
+
 function App() {
   const [pagesData, setPagesData] = useState(settings.pages || []);
   const [appConfig, setAppConfig] = useState(config || {});
@@ -468,19 +470,17 @@ function App() {
     return [...new Set(pagesData.map(p => p.videoUrl || p?.particlesSettings?.videoUrl).filter(Boolean))];
   }, [pagesData]);
   
-  const [absoluteIndex, setAbsoluteIndex] = useState(0);
-  const [viewMode, setViewMode] = useState('ORBIT'); // 'ORBIT' or 'INSIDE'
+  const [closestIndex, setClosestIndex] = useState(0);
+  const currentRotRef = useRef(0);
+  const [viewMode, setViewMode] = useState('ORBIT'); 
 
   const totalPages = Math.max(pagesData.length, 1);
   const pageDistance = (Math.PI * 2) / totalPages;
-  const dragStartRotRef = useRef(0);
-  const wheelLockRef = useRef(false);
   
   const [isEditorOpen, setIsEditorOpen] = useState(() => {
     return window.location.search.includes('editor=true');
   });
 
-  // Rotace hlavního rigů kamery kolem osy Y
   const [{ rotationY }, api] = useSpring(() => ({
     rotationY: 0,
     config: { 
@@ -490,65 +490,23 @@ function App() {
     }
   }));
 
-  const currentIndex = ((absoluteIndex % totalPages) + totalPages) % totalPages;
-
-  const changePage = (direction) => {
+  const bindDrag = useDrag(({ active, movement: [mx], delta: [dx], velocity: [vx] }) => {
     if (totalPages <= 1 || viewMode === 'INSIDE') return;
+    const sensitivity = pageDistance / (window.innerWidth / 1.5);
     
-    setAbsoluteIndex(prev => {
-      const nextIndex = prev + direction;
-      api.start({ 
-        rotationY: nextIndex * -pageDistance, 
-        immediate: false 
-      });
-      return nextIndex;
-    });
-  };
-
-  const bindDrag = useDrag(({ active, first, movement: [mx], velocity: [vx] }) => {
-    if (totalPages <= 1 || viewMode === 'INSIDE') return;
-
-    if (first) {
-      dragStartRotRef.current = rotationY.get();
-    }
-
-    const offsetAngle = (mx / (window.innerWidth / 3)) * pageDistance;
-
     if (active) {
-      api.start({ 
-        rotationY: dragStartRotRef.current + offsetAngle, 
-        immediate: true 
-      });
+      currentRotRef.current += dx * sensitivity;
+      api.start({ rotationY: currentRotRef.current, immediate: true });
     } else {
-      const finalAngle = dragStartRotRef.current + offsetAngle;
-      const exactFloatIndex = finalAngle / -pageDistance;
-      
-      let targetIndex = Math.round(exactFloatIndex);
-      
-      if (vx > (appConfig.physics?.swipeVelocityThreshold ?? 0.5)) {
-        const dir = mx < 0 ? 1 : -1;
-        const startingIndex = Math.round(dragStartRotRef.current / -pageDistance);
-        targetIndex = startingIndex + dir;
-      }
-      
-      setAbsoluteIndex(targetIndex);
-      api.start({ 
-        rotationY: targetIndex * -pageDistance, 
-        immediate: false 
-      });
+      currentRotRef.current += (dx * sensitivity) + (vx * 20 * Math.sign(dx));
+      api.start({ rotationY: currentRotRef.current, immediate: false });
     }
   }, { axis: 'x' });
 
-  const bindWheel = useWheel(({ direction: [, dirY] }) => {
-     if (wheelLockRef.current || viewMode === 'INSIDE') return;
-     
-     if (dirY === -1) changePage(1);
-     if (dirY === 1) changePage(-1);
-     
-     wheelLockRef.current = true;
-     setTimeout(() => {
-       wheelLockRef.current = false;
-     }, 1000);
+  const bindWheel = useWheel(({ delta: [, dy] }) => {
+     if (viewMode === 'INSIDE' || totalPages <= 1) return;
+     currentRotRef.current -= dy * 0.005 * (appConfig.scrollSpeed || 1.0);
+     api.start({ rotationY: currentRotRef.current, immediate: false });
   });
 
   return (
@@ -574,52 +532,53 @@ function App() {
           
           <BlurController rotationY={rotationY} appConfig={appConfig} viewMode={viewMode} totalPages={totalPages} />
           
-          <VideoManager 
-            allUrls={allVideoUrls} 
-            activeUrl={pagesData[currentIndex]?.videoUrl || pagesData[currentIndex]?.particlesSettings?.videoUrl}
-          >
-            {(videoTex) => (
+          <RotationController rotationY={rotationY} pageDistance={pageDistance} totalPages={totalPages} setClosestIndex={setClosestIndex} />
+          
+          <VideoManager allUrls={allVideoUrls}>
+            {(textures) => {
+              const activeRawUrl = pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl;
+              const activeVideoTex = activeRawUrl ? textures[resolveAssetUrl(activeRawUrl)] : null;
+              
+              return (
               <>
-                <GlobalBackground appConfig={appConfig} videoTexture={videoTex} visible={viewMode === 'ORBIT'} />
+                <GlobalBackground appConfig={appConfig} videoTexture={activeVideoTex} visible={viewMode === 'ORBIT'} />
                 <BlenderScene 
                   appConfig={appConfig} 
                   pagesData={pagesData}
                   visible={viewMode === 'ORBIT'} 
-                  videoTexture={videoTex}
-                  currentIndex={currentIndex}
+                  textures={textures}
                   onSelect={(idx) => {
-                    setAbsoluteIndex(prev => {
-                      const currentVisual = ((prev % totalPages) + totalPages) % totalPages;
-                      let diff = idx - currentVisual;
-                      if (diff > totalPages / 2) diff -= totalPages;
-                      if (diff < -totalPages / 2) diff += totalPages;
-                      const targetIndex = prev + diff;
-                      api.start({ 
-                        rotationY: targetIndex * -pageDistance, 
-                        immediate: false 
-                      });
-                      return targetIndex;
+                    const val = currentRotRef.current;
+                    const exactIdx = val / -pageDistance;
+                    let diff = idx - (exactIdx % totalPages);
+                    if (diff > totalPages / 2) diff -= totalPages;
+                    if (diff < -totalPages / 2) diff += totalPages;
+                    const targetIndex = exactIdx + diff;
+                    currentRotRef.current = targetIndex * -pageDistance;
+                    api.start({ 
+                      rotationY: currentRotRef.current, 
+                      immediate: false 
                     });
                     setViewMode('INSIDE');
                   }} 
                 />
-                {/* 3. Obsah projektu uvnitř - VYKRESLÍ SE VŽDY PRO AKTIVNÍ PROJEKT */}
                 <ProjectContent 
-                  page={pagesData[currentIndex]} 
+                  page={pagesData[closestIndex]} 
                   appConfig={appConfig}
-                  videoTexture={videoTex}
-                  currentIndex={currentIndex}
+                  videoTexture={activeVideoTex}
+                  currentIndex={closestIndex}
                   pageDistance={pageDistance}
+                  rotationY={rotationY}
                 />
               </>
-            )}
+            )}}
           </VideoManager>
 
           <CameraRig 
             appConfig={appConfig} 
             rotationY={rotationY} 
             viewMode={viewMode} 
-            currentIndex={currentIndex} 
+            currentIndex={closestIndex} 
           />
         </Canvas>
       </div>
