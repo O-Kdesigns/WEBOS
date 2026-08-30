@@ -330,7 +330,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
         uOpacity={opacity}
         uColor={new THREE.Color(settings.colorMode === 'single' ? (settings.baseColor || '#3b82f6') : (settings.baseColor || '#3b82f6'))}
         transparent={true}
-        depthWrite={false}
+        depthWrite={true}
       />
     );
   }
@@ -346,7 +346,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       thickness={settings.thickness ?? 0.0}
       ior={1.5}
       transparent={true}
-      depthWrite={false}
+      depthWrite={true}
       opacity={opacity}
     />
   );

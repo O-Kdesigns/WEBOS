@@ -172,6 +172,7 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
               opacity={1}
               rotationY={rotationY}
               pageDistance={pageDistance}
+              renderOrder={3}
             />
           </group>
         );
@@ -183,8 +184,9 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
             videoTexture={videoTexture} 
             opacity={1}
             rotationY={rotationY}
-            pageDistance={pageDistance}
-          />
+              pageDistance={pageDistance}
+              renderOrder={3}
+            />
         </group>
       )}
     </group>
@@ -227,7 +229,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible }) {
           appConfig={appConfig} 
           videoTexture={videoTexture} 
           opacity={1} // Válec už nezmizí, jen se rozletí
-          renderOrder={1}
+          
         />
       </group>
     </group>
@@ -290,18 +292,18 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
               position={deskPos}
               quaternion={deskRot}
               scale={deskScale}
-              geometry={baseDeskNode.geometry} 
-              renderOrder={10}
+              geometry={baseDeskNode.geometry} renderOrder={2} 
+              
             >
               {currentDeskTex ? (
                 <a.meshBasicMaterial 
                   map={currentDeskTex} 
                   toneMapped={false} 
                   transparent={true} 
-                  depthWrite={false}
+                  depthWrite={true}
                   opacity={fade} 
-                  side={THREE.DoubleSide} 
-                />
+                  side={THREE.BackSide} 
+                 />
               ) : (
                 <a.meshPhysicalMaterial 
                   color="#000000" 
@@ -310,7 +312,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
                   transmission={0.5} 
                   thickness={0.5} 
                   transparent={true}
-                  depthWrite={false}
+                  depthWrite={true}
                   opacity={fade}
                 />
               )}
@@ -614,7 +616,7 @@ function App() {
              >
                 Opustit projekt
              </button>
-             <h2 style={{ textAlign: 'center', marginTop: '10px' }}>{pagesData[currentIndex]?.title}</h2>
+             <h2 style={{ textAlign: 'center', marginTop: '10px' }}>{pagesData[closestIndex]?.title}</h2>
           </div>
         )}
       </div>
