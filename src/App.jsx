@@ -141,6 +141,41 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
   );
 }
 
+export function isSolidNode(name) {
+  if (!name) return false;
+  const trimmed = name.trim();
+  return (/(?:^|[_.\-\s])1$|(?:\.0*1)$|1$/.test(trimmed)) && !trimmed.endsWith('0');
+}
+
+function SolidObject({ node }) {
+  const cloned = useMemo(() => {
+    if (!node) return null;
+    const cl = node.clone(true);
+    cl.position.set(0, 0, 0);
+    cl.quaternion.set(0, 0, 0, 1);
+    cl.scale.set(1, 1, 1);
+    cl.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    return cl;
+  }, [node]);
+
+  if (!node || !cloned) return null;
+
+  const worldPos = node.getWorldPosition(new THREE.Vector3());
+  const worldQuat = node.getWorldQuaternion(new THREE.Quaternion());
+  const worldScale = node.getWorldScale(new THREE.Vector3());
+
+  return (
+    <group position={worldPos} quaternion={worldQuat} scale={worldScale}>
+      <primitive object={cloned} />
+    </group>
+  );
+}
+
 function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, rotationY }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
@@ -154,6 +189,11 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
       {selected.length > 0 ? selected.map(nodeName => {
         const node = nodes[nodeName];
         if (!node) return null;
+
+        if (isSolidNode(nodeName)) {
+          return <SolidObject key={nodeName} node={node} />;
+        }
+
         return (
           <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
             <ParticleObject 
@@ -415,44 +455,6 @@ function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
   );
 }
 
-function BlurController({ rotationY, appConfig, viewMode, totalPages }) {
-  const lastRot = useRef(rotationY.get());
-  
-  useFrame(() => {
-    if (viewMode === 'INSIDE') {
-      const filterEl = document.getElementById('motion-blur-filter');
-      if (filterEl) filterEl.setAttribute('stdDeviation', `0 0`);
-      return;
-    }
-
-    const currentRot = rotationY.get();
-    const velocity = Math.abs(currentRot - lastRot.current);
-    lastRot.current = currentRot;
-    
-    const pageDistance = (Math.PI * 2) / totalPages;
-    const adjustedRot = Math.abs(currentRot);
-    const normalizedAngle = adjustedRot % pageDistance;
-    const distanceFromPage = Math.min(normalizedAngle, pageDistance - normalizedAngle);
-    
-    const middleFactor = distanceFromPage / (pageDistance / 2);
-    const intensity = appConfig.blurIntensity ?? 300;
-    
-    const velocityBlur = velocity * 300;
-    const staticBlur = middleFactor * intensity;
-    const blurAmount = Math.min(velocityBlur + staticBlur, 100);
-    
-    const filterEl = document.getElementById('motion-blur-filter');
-    if (filterEl) {
-      if (blurAmount < 0.1) {
-        filterEl.setAttribute('stdDeviation', `0 0`);
-      } else {
-        filterEl.setAttribute('stdDeviation', `${blurAmount} 0`);
-      }
-    }
-  });
-  
-  return null;
-}
 
 function RotationController({ rotationY, pageDistance, totalPages, setClosestIndex }) {
   useFrame(() => {
@@ -513,13 +515,7 @@ function App() {
 
   return (
     <div className="app-container" {...bindWheel()}>
-      <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}>
-        <filter id="directional-blur">
-          <feGaussianBlur id="motion-blur-filter" stdDeviation="0 0" />
-        </filter>
-      </svg>
-
-      <div className="canvas-container" {...bindDrag()} style={{ filter: 'url(#directional-blur)', transform: 'translateZ(0)' }}>
+      <div className="canvas-container" {...bindDrag()}>
         <Canvas shadows>
           <Environment preset="city" background blur={0.8} />
           <spotLight 
@@ -531,8 +527,6 @@ function App() {
             color="#ffffff" 
           />
           <ambientLight intensity={0.2} />
-          
-          <BlurController rotationY={rotationY} appConfig={appConfig} viewMode={viewMode} totalPages={totalPages} />
           
           <RotationController rotationY={rotationY} pageDistance={pageDistance} totalPages={totalPages} setClosestIndex={setClosestIndex} />
           

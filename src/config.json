@@ -3,7 +3,6 @@
   "islandScaleHorizontal": 2,
   "cameraFov": 5450,
   "cameraHeight": 0,
-  "blurIntensity": 19,
   "physics": {
     "mass": 2.5,
     "tension": 500,

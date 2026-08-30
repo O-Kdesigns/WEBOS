@@ -2,7 +2,7 @@
   "pages": [
     {
       "id": "1",
-      "title": "Xelith hovnogiii",
+      "title": "Xelith",
       "description": "Základní 3D prostředí",
       "travaSettings": {
         "surfaceModel": "trava/modely_povrchu/ostrov.glb",
@@ -50,8 +50,13 @@
         "refractionDistortion": 0.15,
         "videoUrl": "/obsah/video/reklama xelith.mp4",
         "selectedNodes": [
+          "Particles_Xelith_Obsah",
+          "Particles_Xelith_Obsah001",
+          "Particles_Xelith_Obsah002",
           "Particles_Xelith_Backround",
-          "Particles_Xelith_Obsah"
+          "Particles_Xelith_Obsah1",
+          "Particles_Xelith_Obsah0",
+          "articles_Xelith_Obsah_starej"
         ]
       },
       "videoUrl": "video/reklama xelith.mp4"

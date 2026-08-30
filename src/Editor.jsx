@@ -89,40 +89,79 @@ const DragNumberInput = ({ value, onChange, step = 1, min, max }) => {
   );
 };
 
-// Sdílená komponenta pro nastavení jakýchkoliv GPGPU částic
-export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, openSections, toggleSection, pageTitle, blenderNodes }) {
+export function isSolidNode(name) {
+  if (!name) return false;
+  const trimmed = name.trim();
+  return (/(?:^|[_.\-\s])1$|(?:\.0*1)$|1$/.test(trimmed)) && !trimmed.endsWith('0');
+}
+
+// Sdílená komponenta pro nastavení jakýchkoliv GPGPU částic a objektů
+export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, openSections, toggleSection, pageTitle, blenderNodes = [] }) {
   const getFilteredAssets = (list, prefix) => list.filter(f => f.startsWith(prefix));
 
   let matchedNodes = [];
-  if (pageTitle && blenderNodes) {
-     matchedNodes = blenderNodes.filter(n => n.startsWith('Particles_' + pageTitle));
+  if (pageTitle && blenderNodes && blenderNodes.length > 0) {
+    const cleanTitle = pageTitle.trim().toLowerCase();
+    const firstWord = cleanTitle.split(/[\s_-]+/)[0];
+    
+    matchedNodes = blenderNodes.filter(n => {
+      const cleanNode = n.toLowerCase();
+      return cleanNode.startsWith(('particles_' + cleanTitle).toLowerCase()) ||
+             cleanNode.includes(cleanTitle) ||
+             (firstWord && firstWord.length >= 3 && cleanNode.includes(firstWord));
+    });
   }
+
+  const availableNodes = matchedNodes.length > 0 ? matchedNodes : (blenderNodes || []);
 
   return (
     <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid #10b981', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       
-      {pageTitle && matchedNodes.length > 0 ? (
+      {availableNodes.length > 0 ? (
         <div className="input-group">
-          <label>Zvolte objekty z Blenderu ({matchedNodes.length} nalezeno pro '{pageTitle}'):</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+            <label style={{ margin: 0, fontWeight: 'bold' }}>
+              Zvolte objekty z Blenderu ({matchedNodes.length > 0 ? `${matchedNodes.length} pro '${pageTitle}'` : `všechny (${availableNodes.length})`}):
+            </label>
+          </div>
+          
+          <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginBottom: '0.5rem' }}>
+            💡 <b>0 na konci</b> = Částice | <b>1 na konci</b> (např. <code>_1</code>, <code>.001</code>) = Solid 3D objekt
+          </div>
+
           <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {matchedNodes.map(nodeName => {
-              const isChecked = settings.selectedNodes ? settings.selectedNodes.includes(nodeName) : true;
+            {availableNodes.map(nodeName => {
+              const isChecked = settings.selectedNodes ? settings.selectedNodes.includes(nodeName) : false;
+              const isSolid = isSolidNode(nodeName);
               return (
-                <label key={nodeName} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#60a5fa', cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={isChecked}
-                    onChange={e => {
-                      let current = settings.selectedNodes || matchedNodes;
-                      if (e.target.checked) {
-                        current = [...current, nodeName];
-                      } else {
-                        current = current.filter(n => n !== nodeName);
-                      }
-                      onUpdate('selectedNodes', current);
-                    }} 
-                  />
-                  {nodeName}
+                <label key={nodeName} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: isSolid ? '#93c5fd' : '#6ee7b7', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isChecked}
+                      onChange={e => {
+                        let current = settings.selectedNodes || [];
+                        if (e.target.checked) {
+                          current = [...current, nodeName];
+                        } else {
+                          current = current.filter(n => n !== nodeName);
+                        }
+                        onUpdate('selectedNodes', current);
+                      }} 
+                    />
+                    <span>{nodeName}</span>
+                  </div>
+                  <span style={{ 
+                    fontSize: '0.72rem', 
+                    padding: '2px 6px', 
+                    borderRadius: '3px', 
+                    fontWeight: 'bold',
+                    background: isSolid ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                    color: isSolid ? '#60a5fa' : '#34d399',
+                    border: `1px solid ${isSolid ? 'rgba(59, 130, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`
+                  }}>
+                    {isSolid ? '🔷 SOLID (1)' : '🟢 ČÁSTICE (0)'}
+                  </span>
                 </label>
               );
             })}
@@ -248,7 +287,14 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     loader.load('/obsah/everything/newworldorder.glb?v=' + Date.now(), (gltf) => {
        const names = [];
        gltf.scene.traverse(child => {
-          if (child.name && child.name.includes('Particles_')) names.push(child.name);
+          if (child.name && child.name !== 'Scene') {
+            const isSystem = child.name === 'Cylinder' || 
+                             child.name.startsWith('Camera') || 
+                             child.name.startsWith('GlassDesk');
+            if (!isSystem && (child.isMesh || child.name.includes('Particles_') || child.geometry)) {
+              if (!names.includes(child.name)) names.push(child.name);
+            }
+          }
        });
        setBlenderNodes(names);
     });
@@ -418,10 +464,6 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                 <div className="input-group">
                   <label>Výška kamery (Y os):</label>
                   <DragNumberInput step={0.1} value={appConfig.cameraHeight ?? 1.5} onChange={val => updateConfig('cameraHeight', val)} />
-                </div>
-                <div className="input-group">
-                  <label>Intenzita rozmazání (Motion Blur):</label>
-                  <DragNumberInput step={1} value={appConfig.blurIntensity ?? 300} onChange={val => updateConfig('blurIntensity', val)} />
                 </div>
                 <div className="input-group">
                   <label>Intenzita HDRI (Osvětlení):</label>
