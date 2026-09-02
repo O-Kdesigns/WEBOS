@@ -217,44 +217,48 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
             <div className="input-group">
               <label>Mód barev a materiálu:</label>
               <select value={settings.colorMode || 'single'} onChange={e => onUpdate('colorMode', e.target.value)}>
-                <option value="single">Jedna barva (Metallic)</option>
+                <option value="single">Jedna barva (Solid / Metal)</option>
                 <option value="vertex">Vertex Colors (Z předlohy)</option>
-                <option value="video">Lámat video z pozadí (Sklo)</option>
+                <option value="video">Video uvnitř želé (Jelly Video)</option>
               </select>
             </div>
-            {settings.colorMode === 'single' && (
+            
+            {settings.colorMode !== 'vertex' && (
               <div className="input-group">
-                <label>Barva kuliček:</label>
+                <label>{settings.colorMode === 'video' ? 'Tónování želé (Barva):' : 'Barva kuliček:'}</label>
                 <input 
                   type="color" 
-                  value={settings.baseColor || '#3b82f6'} 
+                  value={settings.baseColor || '#6df73b'} 
                   onChange={e => onUpdate('baseColor', e.target.value)} 
                 />
               </div>
             )}
+
             {settings.colorMode === 'video' && (
               <div className="input-group">
-                <label>Síla refrakce (Deformace obrazu):</label>
-                <DragNumberInput step={0.05} value={settings.refractionDistortion ?? 0.15} onChange={val => onUpdate('refractionDistortion', val)} />
+                <label>Zakřivení optiky videa uvnitř koule (Distortion):</label>
+                <DragNumberInput step={0.05} min={0} max={2} value={settings.refractionDistortion ?? 0.6} onChange={val => onUpdate('refractionDistortion', val)} />
               </div>
             )}
             
             <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-              <label>Metalíza (Metalness):</label>
-              <DragNumberInput step={0.05} value={settings.metalness ?? 0.1} onChange={val => onUpdate('metalness', val)} />
+              <label>Průchod světla / Transmise videa (0 = neprůhledné, 1 = plný průchod):</label>
+              <DragNumberInput step={0.05} min={0} max={1} value={settings.transmission ?? 0.85} onChange={val => onUpdate('transmission', val)} />
             </div>
+
             <div className="input-group">
-              <label>Drsnost (Roughness):</label>
-              <DragNumberInput step={0.05} value={settings.roughness ?? 0.5} onChange={val => onUpdate('roughness', val)} />
+              <label>Hloubka a tloušťka sytosti želé (Thickness):</label>
+              <DragNumberInput step={0.1} min={0} max={10} value={settings.thickness ?? 1.2} onChange={val => onUpdate('thickness', val)} />
             </div>
 
             <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-              <label>Průhlednost / Sklo (Transmission):</label>
-              <DragNumberInput step={0.05} value={settings.transmission ?? 0.0} onChange={val => onUpdate('transmission', val)} />
+              <label>Drsnost / Matnost povrchu (Roughness):</label>
+              <DragNumberInput step={0.05} min={0} max={1} value={settings.roughness ?? 0.2} onChange={val => onUpdate('roughness', val)} />
             </div>
+
             <div className="input-group">
-              <label>Tloušťka hmoty / Želé (Thickness):</label>
-              <DragNumberInput step={0.1} value={settings.thickness ?? 0.0} onChange={val => onUpdate('thickness', val)} />
+              <label>Metalíza / Kovové odlesky (Metalness):</label>
+              <DragNumberInput step={0.05} min={0} max={1} value={settings.metalness ?? 0.1} onChange={val => onUpdate('metalness', val)} />
             </div>
           </div>
         )}

@@ -161,13 +161,16 @@ function useGPGPU(count, particlesData, gl) {
 }
 
 // --- MATERIÁLY ---
+// 1. Původní refrakce pro pozadí (Válec / Kužel) - ZACHOVAT VŠECHNY EFEKTY VČETNĚ NOISU PŘI ROTACI
 const VideoRefractionMaterialImpl = shaderMaterial(
   {
     tVideo: null,
     uDistortion: 0.1,
     uOpacity: 1.0,
-    uColor: new THREE.Color("#ffffff"),
-    tPositions: null
+    uColor: new THREE.Color("#3b82f6"),
+    tPositions: null,
+    uNoiseAmount: 0.0,
+    uTime: 0.0
   },
   `
   uniform sampler2D tPositions;
@@ -202,15 +205,49 @@ const VideoRefractionMaterialImpl = shaderMaterial(
   uniform float uDistortion;
   uniform float uOpacity;
   uniform vec3 uColor;
+  uniform float uNoiseAmount;
+  uniform float uTime;
   
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec4 vScreenPos;
   varying vec3 vViewPosition;
 
+  vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+  float snoise(vec2 v){
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+             -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy) );
+    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 i1;
+    i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod(i, 289.0);
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+    + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+      dot(x12.zw,x12.zw)), 0.0);
+    m = m*m ;
+    m = m*m ;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+
   void main() {
     vec2 screenUv = (vScreenPos.xy / vScreenPos.w) * 0.5 + 0.5;
     vec2 distortedUv = screenUv + (vNormal.xy * uDistortion);
+    
+    // Noise pro jelly efekt válce na pozadí při rotaci
+    float n = snoise(vNormal.xy * 3.0 + uTime * 1.5);
+    distortedUv += n * (uNoiseAmount * 0.5);
     distortedUv = clamp(distortedUv, 0.0, 1.0);
     
     vec4 texColor = texture2D(tVideo, distortedUv);
@@ -221,7 +258,12 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     fresnel = pow(fresnel, 3.0);
     
     vec3 baseVideoColor = texColor.rgb * uColor;
-    vec3 finalColor = baseVideoColor + (vec3(1.0) * fresnel * 0.5);
+    
+    float mixFactor = clamp(uNoiseAmount + (n * uNoiseAmount * 0.5), 0.0, 1.0);
+    if (uNoiseAmount >= 0.99) mixFactor = 1.0; 
+    
+    vec3 mixedColor = mix(baseVideoColor, uColor, mixFactor);
+    vec3 finalColor = mixedColor + (vec3(1.0) * fresnel * 0.5);
     
     gl_FragColor = vec4(finalColor, uOpacity);
   }
@@ -230,7 +272,143 @@ const VideoRefractionMaterialImpl = shaderMaterial(
 
 extend({ VideoRefractionMaterialImpl });
 
-export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
+// 2. Nový Jelly Video materiál pro projektové částice (video uvnitř koule, zakřivené čočkou a s průchodem světla)
+const JellyVideoMaterialImpl = shaderMaterial(
+  {
+    tVideo: null,
+    tPositions: null,
+    uColor: new THREE.Color("#6df73b"),
+    uDistortion: 0.6,
+    uRoughness: 0.2,
+    uMetalness: 0.1,
+    uTransmission: 0.85,
+    uThickness: 1.2,
+    uOpacity: 1.0
+  },
+  `
+  uniform sampler2D tPositions;
+  attribute vec2 aComputeUV;
+  
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec4 vScreenPos;
+  varying vec3 vViewPosition;
+  
+  void main() {
+    vUv = uv;
+    
+    vec4 computedData = texture2D(tPositions, aComputeUV);
+    vec3 computedPos = computedData.xyz;
+    float computedScale = computedData.w;
+    
+    vec3 transformed = position * computedScale + computedPos;
+    vec4 instancePosition = instanceMatrix * vec4(transformed, 1.0);
+    vec4 mvPosition = viewMatrix * modelMatrix * instancePosition;
+    
+    mat3 m = mat3(instanceMatrix);
+    vNormal = normalize(normalMatrix * m * normal);
+    
+    gl_Position = projectionMatrix * mvPosition;
+    vScreenPos = gl_Position;
+    vViewPosition = -mvPosition.xyz;
+  }
+  `,
+  `
+  uniform sampler2D tVideo;
+  uniform vec3 uColor;
+  uniform float uDistortion;
+  uniform float uRoughness;
+  uniform float uMetalness;
+  uniform float uTransmission;
+  uniform float uThickness;
+  uniform float uOpacity;
+  
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec4 vScreenPos;
+  varying vec3 vViewPosition;
+
+  void main() {
+    vec3 normal = normalize(vNormal);
+    vec3 viewDir = normalize(vViewPosition);
+    float NdotV = max(dot(normal, viewDir), 0.0);
+    
+    // 1. Sférické mapování celého videa do vnitřku každé kuličky
+    vec2 sphereUv = normal.xy;
+    float r = length(sphereUv);
+    
+    // Zakřivení optiky / čočky podle uDistortion
+    float curvePower = mix(1.0, 0.65, clamp(uDistortion, 0.0, 2.0));
+    float curvedR = (r > 0.0001) ? pow(r, curvePower) : 0.0;
+    vec2 lensUv = (r > 0.0001) ? (sphereUv / r) * (curvedR * 0.49) + 0.5 : vec2(0.5);
+    lensUv = clamp(lensUv, vec2(0.002), vec2(0.998));
+    
+    vec4 videoTex = texture2D(tVideo, lensUv);
+    
+    // 2. Absorpce světla a hloubka želé (Beer-Lambertův zákon pro tloušťku a sytost)
+    float depth = sqrt(max(0.0, 1.0 - r * r)) * (1.0 + max(uThickness, 0.0) * 0.8);
+    vec3 absorption = exp(-(vec3(1.0) - uColor) * depth * max(uThickness * 0.8, 0.15));
+    
+    // 3. Transmise a vnitřní vyzařování videa skrz želé
+    vec3 innerVideoColor = videoTex.rgb * uColor * absorption;
+    float trans = clamp(uTransmission, 0.0, 1.0);
+    vec3 coreColor = mix(uColor * 0.25 * absorption, innerVideoColor, trans);
+    
+    // 4. Odlesky a lesklost povrchu (Roughness a Metalness)
+    vec3 keyLight = normalize(vec3(0.35, 0.85, 0.55));
+    vec3 H1 = normalize(keyLight + viewDir);
+    float NdotH1 = max(dot(normal, H1), 0.0);
+    float rough = clamp(uRoughness, 0.02, 1.0);
+    float shininess = mix(140.0, 6.0, rough);
+    float spec1 = pow(NdotH1, shininess);
+    
+    vec3 fillLight = normalize(vec3(-0.4, -0.3, 0.7));
+    vec3 H2 = normalize(fillLight + viewDir);
+    float spec2 = pow(max(dot(normal, H2), 0.0), shininess * 0.6) * 0.35;
+    
+    float metal = clamp(uMetalness, 0.0, 1.0);
+    vec3 specTint = mix(vec3(1.0), uColor, metal);
+    vec3 totalSpecular = (spec1 + spec2) * specTint * (1.0 - rough * 0.5);
+    
+    // 5. Mokrý želatinový Fresnel lem a translucentní podsvícení (Subsurface Scattering)
+    float fresnel = pow(1.0 - NdotV, mix(3.5, 2.0, rough));
+    vec3 rimGlaze = mix(vec3(1.0), uColor, 0.4) * (fresnel * (1.0 - rough * 0.4) * 0.6);
+    
+    float sss = pow(max(0.0, dot(viewDir, -keyLight + normal * 0.4)), 2.0) * 0.5;
+    vec3 sssGlow = sss * uColor * (videoTex.rgb + 0.25) * trans;
+    
+    // 6. Výsledný složený vzhled
+    vec3 finalColor = coreColor + totalSpecular + rimGlaze + sssGlow;
+    finalColor = mix(finalColor, finalColor * uColor, metal * 0.5);
+    
+    gl_FragColor = vec4(finalColor, uOpacity);
+  }
+  `
+);
+
+extend({ JellyVideoMaterialImpl });
+
+export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotationY, pageDistance }) {
+  const isCylinder = settings.isCylinder || settings.scatterSpring !== undefined || (settings.shape === 'cylinder' && !settings.customGeometry);
+  const matRef = useRef();
+
+  useFrame((state) => {
+    if (!matRef.current) return;
+    const time = state.clock.getElapsedTime();
+    if (matRef.current.uniforms && matRef.current.uniforms.uTime) {
+      matRef.current.uniforms.uTime.value = time;
+    }
+    if (rotationY && pageDistance) {
+      const val = rotationY.get();
+      const exactIdx = val / -pageDistance;
+      const remainder = Math.abs(exactIdx - Math.round(exactIdx));
+      const amt = Math.min(remainder * 2.0, 1.0);
+      if (matRef.current.uniforms && matRef.current.uniforms.uNoiseAmount) {
+        matRef.current.uniforms.uNoiseAmount.value = amt;
+      }
+    }
+  });
+
   const onBeforeCompile = React.useCallback((shader) => {
     shader.uniforms.tPositions = { value: null };
     
@@ -253,13 +431,47 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1 }) {
     );
   }, []);
 
+  // Pro válec na pozadí (GlobalBackground / Kužel) - NESAHAT NA KUŽEL, PLNÉ ZACHOVÁNÍ
+  if (isCylinder) {
+    if (videoTexture) {
+      return (
+        <videoRefractionMaterialImpl 
+          ref={matRef}
+          tVideo={videoTexture} 
+          uDistortion={settings.refractionDistortion ?? 0.15}
+          uOpacity={opacity}
+          uColor={new THREE.Color(settings.baseColor || '#3b82f6')}
+          transparent={true}
+          depthWrite={true}
+        />
+      );
+    } else {
+      return (
+        <a.meshPhysicalMaterial 
+          onBeforeCompile={onBeforeCompile}
+          color={settings.baseColor || '#3b82f6'}
+          metalness={settings.metalness ?? 0.1}
+          roughness={settings.roughness ?? 0.5}
+          transparent={true}
+          depthWrite={true}
+          opacity={opacity}
+        />
+      );
+    }
+  }
+
+  // Pro projektové částice v módu video použijeme nový bohatý Jelly materiál s plným zapojením nastavení
   if (settings.colorMode === 'video' && videoTexture) {
     return (
-      <videoRefractionMaterialImpl 
+      <jellyVideoMaterialImpl 
         tVideo={videoTexture} 
-        uDistortion={settings.refractionDistortion ?? 0.15}
+        uColor={new THREE.Color(settings.baseColor || '#6df73b')}
+        uDistortion={settings.refractionDistortion ?? 0.6}
+        uRoughness={settings.roughness ?? 0.2}
+        uMetalness={settings.metalness ?? 0.1}
+        uTransmission={settings.transmission !== undefined ? settings.transmission : 0.85}
+        uThickness={settings.thickness !== undefined ? settings.thickness : 1.2}
         uOpacity={opacity}
-        uColor={new THREE.Color(settings.colorMode === 'single' ? (settings.baseColor || '#3b82f6') : (settings.baseColor || '#3b82f6'))}
         transparent={true}
         depthWrite={true}
       />
@@ -509,7 +721,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -519,7 +731,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
   );
 }
 
-function CustomParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
+function CustomParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance }) {
   const { scene } = useGLTF(`/obsah/${settings.customModel}`);
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -658,7 +870,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -668,7 +880,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
   );
 }
 
-function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
+function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);
@@ -801,7 +1013,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
     <group {...transform}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
         <sphereGeometry args={[1, 16, 16]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
       
       <group ref={pointerLightRef}>
@@ -811,17 +1023,17 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
   );
 }
 
-export function ParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder = 0 }) {
+export function ParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder = 0, rotationY, pageDistance }) {
   if (!settings?.hasParticles) return null;
   
   if (settings.shape === 'custom' && settings.customModel) {
-    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
+    return <CustomParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} rotationY={rotationY} pageDistance={pageDistance} />;
   }
 
   if (settings.shape === 'geometry' && settings.customGeometry) {
-    return <GeometryParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
+    return <GeometryParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} rotationY={rotationY} pageDistance={pageDistance} />;
   }
   
-  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} />;
+  return <StandardParticleObject settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} renderOrder={renderOrder} rotationY={rotationY} pageDistance={pageDistance} />;
 }
 

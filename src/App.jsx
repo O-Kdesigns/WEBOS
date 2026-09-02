@@ -232,7 +232,7 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
   );
 }
 
-export function GlobalBackground({ appConfig, videoTexture, visible }) {
+export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, pageDistance }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
   
   // Místo mizení (fade) animujeme scatter (rozlet)
@@ -262,13 +262,16 @@ export function GlobalBackground({ appConfig, videoTexture, visible }) {
             count: 10000, 
             hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
             baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
-            colorMode: appConfig.cylinderSettings?.colorMode || 'single',
-            scatterSpring: scatter // Předáme spring hodnotu pro animaci shaderu
+            colorMode: appConfig.cylinderSettings?.colorMode || 'video',
+            refractionDistortion: appConfig.cylinderSettings?.refractionDistortion ?? 0.15,
+            scatterSpring: scatter, // Předáme spring hodnotu pro animaci shaderu
+            isCylinder: true
           }}
           appConfig={appConfig} 
           videoTexture={videoTexture} 
           opacity={1} // Válec už nezmizí, jen se rozletí
-          
+          rotationY={rotationY}
+          pageDistance={pageDistance}
         />
       </group>
     </group>
@@ -582,7 +585,7 @@ function App() {
               
               return (
               <>
-                <GlobalBackground appConfig={appConfig} videoTexture={activeVideoTex} visible={viewMode === 'ORBIT'} />
+                <GlobalBackground appConfig={appConfig} videoTexture={activeVideoTex} visible={viewMode === 'ORBIT'} rotationY={rotationY} pageDistance={pageDistance} />
                 <BlenderScene 
                   appConfig={appConfig} 
                   pagesData={pagesData}

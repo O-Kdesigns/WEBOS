@@ -14,7 +14,7 @@
   },
   "hdriIntensity": 150,
   "particlePhysics": {
-    "mouseRadius": 1,
+    "mouseRadius": 0.1,
     "floatAmplitude": 0.025,
     "floatSpeed": 1,
     "mouseForce": 0.01,
