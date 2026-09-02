@@ -40,8 +40,19 @@ function ensureVideoEntry(url, gl) {
   
   const texture = new THREE.VideoTexture(video);
   texture.colorSpace = gl.outputColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   
-  const entry = { video, texture, isActive: false, warmedUp: false };
+  const deskTexture = new THREE.VideoTexture(video);
+  deskTexture.colorSpace = gl.outputColorSpace;
+  deskTexture.center.set(0.5, 0.5);
+  deskTexture.rotation = Math.PI;
+  deskTexture.generateMipmaps = false;
+  deskTexture.minFilter = THREE.LinearFilter;
+  deskTexture.magFilter = THREE.LinearFilter;
+
+  const entry = { video, texture, deskTexture, isActive: false, warmedUp: false };
   videoTextureCache.set(url, entry);
   
   // Krátké přehrání pro zahřátí dekodéru
@@ -270,6 +281,8 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
             baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
             colorMode: appConfig.cylinderSettings?.colorMode || 'video',
             refractionDistortion: appConfig.cylinderSettings?.refractionDistortion ?? 0.15,
+            transitionMaxLight: appConfig.cylinderSettings?.transitionMaxLight ?? 0.8,
+            transitionMinDark: appConfig.cylinderSettings?.transitionMinDark ?? 0.05,
             scatterSpring: scatter, // Předáme spring hodnotu pro animaci shaderu
             isCylinder: true
           }}
@@ -292,18 +305,6 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
     config: { duration: 1000 }
   });
 
-  const processedTextures = useMemo(() => {
-    const res = {};
-    Object.keys(textures).forEach(url => {
-      const tex = textures[url].clone();
-      tex.center.set(0.5, 0.5);
-      tex.rotation = Math.PI;
-      tex.needsUpdate = true;
-      res[url] = tex;
-    });
-    return res;
-  }, [textures]);
-
   const totalPages = Math.max(pagesData.length, 1);
   const pageDistance = (Math.PI * 2) / totalPages;
 
@@ -324,7 +325,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
         
         const rawUrl = page.videoUrl || page.particlesSettings?.videoUrl;
         const resolvedUrl = rawUrl ? resolveAssetUrl(rawUrl) : null;
-        const currentDeskTex = resolvedUrl ? processedTextures[resolvedUrl] : null;
+        const currentDeskTex = resolvedUrl ? (videoTextureCache.get(resolvedUrl)?.deskTexture || textures[resolvedUrl]) : null;
 
         return (
           <group 

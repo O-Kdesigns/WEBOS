@@ -242,3 +242,50 @@
 .editor-overlay.transparent-mode .editor-section {
   background: rgba(0, 0, 0, 0.2);
 }
+
+.input-desc {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  margin-top: -3px;
+  margin-bottom: 3px;
+  line-height: 1.35;
+  display: block;
+}
+
+.editor-subsection {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.editor-subsection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  user-select: none;
+  margin: 0;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: color 0.15s;
+}
+
+.editor-subsection-header:hover {
+  color: #ffffff;
+}
+
+.editor-subsection-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 0.35rem;
+}

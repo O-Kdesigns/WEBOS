@@ -7,13 +7,16 @@ const VolumetricLightShader = {
     tDiffuse: { value: null },
     uLightScreenPos: { value: new THREE.Vector2(0.5, 0.5) },
     uExposure: { value: 1.0 },
-    uDecay: { value: 0.96 },
-    uDensity: { value: 0.95 },
+    uDecay: { value: 0.92 },
+    uDensity: { value: 0.9 },
     uWeight: { value: 0.5 },
     uThreshold: { value: 0.4 },
+    uSmoothThreshold: { value: 0.15 },
+    uDitherStrength: { value: 1.0 },
+    uRayLength: { value: 0.45 },
     uLightColor: { value: new THREE.Color('#ffffff') },
     uVisibility: { value: 1.0 },
-    uMaxRadius: { value: 1.5 }
+    uMaxRadius: { value: 0.9 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -30,13 +33,21 @@ const VolumetricLightShader = {
     uniform float uDensity;
     uniform float uWeight;
     uniform float uThreshold;
+    uniform float uSmoothThreshold;
+    uniform float uDitherStrength;
+    uniform float uRayLength;
+    uniform float uMaxRadius;
     uniform vec3 uLightColor;
     uniform float uVisibility;
-    uniform float uMaxRadius;
 
     varying vec2 vUv;
 
-    const int NUM_SAMPLES = 48;
+    const int NUM_SAMPLES = 60;
+
+    // Fast screen-space Interleaved Gradient Noise (IGN by Jorge Jimenez)
+    float getDither(vec2 coord) {
+      return fract(52.9829189 * fract(dot(coord, vec2(0.06711056, 0.00583715))));
+    }
 
     void main() {
       vec4 baseColor = texture2D(tDiffuse, vUv);
@@ -46,26 +57,45 @@ const VolumetricLightShader = {
         return;
       }
 
-      vec2 deltaTexCoord = (vUv - uLightScreenPos) * (1.0 / float(NUM_SAMPLES)) * uDensity;
-      vec2 curUv = vUv;
-      float illuminationDecay = 1.0;
-      vec3 accumRays = vec3(0.0);
+      vec2 toLight = uLightScreenPos - vUv;
+      float distToLight = length(toLight);
 
       // Radial distance falloff so rays don't hard-edge at screen boundaries
-      float distToLight = distance(vUv, uLightScreenPos);
       float distFade = smoothstep(uMaxRadius, 0.0, distToLight);
+      if (distFade <= 0.001) {
+        gl_FragColor = baseColor;
+        return;
+      }
+
+      // Omezení délky krokování pro kratší, sevřenější paprsky (uRayLength)
+      float marchDist = min(distToLight, uRayLength);
+      vec2 dir = distToLight > 0.0001 ? toLight / distToLight : vec2(0.0);
+      vec2 deltaTexCoord = -dir * (marchDist / float(NUM_SAMPLES)) * uDensity;
+      
+      // Jitter offset paprsku pomocí ditheringu - eliminuje pruhy/banding
+      float dither = getDither(gl_FragCoord.xy) * uDitherStrength;
+      vec2 curUv = vUv - deltaTexCoord * dither;
+
+      float illuminationDecay = 1.0;
+      float sampleStepDecay = pow(uDecay, 48.0 / float(NUM_SAMPLES));
+      float normWeight = uWeight * (48.0 / float(NUM_SAMPLES));
+      vec3 accumRays = vec3(0.0);
+
+      float tMin = max(0.0, uThreshold - uSmoothThreshold);
+      float tMax = min(1.0, uThreshold + uSmoothThreshold + 0.0001);
 
       for (int i = 0; i < NUM_SAMPLES; i++) {
         curUv -= deltaTexCoord;
         vec2 clampedUv = clamp(curUv, vec2(0.0), vec2(1.0));
         vec4 sampleCol = texture2D(tDiffuse, clampedUv);
 
-        // High-pass filter based on luminance threshold
-        // The center light passes through; dark background & particles act as occluders
-        vec3 lightExtracted = max(sampleCol.rgb - vec3(uThreshold), vec3(0.0)) / (1.0 - uThreshold + 0.0001);
+        // Hladká extrakce jasu pro plynulý přechod bez ostrých hran
+        float lum = dot(sampleCol.rgb, vec3(0.299, 0.587, 0.114));
+        float factor = smoothstep(tMin, tMax, lum);
+        vec3 lightExtracted = sampleCol.rgb * factor;
 
-        accumRays += lightExtracted * illuminationDecay * uWeight;
-        illuminationDecay *= uDecay;
+        accumRays += lightExtracted * illuminationDecay * normWeight;
+        illuminationDecay *= sampleStepDecay;
       }
 
       accumRays *= uExposure * uLightColor * uVisibility * distFade;
@@ -87,6 +117,9 @@ export function CenterLight({ appConfig }) {
   const radius = vl.lightSize ?? 0.35;
   const intensity = vl.lightIntensity ?? 20;
   const color = vl.color || '#ffffff';
+  const hasAura = vl.hasAura ?? true;
+  const auraSize = vl.auraSize ?? 2.2;
+  const auraOpacity = vl.auraOpacity ?? 0.35;
 
   return (
     <group position={[posX, posY, posZ]}>
@@ -97,16 +130,18 @@ export function CenterLight({ appConfig }) {
       </mesh>
 
       {/* Jemná záře / aura kolem jádra pro bohatší rozptyl paprsků */}
-      <mesh renderOrder={1}>
-        <sphereGeometry args={[radius * 2.2, 32, 32]} />
-        <meshBasicMaterial 
-          color={color} 
-          transparent={true} 
-          opacity={0.35} 
-          toneMapped={false} 
-          depthWrite={false}
-        />
-      </mesh>
+      {hasAura && (
+        <mesh renderOrder={1}>
+          <sphereGeometry args={[radius * auraSize, 32, 32]} />
+          <meshBasicMaterial 
+            color={color} 
+            transparent={true} 
+            opacity={auraOpacity} 
+            toneMapped={false} 
+            depthWrite={false}
+          />
+        </mesh>
+      )}
 
       {/* Bodové světlo pro reálné prosvícení vnitřku částic */}
       <pointLight 
@@ -122,7 +157,8 @@ export function CenterLight({ appConfig }) {
 export function VolumetricLightPass({ appConfig }) {
   const { gl, scene, camera, size } = useThree();
 
-  const dpr = Math.min(gl.getPixelRatio(), 2);
+  // Optimalizace rozlišení: max DPR 1.5 zabrání zahlcení GPU paměti
+  const dpr = Math.min(gl.getPixelRatio(), 1.5);
   const width = Math.max(1, Math.floor(size.width * dpr));
   const height = Math.max(1, Math.floor(size.height * dpr));
 
@@ -134,6 +170,7 @@ export function VolumetricLightPass({ appConfig }) {
       type: THREE.HalfFloatType
     });
     target.texture.colorSpace = gl.outputColorSpace;
+    target.texture.generateMipmaps = false; // Zabrání mikrozásekům při generování mipmap
     return target;
   }, [width, height, gl.outputColorSpace]);
 
@@ -181,7 +218,7 @@ export function VolumetricLightPass({ appConfig }) {
       vl.posZ ?? 0
     );
 
-    // DŮLEŽITÉ: Aktualizace světové matice kamery a získání skutečné světové pozice (ne lokální [0,0,0] z rigu)
+    // DŮLEŽITÉ: Aktualizace světové matice kamery a získání skutečné světové pozice
     camera.updateMatrixWorld();
     const camWorldPos = new THREE.Vector3();
     camera.getWorldPosition(camWorldPos);
@@ -206,11 +243,14 @@ export function VolumetricLightPass({ appConfig }) {
     material.uniforms.uLightScreenPos.value.set(screenX, screenY);
     material.uniforms.uVisibility.value = visibility;
     material.uniforms.uExposure.value = vl.exposure ?? 1.0;
-    material.uniforms.uDecay.value = vl.decay ?? 0.96;
-    material.uniforms.uDensity.value = vl.density ?? 0.95;
+    material.uniforms.uDecay.value = vl.decay ?? 0.92;
+    material.uniforms.uDensity.value = vl.density ?? 0.9;
     material.uniforms.uWeight.value = vl.weight ?? 0.5;
     material.uniforms.uThreshold.value = vl.threshold ?? 0.4;
-    material.uniforms.uMaxRadius.value = vl.maxRadius ?? 1.5;
+    material.uniforms.uSmoothThreshold.value = vl.smoothThreshold ?? 0.15;
+    material.uniforms.uDitherStrength.value = vl.ditherStrength ?? 1.0;
+    material.uniforms.uRayLength.value = vl.rayLength ?? 0.45;
+    material.uniforms.uMaxRadius.value = vl.maxRadius ?? 0.9;
     if (vl.color) {
       material.uniforms.uLightColor.value.set(vl.color);
     }

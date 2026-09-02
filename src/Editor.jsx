@@ -97,8 +97,6 @@ export function isSolidNode(name) {
 
 // Sdílená komponenta pro nastavení jakýchkoliv GPGPU částic a objektů
 export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, openSections, toggleSection, pageTitle, blenderNodes = [] }) {
-  const getFilteredAssets = (list, prefix) => list.filter(f => f.startsWith(prefix));
-
   let matchedNodes = [];
   if (pageTitle && blenderNodes && blenderNodes.length > 0) {
     const cleanTitle = pageTitle.trim().toLowerCase();
@@ -121,13 +119,10 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
         <div className="input-group">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
             <label style={{ margin: 0, fontWeight: 'bold' }}>
-              Zvolte objekty z Blenderu ({matchedNodes.length > 0 ? `${matchedNodes.length} pro '${pageTitle}'` : `všechny (${availableNodes.length})`}):
+              Objekty z Blenderu ({matchedNodes.length > 0 ? `${matchedNodes.length} pro '${pageTitle}'` : `všechny (${availableNodes.length})`}):
             </label>
           </div>
-          
-          <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginBottom: '0.5rem' }}>
-            💡 <b>0 na konci</b> = Částice | <b>1 na konci</b> (např. <code>_1</code>, <code>.001</code>) = Solid 3D objekt
-          </div>
+          <span className="input-desc">💡 <b>0 na konci</b> = Částice | <b>1 na konci</b> (např. <code>_1</code>, <code>.001</code>) = Solid 3D mesh</span>
 
           <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {availableNodes.map(nodeName => {
@@ -169,7 +164,8 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
         </div>
       ) : (
         <div className="input-group">
-          <label>Tvar částicového oblaku (Základní):</label>
+          <label>Základní tvar částicového oblaku:</label>
+          <span className="input-desc">Geometrický tvar pro rozmístění částic, pokud není vybrán model</span>
           <select value={settings.shape || 'sphere'} onChange={e => onUpdate('shape', e.target.value)}>
             <option value="sphere">Koule</option>
             <option value="cube">Krychle</option>
@@ -179,25 +175,29 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
       )}
       
       {/* MESH (Velikosti a Hustota) */}
-      <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+      <div className="editor-subsection">
         <h5 
+          className="editor-subsection-header"
           onClick={() => toggleSection(`part-mesh-${id}`)} 
-          style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
         >
-          Mesh (Velikost a Hustota) <span>{openSections[`part-mesh-${id}`] ? '▲' : '▼'}</span>
+          <span>📏 Mesh & Hustota bodů</span>
+          <span>{openSections[`part-mesh-${id}`] ? '▲' : '▼'}</span>
         </h5>
         {openSections[`part-mesh-${id}`] && (
-          <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div className="editor-subsection-content">
             <div className="input-group">
-              <label>Základní velikost částice:</label>
+              <label>Základní velikost částic:</label>
+              <span className="input-desc">Měřítko jednotlivých kuliček</span>
               <DragNumberInput step={0.01} value={settings.baseSize ?? 0.1} onChange={val => onUpdate('baseSize', val)} />
             </div>
             <div className="input-group">
-              <label>Náhodnost velikosti (0 = stejné, 1 = divoké):</label>
+              <label>Náhodnost velikosti:</label>
+              <span className="input-desc">0 = stejná velikost, 1 = divoký organický rozptyl</span>
               <DragNumberInput step={0.05} value={settings.sizeRandomness ?? 0.5} onChange={val => onUpdate('sizeRandomness', val)} />
             </div>
             <div className="input-group">
-              <label>Hustota bodů z modelu (0 - 100% z originálu):</label>
+              <label>Hustota bodů z modelu (0 - 100%):</label>
+              <span className="input-desc">Procento z celkového počtu vrcholů sítě</span>
               <DragNumberInput step={1} min={0} max={100} value={settings.densityPercent ?? 100} onChange={val => onUpdate('densityPercent', val)} />
             </div>
           </div>
@@ -205,17 +205,19 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
       </div>
 
       {/* RENDER (Vzhled materiálu) */}
-      <div className="editor-section" style={{ background: 'rgba(0,0,0,0.2)', padding: '0.5rem', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+      <div className="editor-subsection">
         <h5 
+          className="editor-subsection-header"
           onClick={() => toggleSection(`part-render-${id}`)} 
-          style={{ cursor: 'pointer', margin: 0, color: '#9ca3af', display: 'flex', justifyContent: 'space-between' }}
         >
-          Render (Vzhled materiálu) <span>{openSections[`part-render-${id}`] ? '▲' : '▼'}</span>
+          <span>🎨 Materiál & Želé (Render)</span>
+          <span>{openSections[`part-render-${id}`] ? '▲' : '▼'}</span>
         </h5>
         {openSections[`part-render-${id}`] && (
-          <div style={{ paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div className="editor-subsection-content">
             <div className="input-group">
               <label>Mód barev a materiálu:</label>
+              <span className="input-desc">Způsob obarvení a stínování částic</span>
               <select value={settings.colorMode || 'single'} onChange={e => onUpdate('colorMode', e.target.value)}>
                 <option value="single">Jedna barva (Solid / Metal)</option>
                 <option value="vertex">Vertex Colors (Z předlohy)</option>
@@ -226,6 +228,7 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
             {settings.colorMode !== 'vertex' && (
               <div className="input-group">
                 <label>{settings.colorMode === 'video' ? 'Tónování želé (Barva):' : 'Barva kuliček:'}</label>
+                <span className="input-desc">Odstín skleněného těla nebo povrchu</span>
                 <input 
                   type="color" 
                   value={settings.baseColor || '#6df73b'} 
@@ -235,29 +238,52 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
             )}
 
             {settings.colorMode === 'video' && (
-              <div className="input-group">
-                <label>Zakřivení optiky videa uvnitř koule (Distortion):</label>
-                <DragNumberInput step={0.05} min={0} max={2} value={settings.refractionDistortion ?? 0.6} onChange={val => onUpdate('refractionDistortion', val)} />
-              </div>
+              <>
+                <div className="input-group">
+                  <label>Zakřivení optiky videa (Distortion):</label>
+                  <span className="input-desc">Efekt rybího oka a čočky promítající video do kuličky</span>
+                  <DragNumberInput step={0.05} min={0} max={2} value={settings.refractionDistortion ?? 0.6} onChange={val => onUpdate('refractionDistortion', val)} />
+                </div>
+
+                <div style={{ marginTop: '0.8rem', marginBottom: '0.4rem', padding: '0.4rem 0.6rem', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '4px', borderLeft: '3px solid #3b82f6' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#93c5fd' }}>🌊 Přechod mezi videi (Vodní zamíchání)</span>
+                </div>
+
+                <div className="input-group">
+                  <label>Maximální světlá (Jas světlých vírů):</label>
+                  <span className="input-desc">Maximální intenzita světlé / modré barvy při zamíchání (např. 0.8)</span>
+                  <DragNumberInput step={0.05} min={0} max={3} value={settings.transitionMaxLight ?? 0.8} onChange={val => onUpdate('transitionMaxLight', val)} />
+                </div>
+
+                <div className="input-group">
+                  <label>Minimální tmavá (Úroveň tmavých vírů):</label>
+                  <span className="input-desc">Jak hluboká je černá v tmavých proudech (0 = úplná tma, 0.05 = lehký nádech, 0.2 = měkčí temnota)</span>
+                  <DragNumberInput step={0.01} min={0} max={1} value={settings.transitionMinDark ?? 0.05} onChange={val => onUpdate('transitionMinDark', val)} />
+                </div>
+              </>
             )}
             
-            <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-              <label>Průchod světla / Transmise videa (0 = neprůhledné, 1 = plný průchod):</label>
+            <div className="input-group">
+              <label>Průchod světla / Transmise videa:</label>
+              <span className="input-desc">0 = neprůhledné, 1 = plný zářivý průchod videa skrz kuličku</span>
               <DragNumberInput step={0.05} min={0} max={1} value={settings.transmission ?? 0.85} onChange={val => onUpdate('transmission', val)} />
             </div>
 
             <div className="input-group">
               <label>Hloubka a tloušťka sytosti želé (Thickness):</label>
+              <span className="input-desc">Absorpce světla a sytost želatinového jádra</span>
               <DragNumberInput step={0.1} min={0} max={10} value={settings.thickness ?? 1.2} onChange={val => onUpdate('thickness', val)} />
             </div>
 
-            <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-              <label>Drsnost / Matnost povrchu (Roughness):</label>
+            <div className="input-group">
+              <label>Drsnost povrchu (Roughness):</label>
+              <span className="input-desc">0 = zrcadlově lesklé, 1 = sametově matné</span>
               <DragNumberInput step={0.05} min={0} max={1} value={settings.roughness ?? 0.2} onChange={val => onUpdate('roughness', val)} />
             </div>
 
             <div className="input-group">
-              <label>Metalíza / Kovové odlesky (Metalness):</label>
+              <label>Metalíza (Metalness):</label>
+              <span className="input-desc">Míra kovových odlesků a reflexe</span>
               <DragNumberInput step={0.05} min={0} max={1} value={settings.metalness ?? 0.1} onChange={val => onUpdate('metalness', val)} />
             </div>
           </div>
@@ -270,7 +296,13 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, ope
 export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
   const [assets, setAssets] = useState({ models: [], images: [], videos: [] });
   const [saving, setSaving] = useState(false);
-  const [openSections, setOpenSections] = useState({});
+  const [openSections, setOpenSections] = useState({
+    'global-volumetric': true,
+    'vl-source': true,
+    'vl-optics': true,
+    'global-background-cylinder': true,
+    'part-render-global-cylinder': true
+  });
   const [isTransparent, setIsTransparent] = useState(false);
   const [blenderNodes, setBlenderNodes] = useState([]);
 
@@ -287,7 +319,6 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
       .then(data => setAssets(data));
       
     const loader = new GLTFLoader();
-    // Přidáme timestamp, aby prohlížeč nečetl starou verzi z cache
     loader.load('/obsah/everything/newworldorder.glb?v=' + Date.now(), (gltf) => {
        const names = [];
        gltf.scene.traverse(child => {
@@ -319,28 +350,10 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
       body: JSON.stringify({ pages, config: appConfig })
     });
     setSaving(false);
-    
-    // Není potřeba tvrdý reload, hodnoty už jsou živě propsané
-    // Ale můžeme po uložení zavřít editor (nepovinné, pro teď jen necháme uložit v tichosti)
   };
 
   const updatePage = (id, field, value) => {
     setPages(pages.map(p => p.id === id ? { ...p, [field]: value } : p));
-  };
-
-  const updateTravaSettings = (id, field, value) => {
-    setPages(pages.map(p => {
-      if (p.id === id) {
-        return {
-          ...p,
-          travaSettings: {
-            ...(p.travaSettings || {}),
-            [field]: value
-          }
-        };
-      }
-      return p;
-    }));
   };
 
   const updateObsahSettings = (id, field, value) => {
@@ -377,11 +390,41 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     setAppConfig({ ...appConfig, [field]: value });
   };
 
+  const updateVolumetric = (field, value) => {
+    setAppConfig({
+      ...appConfig,
+      volumetricLight: {
+        ...(appConfig.volumetricLight || {}),
+        [field]: value
+      }
+    });
+  };
+
+  const updateBackground = (field, value) => {
+    setAppConfig({
+      ...appConfig,
+      backgroundSettings: {
+        ...(appConfig.backgroundSettings || {}),
+        [field]: value
+      }
+    });
+  };
+
   const updatePhysics = (field, value) => {
     setAppConfig({
       ...appConfig,
       physics: {
         ...(appConfig.physics || {}),
+        [field]: value
+      }
+    });
+  };
+
+  const updateParticlePhysics = (field, value) => {
+    setAppConfig({
+      ...appConfig,
+      particlePhysics: {
+        ...(appConfig.particlePhysics || {}),
         [field]: value
       }
     });
@@ -418,7 +461,6 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     setPages(pages.filter(p => p.id !== id));
   };
 
-  // Helper pro filtraci
   const getFilteredAssets = (list, prefix) => list.filter(f => f.startsWith(prefix));
 
   return (
@@ -431,7 +473,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
           <h2>🛠 CMS: Správa Portfolia</h2>
           <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#ccc' }}>
             <input type="checkbox" checked={isTransparent} onChange={e => setIsTransparent(e.target.checked)} />
-            Průhledný režim (videt skrz)
+            Průhledný režim (vidět scénu)
           </label>
         </div>
         <div className="editor-actions">
@@ -445,17 +487,16 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
         {/* GLOBÁLNÍ NASTAVENÍ */}
         <div className="editor-card" style={{ border: '1px solid #3b82f6' }}>
           <div className="card-header">
-            <h3 style={{ color: '#3b82f6' }}>Globální nastavení (config.json)</h3>
+            <h3 style={{ color: '#3b82f6' }}>⚙️ Globální nastavení (config.json)</h3>
           </div>
-          
 
-
+          {/* 1. VOLUMETRIC LIGHT (GOD RAYS) */}
           <div className="editor-section">
             <h4 
               style={{ color: '#f59e0b', borderBottomColor: 'rgba(245, 158, 11, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-volumetric')}
             >
-              Volumetric Light (God Rays)
+              <span>✨ Volumetric Light (God Rays)</span>
               <span>{openSections['global-volumetric'] ? '▲' : '▼'}</span>
             </h4>
             
@@ -466,235 +507,473 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                     <input 
                       type="checkbox" 
                       checked={appConfig.volumetricLight?.enabled ?? true} 
-                      onChange={e => updateConfig('volumetricLight', { ...appConfig.volumetricLight, enabled: e.target.checked })} 
+                      onChange={e => updateVolumetric('enabled', e.target.checked)} 
                     />
-                    Aktivovat Volumetric Light
+                    Aktivovat Volumetric Postprocessing
                   </label>
+                  <span className="input-desc" style={{ width: '100%' }}>Zapne/vypne screen-space radial blur raymarching světla</span>
                 </div>
-                <div className="input-group">
-                  <label>Expozice paprsků (Exposure):</label>
-                  <DragNumberInput step={0.05} min={0} max={3} value={appConfig.volumetricLight?.exposure ?? 0.85} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, exposure: val })} />
+
+                {/* Podsekce: Světelný zdroj a středové jádro */}
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('vl-source')}
+                  >
+                    <span>🌟 Zdroj světla & Středové jádro</span>
+                    <span>{openSections['vl-source'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['vl-source'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Pozice Y (Výška středu):</label>
+                        <span className="input-desc">Vertikální umístění světelného zdroje ve 3D prostoru</span>
+                        <DragNumberInput step={0.1} value={appConfig.volumetricLight?.posY ?? 0} onChange={val => updateVolumetric('posY', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Pozice X (Horizontálně):</label>
+                        <span className="input-desc">Vodorovné posunutí středu světla</span>
+                        <DragNumberInput step={0.1} value={appConfig.volumetricLight?.posX ?? 0} onChange={val => updateVolumetric('posX', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Velikost světelného jádra (Radius):</label>
+                        <span className="input-desc">Poloměr centrální zářivé kuličky</span>
+                        <DragNumberInput step={0.05} min={0.05} max={3.0} value={appConfig.volumetricLight?.lightSize ?? 0.35} onChange={val => updateVolumetric('lightSize', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Intenzita bodového světla:</label>
+                        <span className="input-desc">Reálné prosvícení vnitřní stěny částic</span>
+                        <DragNumberInput step={1} min={0} max={100} value={appConfig.volumetricLight?.lightIntensity ?? 20} onChange={val => updateVolumetric('lightIntensity', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Barva světla & paprsků:</label>
+                        <span className="input-desc">Základní tónování vyzařovaného světla</span>
+                        <input 
+                          type="color" 
+                          value={appConfig.volumetricLight?.color || '#ffffff'} 
+                          onChange={e => updateVolumetric('color', e.target.value)} 
+                        />
+                      </div>
+
+                      <div className="input-group checkbox-group" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.6rem' }}>
+                        <label style={{ color: '#fde68a' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.volumetricLight?.hasAura ?? true} 
+                            onChange={e => updateVolumetric('hasAura', e.target.checked)} 
+                          />
+                          Světelná aura / opar kolem středu
+                        </label>
+                      </div>
+
+                      {appConfig.volumetricLight?.hasAura !== false && (
+                        <>
+                          <div className="input-group">
+                            <label>Násobič velikosti aury:</label>
+                            <span className="input-desc">Rozptyl jemného zářivého halo obalu</span>
+                            <DragNumberInput step={0.1} min={1.0} max={6.0} value={appConfig.volumetricLight?.auraSize ?? 2.2} onChange={val => updateVolumetric('auraSize', val)} />
+                          </div>
+                          <div className="input-group">
+                            <label>Průhlednost aury (Hustota):</label>
+                            <span className="input-desc">Sytost světelného oparu pro plnější tělo paprsků</span>
+                            <DragNumberInput step={0.05} min={0.05} max={1.0} value={appConfig.volumetricLight?.auraOpacity ?? 0.35} onChange={val => updateVolumetric('auraOpacity', val)} />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="input-group">
-                  <label>Útlum paprsků (Decay):</label>
-                  <DragNumberInput step={0.01} min={0.5} max={1.0} value={appConfig.volumetricLight?.decay ?? 0.95} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, decay: val })} />
+
+                {/* Podsekce: Optika a chování paprsků */}
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('vl-optics')}
+                  >
+                    <span>⚡ Chování & Optika paprsků</span>
+                    <span>{openSections['vl-optics'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['vl-optics'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Expozice paprsků (Exposure):</label>
+                        <span className="input-desc">Celkový jas a intenzita vyzařovaných paprsků</span>
+                        <DragNumberInput step={0.05} min={0} max={4} value={appConfig.volumetricLight?.exposure ?? 1.0} onChange={val => updateVolumetric('exposure', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Útlum do dálky (Decay):</label>
+                        <span className="input-desc">Rychlost slábnutí paprsku se vzdáleností (0.90 = rychlý útlum, 0.98 = nekonečný dosah)</span>
+                        <DragNumberInput step={0.01} min={0.5} max={0.99} value={appConfig.volumetricLight?.decay ?? 0.96} onChange={val => updateVolumetric('decay', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Hustota / Rozptyl paprsků (Density):</label>
+                        <span className="input-desc">Šířka a rozptyl paprsků přes obrazovku</span>
+                        <DragNumberInput step={0.05} min={0.1} max={2.0} value={appConfig.volumetricLight?.density ?? 0.95} onChange={val => updateVolumetric('density', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Váha vzorků (Weight):</label>
+                        <span className="input-desc">Výraznost a sytost jednotlivých světelných stop</span>
+                        <DragNumberInput step={0.05} min={0} max={2.0} value={appConfig.volumetricLight?.weight ?? 0.5} onChange={val => updateVolumetric('weight', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Práh jasu (Threshold):</label>
+                        <span className="input-desc">Hodnota jasu, od které objekty začnou vyzařovat paprsky (nízká = září i okolí, vysoká = jen střed)</span>
+                        <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.volumetricLight?.threshold ?? 0.4} onChange={val => updateVolumetric('threshold', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Délka paprsků (Ray Length):</label>
+                        <span className="input-desc">Fyzická délka paprsku (menší hodnota = krátké sevřené paprsky u středu)</span>
+                        <DragNumberInput step={0.05} min={0.1} max={2.0} value={appConfig.volumetricLight?.rayLength ?? 0.45} onChange={val => updateVolumetric('rayLength', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Maximální dosah (Max Radius):</label>
+                        <span className="input-desc">Kruhový poloměr na obrazovce, za kterým paprsky plynule mizí</span>
+                        <DragNumberInput step={0.05} min={0.2} max={3.0} value={appConfig.volumetricLight?.maxRadius ?? 0.9} onChange={val => updateVolumetric('maxRadius', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="input-group">
-                  <label>Hustota paprsků (Density):</label>
-                  <DragNumberInput step={0.05} min={0.1} max={2.0} value={appConfig.volumetricLight?.density ?? 0.9} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, density: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Váha / síla paprsků (Weight):</label>
-                  <DragNumberInput step={0.05} min={0} max={2.0} value={appConfig.volumetricLight?.weight ?? 0.4} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, weight: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Práh jasu (Threshold):</label>
-                  <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.volumetricLight?.threshold ?? 0.6} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, threshold: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Velikost světelného jádra:</label>
-                  <DragNumberInput step={0.05} min={0.05} max={3.0} value={appConfig.volumetricLight?.lightSize ?? 0.35} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, lightSize: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Intenzita světla:</label>
-                  <DragNumberInput step={1} min={0} max={100} value={appConfig.volumetricLight?.lightIntensity ?? 15} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, lightIntensity: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Barva světla a paprsků:</label>
-                  <input 
-                    type="color" 
-                    value={appConfig.volumetricLight?.color || '#ffffff'} 
-                    onChange={e => updateConfig('volumetricLight', { ...appConfig.volumetricLight, color: e.target.value })} 
-                    style={{ width: '100%', height: '35px', background: 'transparent', border: '1px solid #444', borderRadius: '4px', cursor: 'pointer' }}
-                  />
-                </div>
-                <div className="input-group">
-                  <label>Pozice Y (Výška):</label>
-                  <DragNumberInput step={0.1} value={appConfig.volumetricLight?.posY ?? 0} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, posY: val })} />
+
+                {/* Podsekce: Kvalita a Vyhlazení */}
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('vl-quality')}
+                  >
+                    <span>🔬 Vyhlazení & Dithering (Anti-Banding)</span>
+                    <span>{openSections['vl-quality'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['vl-quality'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Síla Ditheringu (Jitter):</label>
+                        <span className="input-desc">1 = naprosto hladké celistvé paprsky, 0 = zřetelné proužky/zuby</span>
+                        <DragNumberInput step={0.1} min={0} max={1} value={appConfig.volumetricLight?.ditherStrength ?? 1.0} onChange={val => updateVolumetric('ditherStrength', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Měkkost prahu (Smooth Threshold):</label>
+                        <span className="input-desc">Šířka prolínání světla na hranách objektů pro jemnější okraje</span>
+                        <DragNumberInput step={0.02} min={0.01} max={0.5} value={appConfig.volumetricLight?.smoothThreshold ?? 0.15} onChange={val => updateVolumetric('smoothThreshold', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
           </div>
 
+          {/* 2. POZADÍ A HDRI (DARK STUDIO) */}
           <div className="editor-section">
             <h4 
               style={{ color: '#8b5cf6', borderBottomColor: 'rgba(139, 92, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-background-dark')}
             >
-              Pozadí a HDRI (Dark Studio)
+              <span>🌌 Pozadí & HDRI (Dark Studio)</span>
               <span>{openSections['global-background-dark'] ? '▲' : '▼'}</span>
             </h4>
             
             {openSections['global-background-dark'] && (
               <>
-                <div className="input-group">
-                  <label>Intenzita HDRI odlesků:</label>
-                  <DragNumberInput step={0.1} min={0} max={5} value={appConfig.environmentIntensity ?? 0.8} onChange={val => updateConfig('environmentIntensity', val)} />
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('bg-pbr')}
+                  >
+                    <span>💎 PBR Odlesky prostředí</span>
+                    <span>{openSections['bg-pbr'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['bg-pbr'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Intenzita HDRI odlesků (Environment):</label>
+                        <span className="input-desc">Síla PBR odlesků města/studia na skleněných deskách a kuličkách</span>
+                        <DragNumberInput step={0.1} min={0} max={5} value={appConfig.environmentIntensity ?? 0.8} onChange={val => updateConfig('environmentIntensity', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="input-group">
-                  <label>Barva středu pozadí:</label>
-                  <input 
-                    type="color" 
-                    value={appConfig.backgroundSettings?.centerColor || '#060608'} 
-                    onChange={e => updateConfig('backgroundSettings', { ...appConfig.backgroundSettings, centerColor: e.target.value })} 
-                    style={{ width: '100%', height: '35px', background: 'transparent', border: '1px solid #444', borderRadius: '4px', cursor: 'pointer' }}
-                  />
-                </div>
-                <div className="input-group">
-                  <label>Barva okrajů pozadí (Rim):</label>
-                  <input 
-                    type="color" 
-                    value={appConfig.backgroundSettings?.edgeColor || '#232630'} 
-                    onChange={e => updateConfig('backgroundSettings', { ...appConfig.backgroundSettings, edgeColor: e.target.value })} 
-                    style={{ width: '100%', height: '35px', background: 'transparent', border: '1px solid #444', borderRadius: '4px', cursor: 'pointer' }}
-                  />
-                </div>
-                <div className="input-group">
-                  <label>Strmost okrajového přechodu (Rim Power):</label>
-                  <DragNumberInput step={0.1} min={0.5} max={8.0} value={appConfig.backgroundSettings?.rimPower ?? 2.2} onChange={val => updateConfig('backgroundSettings', { ...appConfig.backgroundSettings, rimPower: val })} />
+
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('bg-gradient')}
+                  >
+                    <span>🎨 Gradient studiového pozadí</span>
+                    <span>{openSections['bg-gradient'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['bg-gradient'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Barva středu pozadí:</label>
+                        <span className="input-desc">Hluboký tmavý odstín v přímém pohledu kamery</span>
+                        <input 
+                          type="color" 
+                          value={appConfig.backgroundSettings?.centerColor || '#060608'} 
+                          onChange={e => updateBackground('centerColor', e.target.value)} 
+                        />
+                      </div>
+                      <div className="input-group">
+                        <label>Barva okrajů pozadí (Rim Glow):</label>
+                        <span className="input-desc">Světlejší stříbřitý tón na okrajích a horizontu</span>
+                        <input 
+                          type="color" 
+                          value={appConfig.backgroundSettings?.edgeColor || '#232630'} 
+                          onChange={e => updateBackground('edgeColor', e.target.value)} 
+                        />
+                      </div>
+                      <div className="input-group">
+                        <label>Strmost přechodu (Rim Power):</label>
+                        <span className="input-desc">Křivka přechodu mezi středem a okrajem (vyšší = užší lem na kraji)</span>
+                        <DragNumberInput step={0.1} min={0.5} max={8.0} value={appConfig.backgroundSettings?.rimPower ?? 2.2} onChange={val => updateBackground('rimPower', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
           </div>
 
+          {/* 3. KAMERA A OSVĚTLENÍ */}
           <div className="editor-section">
             <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-kamera')}
             >
-              Kamera a efekty
+              <span>🎥 Kamera & Přímé osvětlení</span>
               <span>{openSections['global-kamera'] ? '▲' : '▼'}</span>
             </h4>
             
             {openSections['global-kamera'] && (
               <>
-                <div className="input-group">
-                  <label>Zorné pole kamery (FOV):</label>
-                  <DragNumberInput step={1} value={appConfig.cameraFov || 60} onChange={val => updateConfig('cameraFov', val)} />
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('cam-rig')}
+                  >
+                    <span>🔭 Kamerový Rig</span>
+                    <span>{openSections['cam-rig'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['cam-rig'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Zorné pole kamery (FOV):</label>
+                        <span className="input-desc">Šířka zorného úhlu kamery v ORBIT módu</span>
+                        <DragNumberInput step={1} value={appConfig.cameraFov || 60} onChange={val => updateConfig('cameraFov', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Výška kamery (Y os):</label>
+                        <span className="input-desc">Vertikální výška kamery nad středem scény</span>
+                        <DragNumberInput step={0.1} value={appConfig.cameraHeight ?? 1.5} onChange={val => updateConfig('cameraHeight', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="input-group">
-                  <label>Výška kamery (Y os):</label>
-                  <DragNumberInput step={0.1} value={appConfig.cameraHeight ?? 1.5} onChange={val => updateConfig('cameraHeight', val)} />
-                </div>
-                <div className="input-group">
-                  <label>Intenzita přímého světla (SpotLight):</label>
-                  <DragNumberInput step={0.1} min={0} value={appConfig.hdriIntensity ?? 1} onChange={val => updateConfig('hdriIntensity', val)} />
+
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('cam-direct-light')}
+                  >
+                    <span>🔦 Přímé scénické světlo</span>
+                    <span>{openSections['cam-direct-light'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['cam-direct-light'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Intenzita kuželového světla (SpotLight):</label>
+                        <span className="input-desc">Hlavní kuželové scénické světlo shora</span>
+                        <DragNumberInput step={0.1} min={0} value={appConfig.hdriIntensity ?? 1} onChange={val => updateConfig('hdriIntensity', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
           </div>
 
+          {/* 4. FYZIKA ROTACE A GEST */}
           <div className="editor-section">
             <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-fyzika')}
             >
-              Fyzika rotace a gest
+              <span>🌀 Fyzika rotace & Gesta</span>
               <span>{openSections['global-fyzika'] ? '▲' : '▼'}</span>
             </h4>
             
             {openSections['global-fyzika'] && (
               <>
-                <div className="input-group">
-                  <label>Hmotnost (Mass):</label>
-                  <DragNumberInput step={0.1} value={appConfig.physics?.mass || 2.5} onChange={val => updatePhysics('mass', val)} />
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('phys-springs')}
+                  >
+                    <span>⚡ Pružiny & Setrvačnost (Springs)</span>
+                    <span>{openSections['phys-springs'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['phys-springs'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Hmotnost (Mass):</label>
+                        <span className="input-desc">Tíha a setrvačnost při roztočení kruhu projektů</span>
+                        <DragNumberInput step={0.1} value={appConfig.physics?.mass || 2.5} onChange={val => updatePhysics('mass', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Pružnost (Tension):</label>
+                        <span className="input-desc">Síla pružiny přitahující pohled k nejbližší desce</span>
+                        <DragNumberInput step={10} value={appConfig.physics?.tension || 500} onChange={val => updatePhysics('tension', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Tření (Friction):</label>
+                        <span className="input-desc">Tlumení a rychlost dobrzdění po švihu</span>
+                        <DragNumberInput step={1} value={appConfig.physics?.friction || 100} onChange={val => updatePhysics('friction', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="input-group">
-                  <label>Pružnost (Tension):</label>
-                  <DragNumberInput step={10} value={appConfig.physics?.tension || 500} onChange={val => updatePhysics('tension', val)} />
-                </div>
-                <div className="input-group">
-                  <label>Tření (Friction):</label>
-                  <DragNumberInput step={1} value={appConfig.physics?.friction || 100} onChange={val => updatePhysics('friction', val)} />
-                </div>
-                <div className="input-group">
-                  <label>Citlivost tahu (Velocity):</label>
-                  <DragNumberInput step={0.1} value={appConfig.physics?.swipeVelocityThreshold || 0.5} onChange={val => updatePhysics('swipeVelocityThreshold', val)} />
-                </div>
-                <div className="input-group">
-                  <label>Kroků scrollu na portfolio:</label>
-                  <DragNumberInput step={1} min={1} value={appConfig.scrollStepsPerPortfolio ?? 5} onChange={val => updateConfig('scrollStepsPerPortfolio', Math.max(1, Math.round(val)))} />
-                </div>
-                <div className="input-group">
-                  <label>Rychlost / citlivost scrollu:</label>
-                  <DragNumberInput step={0.1} min={0.1} value={appConfig.scrollSpeed ?? 1.0} onChange={val => updateConfig('scrollSpeed', val)} />
+
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('phys-gestures')}
+                  >
+                    <span>👆 Gesta & Kolečko myši</span>
+                    <span>{openSections['phys-gestures'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['phys-gestures'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Citlivost tahu (Swipe Velocity):</label>
+                        <span className="input-desc">Práh rychlosti gesta pro přeskok na další projekt</span>
+                        <DragNumberInput step={0.1} value={appConfig.physics?.swipeVelocityThreshold || 0.5} onChange={val => updatePhysics('swipeVelocityThreshold', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Kroků scrollu na portfolio:</label>
+                        <span className="input-desc">Počet záseků kolečka myši pro otočení o jeden projekt</span>
+                        <DragNumberInput step={1} min={1} value={appConfig.scrollStepsPerPortfolio ?? 5} onChange={val => updateConfig('scrollStepsPerPortfolio', Math.max(1, Math.round(val)))} />
+                      </div>
+                      <div className="input-group">
+                        <label>Rychlost / citlivost scrollu:</label>
+                        <span className="input-desc">Globální násobič citlivosti kolečka</span>
+                        <DragNumberInput step={0.1} min={0.1} value={appConfig.scrollSpeed ?? 1.0} onChange={val => updateConfig('scrollSpeed', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
           </div>
 
+          {/* 5. HUDEBNÍ PŘEHRÁVAČ */}
           <div className="editor-section">
             <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-hudba')}
             >
-              Hudební přehrávač (HUD)
+              <span>🎵 Hudební přehrávač (HUD)</span>
               <span>{openSections['global-hudba'] ? '▲' : '▼'}</span>
             </h4>
             
             {openSections['global-hudba'] && (
-              <>
+              <div className="editor-subsection-content">
                 <div className="input-group">
                   <label>Hlasitost hudby (0 - 1):</label>
+                  <span className="input-desc">Výchozí úroveň hlasitosti při spuštění</span>
                   <DragNumberInput step={0.05} min={0} max={1} value={appConfig.musicVolume ?? 0.4} onChange={val => updateConfig('musicVolume', val)} />
                 </div>
-                <div style={{ fontSize: '0.82rem', color: '#9ca3af', marginTop: '0.4rem', lineHeight: '1.4' }}>
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.2rem', lineHeight: '1.4' }}>
                   📁 <b>Složka pro hudbu:</b> <code>/public/music/</code><br/>
-                  📝 <b>Seznam a názvy skladeb:</b> <code>src/tracks.json</code>
+                  📝 <b>Seznam skladeb:</b> <code>src/tracks.json</code>
                 </div>
-              </>
+              </div>
             )}
           </div>
 
+          {/* 6. FYZIKA ČÁSTIC A INTERAKCE */}
           <div className="editor-section">
             <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-castice')}
             >
-              Fyzika částic a interakce
+              <span>💥 Fyzika částic & Interakce</span>
               <span>{openSections['global-castice'] ? '▲' : '▼'}</span>
             </h4>
             
             {openSections['global-castice'] && (
               <>
-                <div className="input-group">
-                  <label>Síla levitování (Rozkmit):</label>
-                  <DragNumberInput step={0.01} value={appConfig.particlePhysics?.floatAmplitude ?? 0.1} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, floatAmplitude: val })} />
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('part-float')}
+                  >
+                    <span>🌊 Levitace & Návrat částic</span>
+                    <span>{openSections['part-float'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['part-float'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Síla levitování (Rozkmit):</label>
+                        <span className="input-desc">Výška vertikálního vlnění částic</span>
+                        <DragNumberInput step={0.01} value={appConfig.particlePhysics?.floatAmplitude ?? 0.1} onChange={val => updateParticlePhysics('floatAmplitude', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Rychlost levitování:</label>
+                        <span className="input-desc">Frekvence a tempo pulzujícího pohybu</span>
+                        <DragNumberInput step={0.1} value={appConfig.particlePhysics?.floatSpeed ?? 1.0} onChange={val => updateParticlePhysics('floatSpeed', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Rychlost návratu částic (Return Speed):</label>
+                        <span className="input-desc">Rychlost, jakou se částice vrací do původního tvaru po odfouknutí</span>
+                        <DragNumberInput step={0.01} value={appConfig.particlePhysics?.returnSpeed ?? 0.05} onChange={val => updateParticlePhysics('returnSpeed', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="input-group">
-                  <label>Rychlost levitování:</label>
-                  <DragNumberInput step={0.1} value={appConfig.particlePhysics?.floatSpeed ?? 1.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, floatSpeed: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Rychlost návratu částic:</label>
-                  <DragNumberInput step={0.01} value={appConfig.particlePhysics?.returnSpeed ?? 0.05} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, returnSpeed: val })} />
-                </div>
-                <div className="input-group" style={{ borderTop: '1px solid rgba(59, 130, 246, 0.2)', paddingTop: '1rem' }}>
-                  <label>Síla odfouknutí myší:</label>
-                  <DragNumberInput step={0.1} value={appConfig.particlePhysics?.mouseForce ?? 1.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, mouseForce: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Průměr efektu myši:</label>
-                  <DragNumberInput step={0.1} value={appConfig.particlePhysics?.mouseRadius ?? 2.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, mouseRadius: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Délka průniku (Lightsaber):</label>
-                  <DragNumberInput step={0.1} value={appConfig.particlePhysics?.laserLength ?? 5.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, laserLength: val })} />
-                </div>
-                <div className="input-group">
-                  <label>Intenzita světla myši (Lightsaber):</label>
-                  <DragNumberInput step={1} value={appConfig.particlePhysics?.laserIntensity ?? 10.0} onChange={val => updateConfig('particlePhysics', { ...appConfig.particlePhysics, laserIntensity: val })} />
+
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('part-mouse')}
+                  >
+                    <span>⚔️ Interakce myší (Laser / Lightsaber)</span>
+                    <span>{openSections['part-mouse'] ? '▲' : '▼'}</span>
+                  </h5>
+                  {openSections['part-mouse'] && (
+                    <div className="editor-subsection-content">
+                      <div className="input-group">
+                        <label>Síla odfouknutí myší:</label>
+                        <span className="input-desc">Síla tlakového impulsu při rychlém pohybu kurzoru</span>
+                        <DragNumberInput step={0.1} value={appConfig.particlePhysics?.mouseForce ?? 1.0} onChange={val => updateParticlePhysics('mouseForce', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Průměr efektu myši (Radius):</label>
+                        <span className="input-desc">Akční rádius tlakové vlny od kurzoru</span>
+                        <DragNumberInput step={0.1} value={appConfig.particlePhysics?.mouseRadius ?? 2.0} onChange={val => updateParticlePhysics('mouseRadius', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Délka průniku (Laser Length):</label>
+                        <span className="input-desc">Hloubka laserového paprsku do prostoru scény</span>
+                        <DragNumberInput step={0.1} value={appConfig.particlePhysics?.laserLength ?? 5.0} onChange={val => updateParticlePhysics('laserLength', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Intenzita světla myši (Laser Light):</label>
+                        <span className="input-desc">Síla bodového osvětlení pod kurzorem</span>
+                        <DragNumberInput step={1} value={appConfig.particlePhysics?.laserIntensity ?? 10.0} onChange={val => updateParticlePhysics('laserIntensity', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
           </div>
 
+          {/* 7. POZADÍ PROSTORU (VÁLEC) */}
           <div className="editor-section">
             <h4 
               style={{ color: '#10b981', borderBottomColor: 'rgba(16, 185, 129, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-background-cylinder')}
             >
-              Pozadí prostoru (Abstraktní Válec)
+              <span>🏛️ Pozadí prostoru (Abstraktní Válec)</span>
               <span>{openSections['global-background-cylinder'] ? '▲' : '▼'}</span>
             </h4>
             {openSections['global-background-cylinder'] && (
@@ -705,15 +984,15 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                       type="checkbox" 
                       checked={appConfig.cylinderSettings?.hasParticles ?? true} 
                       onChange={e => updateCylinderSettings('hasParticles', e.target.checked)} 
-                      style={{ transform: 'scale(1.2)' }} 
                     />
                     Zobrazit částicový sloup v pozadí
                   </label>
+                  <span className="input-desc" style={{ width: '100%' }}>Aktivuje vnější částicový válec v pozadí</span>
                 </div>
 
                 {appConfig.cylinderSettings?.hasParticles !== false && (
                   <ParticleSettingsPanel 
-                    settings={{ shape: 'cylinder', count: 10000, radius: 8.0, height: 40.0, objectY: 0, objectZ: 0, colorMode: 'single', baseColor: '#3b82f6', ...appConfig.cylinderSettings }}
+                    settings={{ shape: 'cylinder', count: 10000, radius: 8.0, height: 40.0, objectY: 0, objectZ: 0, colorMode: 'video', baseColor: '#3b82f6', ...appConfig.cylinderSettings }}
                     onUpdate={updateCylinderSettings}
                     id="global-cylinder"
                     assets={assets}
@@ -726,29 +1005,30 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
           </div>
         </div>
 
-        {/* STRÁNKY */}
+        {/* STRÁNKY PORTFOLIA */}
         {pages.map((page, index) => {
-          const ts = page.travaSettings || {};
-          
           return (
             <div key={page.id} className="editor-card">
               <div className="card-header">
-                <h3>Stránka {index + 1}</h3>
+                <h3>📁 Stránka {index + 1}: {page.title || 'Bez názvu'}</h3>
                 <button onClick={() => deletePage(page.id)} className="btn-delete">Smazat</button>
               </div>
               
               <div className="input-group">
-                <label>Nadpis:</label>
+                <label>Nadpis projektu:</label>
+                <span className="input-desc">Zobrazuje se na 3D desce i v HUD rozhraní</span>
                 <input type="text" value={page.title || ''} onChange={e => updatePage(page.id, 'title', e.target.value)} />
               </div>
               
               <div className="input-group">
-                <label>Popis:</label>
+                <label>Popis projektu:</label>
+                <span className="input-desc">Doplňkový text a anotace</span>
                 <textarea value={page.description || ''} onChange={e => updatePage(page.id, 'description', e.target.value)} />
               </div>
               
               <div className="input-group">
-                <label>Video na pozadí stránky:</label>
+                <label>Video na desce a v pozadí:</label>
+                <span className="input-desc">Video smyčka promítaná do skleněné desky a želé částic</span>
                 <select value={page.videoUrl || ''} onChange={e => updatePage(page.id, 'videoUrl', e.target.value)}>
                   <option value="">Žádné video</option>
                   {getFilteredAssets(assets.videos, 'video/').map(v => <option key={v} value={v}>{v}</option>)}
@@ -765,78 +1045,106 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                 )}
               </div>
 
-
-
-              {/* Sekce: MODUL OBSAH */}
+              {/* Sekce: MODUL OBSAH (3D Objekt) */}
               <div className="editor-section">
                 <h4 
                   style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-                  onClick={() => toggleSection('page-obsah')}
+                  onClick={() => toggleSection(`page-obsah-${page.id}`)}
                 >
-                  Modul: Obsah
-                  <span>{openSections['page-obsah'] ? '▲' : '▼'}</span>
+                  <span>📦 Modul: 3D Objekt (Model)</span>
+                  <span>{openSections[`page-obsah-${page.id}`] ? '▲' : '▼'}</span>
                 </h4>
                 
-                {openSections['page-obsah'] && (
+                {openSections[`page-obsah-${page.id}`] && (
                   <>
                     <div className="input-group checkbox-group">
                       <label style={{ fontSize: '1rem', color: '#10b981', fontWeight: 'bold' }}>
-                        <input type="checkbox" checked={page.obsahSettings?.hasObject || false} onChange={e => updateObsahSettings(page.id, 'hasObject', e.target.checked)} style={{ transform: 'scale(1.2)' }} />
-                        3D Objekt (Model)
+                        <input type="checkbox" checked={page.obsahSettings?.hasObject || false} onChange={e => updateObsahSettings(page.id, 'hasObject', e.target.checked)} />
+                        Aktivovat 3D Model
                       </label>
+                      <span className="input-desc" style={{ width: '100%' }}>Zobrazí 3D GLB model uvnitř scény projektu</span>
                     </div>
 
                     {page.obsahSettings?.hasObject && (
                       <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid #10b981', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         
                         <div className="input-group">
-                          <label>Vyberte model (ze složky obsah/levitate/):</label>
+                          <label>Vyberte GLB model:</label>
+                          <span className="input-desc">Soubor ze složky <code>/obsah/levitate/</code></span>
                           <select value={page.obsahSettings?.objectModel || ''} onChange={e => updateObsahSettings(page.id, 'objectModel', e.target.value)}>
                             <option value="">Nevybrán model</option>
                             {getFilteredAssets(assets.models, 'obsah/levitate/').map(m => <option key={m} value={m}>{m}</option>)}
                           </select>
                         </div>
                         
-                        <div className="input-group" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
-                          <label>Vzdálenost od kamery (do hloubky ostrova):</label>
-                          <DragNumberInput step={0.1} value={page.obsahSettings?.objectZ ?? 4.0} onChange={val => updateObsahSettings(page.id, 'objectZ', val)} />
-                        </div>
-                        
-                        <div className="input-group">
-                          <label>Pozice horizontálně (mínus = vlevo, plus = vpravo):</label>
-                          <DragNumberInput step={0.1} value={page.obsahSettings?.objectX ?? 0.0} onChange={val => updateObsahSettings(page.id, 'objectX', val)} />
+                        <div className="editor-subsection">
+                          <h5 
+                            className="editor-subsection-header"
+                            onClick={() => toggleSection(`page-transform-${page.id}`)}
+                          >
+                            <span>📍 3D Transformace a Pozice</span>
+                            <span>{openSections[`page-transform-${page.id}`] ? '▲' : '▼'}</span>
+                          </h5>
+                          {openSections[`page-transform-${page.id}`] && (
+                            <div className="editor-subsection-content">
+                              <div className="input-group">
+                                <label>Vzdálenost Z (Hloubka):</label>
+                                <span className="input-desc">Vzdálenost modelu od středu/kamery</span>
+                                <DragNumberInput step={0.1} value={page.obsahSettings?.objectZ ?? 4.0} onChange={val => updateObsahSettings(page.id, 'objectZ', val)} />
+                              </div>
+                              <div className="input-group">
+                                <label>Pozice X (Horizontálně):</label>
+                                <span className="input-desc">Vodorovný posun modelu</span>
+                                <DragNumberInput step={0.1} value={page.obsahSettings?.objectX ?? 0.0} onChange={val => updateObsahSettings(page.id, 'objectX', val)} />
+                              </div>
+                              <div className="input-group">
+                                <label>Základní výška Y (Od země):</label>
+                                <span className="input-desc">Svislá poloha středu modelu</span>
+                                <DragNumberInput step={0.1} value={page.obsahSettings?.objectY ?? 2.0} onChange={val => updateObsahSettings(page.id, 'objectY', val)} />
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="input-group">
-                          <label>Základní výška (od země):</label>
-                          <DragNumberInput step={0.1} value={page.obsahSettings?.objectY ?? 2.0} onChange={val => updateObsahSettings(page.id, 'objectY', val)} />
-                        </div>
-                        
-                        <div className="input-group checkbox-group" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
-                          <label style={{ fontSize: '0.9rem', color: '#60a5fa' }}>
-                            <input type="checkbox" checked={page.obsahSettings?.isLevitating || false} onChange={e => updateObsahSettings(page.id, 'isLevitating', e.target.checked)} />
-                            Zapnout levitování (Ping-pong animace)
-                          </label>
-                        </div>
+                        <div className="editor-subsection">
+                          <h5 
+                            className="editor-subsection-header"
+                            onClick={() => toggleSection(`page-levitate-${page.id}`)}
+                          >
+                            <span>🕊️ Levitace & Animace</span>
+                            <span>{openSections[`page-levitate-${page.id}`] ? '▲' : '▼'}</span>
+                          </h5>
+                          {openSections[`page-levitate-${page.id}`] && (
+                            <div className="editor-subsection-content">
+                              <div className="input-group checkbox-group">
+                                <label style={{ color: '#60a5fa' }}>
+                                  <input type="checkbox" checked={page.obsahSettings?.isLevitating || false} onChange={e => updateObsahSettings(page.id, 'isLevitating', e.target.checked)} />
+                                  Zapnout levitování (Ping-pong animace)
+                                </label>
+                              </div>
 
-                        {page.obsahSettings?.isLevitating && (
-                          <div style={{ paddingLeft: '1rem', borderLeft: '2px solid rgba(96, 165, 250, 0.3)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <div className="input-group">
-                              <label>Rozmezí ping-pongu (Amplituda):</label>
-                              <DragNumberInput step={0.1} value={page.obsahSettings?.levitateRange ?? 0.5} onChange={val => updateObsahSettings(page.id, 'levitateRange', val)} />
+                              {page.obsahSettings?.isLevitating && (
+                                <>
+                                  <div className="input-group">
+                                    <label>Rozsah kmitání (Amplituda):</label>
+                                    <span className="input-desc">Výška zdvihu při vznášení</span>
+                                    <DragNumberInput step={0.1} value={page.obsahSettings?.levitateRange ?? 0.5} onChange={val => updateObsahSettings(page.id, 'levitateRange', val)} />
+                                  </div>
+                                  <div className="input-group">
+                                    <label>Rychlost vznášení:</label>
+                                    <span className="input-desc">Frekvence kmitání</span>
+                                    <DragNumberInput step={0.1} value={page.obsahSettings?.levitateSpeed ?? 1.0} onChange={val => updateObsahSettings(page.id, 'levitateSpeed', val)} />
+                                  </div>
+                                  <div className="input-group">
+                                    <label>Plynulost (Smoothing):</label>
+                                    <span className="input-desc">Jemnost tlumení pohybu</span>
+                                    <DragNumberInput step={0.01} value={page.obsahSettings?.levitateSmoothing ?? 0.1} onChange={val => updateObsahSettings(page.id, 'levitateSmoothing', val)} />
+                                  </div>
+                                </>
+                              )}
                             </div>
-                            
-                            <div className="input-group">
-                              <label>Rychlost vznášení:</label>
-                              <DragNumberInput step={0.1} value={page.obsahSettings?.levitateSpeed ?? 1.0} onChange={val => updateObsahSettings(page.id, 'levitateSpeed', val)} />
-                            </div>
-                            
-                            <div className="input-group">
-                              <label>Smoothing (Jemnost pohybu):</label>
-                              <DragNumberInput step={0.01} value={page.obsahSettings?.levitateSmoothing ?? 0.1} onChange={val => updateObsahSettings(page.id, 'levitateSmoothing', val)} />
-                            </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                         
                       </div>
                     )}
@@ -848,19 +1156,20 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
               <div className="editor-section">
                 <h4 
                   style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-                  onClick={() => toggleSection('page-particles')}
+                  onClick={() => toggleSection(`page-particles-${page.id}`)}
                 >
-                  Modul: Částice
-                  <span>{openSections['page-particles'] ? '▲' : '▼'}</span>
+                  <span>✨ Modul: Částice projektu</span>
+                  <span>{openSections[`page-particles-${page.id}`] ? '▲' : '▼'}</span>
                 </h4>
                 
-                {openSections['page-particles'] && (
+                {openSections[`page-particles-${page.id}`] && (
                   <>
                     <div className="input-group checkbox-group">
                       <label style={{ fontSize: '1rem', color: '#10b981', fontWeight: 'bold' }}>
-                        <input type="checkbox" checked={page.particlesSettings?.hasParticles || false} onChange={e => updateParticlesSettings(page.id, 'hasParticles', e.target.checked)} style={{ transform: 'scale(1.2)' }} />
-                        Zapnout částice
+                        <input type="checkbox" checked={page.particlesSettings?.hasParticles || false} onChange={e => updateParticlesSettings(page.id, 'hasParticles', e.target.checked)} />
+                        Zapnout částice projektu
                       </label>
+                      <span className="input-desc" style={{ width: '100%' }}>Generuje GPGPU částicový oblak podle vybraných objektů</span>
                     </div>
 
                     {page.particlesSettings?.hasParticles && (

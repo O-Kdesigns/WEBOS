@@ -19,15 +19,21 @@
     "posX": 0,
     "posY": 0,
     "posZ": 0,
-    "lightSize": 0.005,
+    "lightSize": 0.01,
     "lightIntensity": 20,
     "color": "#ffffff",
-    "exposure": 0.46,
-    "decay": 0.96,
-    "density": 0.95,
+    "hasAura": true,
+    "auraSize": 2.2,
+    "auraOpacity": 0.35,
+    "exposure": 1,
+    "decay": 0.92,
+    "density": 0.9,
     "weight": 0.5,
     "threshold": 0.4,
-    "maxRadius": 1.5
+    "smoothThreshold": 0.15,
+    "ditherStrength": 1,
+    "rayLength": 2,
+    "maxRadius": 0.73
   },
   "backgroundSettings": {
     "centerColor": "#060608",
@@ -60,6 +66,8 @@
     "sizeRandomness": 0,
     "baseSize": 0.25,
     "shape": "cylinder",
-    "hasParticles": true
+    "hasParticles": true,
+    "transitionMaxLight": 1.19,
+    "transitionMinDark": 0
   }
 }
