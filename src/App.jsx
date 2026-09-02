@@ -179,7 +179,7 @@ function SolidObject({ node }) {
   );
 }
 
-function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY }) {
+function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY, rotationY }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   if (!page || !page.particlesSettings?.hasParticles) return null;
@@ -215,6 +215,8 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
                 videoTexture={videoTexture} 
                 opacity={1}
                 renderOrder={3}
+                rotationY={rotationY}
+                pageDistance={pageDistance}
               />
             </group>
           );
@@ -226,6 +228,8 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
               videoTexture={videoTexture} 
               opacity={1}
               renderOrder={3}
+              rotationY={rotationY}
+              pageDistance={pageDistance}
             />
           </group>
         )}
@@ -617,6 +621,7 @@ function App() {
                   currentIndex={closestIndex}
                   pageDistance={pageDistance}
                   insideRotationY={insideRotationY}
+                  rotationY={rotationY}
                 />
               </>
             )}}

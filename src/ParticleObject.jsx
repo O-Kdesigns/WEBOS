@@ -161,7 +161,7 @@ function useGPGPU(count, particlesData, gl) {
 }
 
 // --- MATERIÁLY ---
-// 1. Původní refrakce pro pozadí (Válec / Kužel) - ZACHOVAT VŠECHNY EFEKTY VČETNĚ NOISU PŘI ROTACI
+// 1. Původní refrakce pro pozadí (Válec / Kužel) - ZACHOVAT VŠECHNY EFEKTY VČETNĚ VODOVÉHO NOISU PŘI ROTACI S PŘECHODEM DO ČERNÉ
 const VideoRefractionMaterialImpl = shaderMaterial(
   {
     tVideo: null,
@@ -245,9 +245,13 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     vec2 screenUv = (vScreenPos.xy / vScreenPos.w) * 0.5 + 0.5;
     vec2 distortedUv = screenUv + (vNormal.xy * uDistortion);
     
-    // Noise pro jelly efekt válce na pozadí při rotaci
-    float n = snoise(vNormal.xy * 3.0 + uTime * 1.5);
-    distortedUv += n * (uNoiseAmount * 0.5);
+    // Vodový vlnový šum (multi-frekvenční simplex noise pro proudění kapaliny)
+    float n1 = snoise(vNormal.xy * 3.0 + vec2(uTime * 1.5, uTime * 0.8));
+    float n2 = snoise(vNormal.xy * 6.0 - vec2(uTime * 2.0, uTime * 1.2)) * 0.5;
+    float n = (n1 + n2) / 1.5;
+    
+    // Deformace UV souřadnic podle vodového šumu při rotaci
+    distortedUv += n * (uNoiseAmount * 0.45);
     distortedUv = clamp(distortedUv, 0.0, 1.0);
     
     vec4 texColor = texture2D(tVideo, distortedUv);
@@ -259,11 +263,18 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     
     vec3 baseVideoColor = texColor.rgb * uColor;
     
-    float mixFactor = clamp(uNoiseAmount + (n * uNoiseAmount * 0.5), 0.0, 1.0);
-    if (uNoiseAmount >= 0.99) mixFactor = 1.0; 
+    // Plynulé zatmívání do černé řízené vodovým šumem
+    // Kousíček od portfolia je vidět krásné vlnění, směrem k 100 % (přepnutí videa) se plynule ponoří do černé
+    float darkFactor = clamp(pow(uNoiseAmount, 1.2) * 1.15 + (n * 0.3 * uNoiseAmount), 0.0, 1.0);
+    if (uNoiseAmount >= 0.95) {
+      darkFactor = max(darkFactor, (uNoiseAmount - 0.95) / 0.05);
+    }
     
-    vec3 mixedColor = mix(baseVideoColor, uColor, mixFactor);
-    vec3 finalColor = mixedColor + (vec3(1.0) * fresnel * 0.5);
+    vec3 mixedColor = mix(baseVideoColor, vec3(0.0), darkFactor);
+    
+    // Jemný skleněný odlesk kuliček i ve tmě, aby neztratily plastičnost
+    float fresnelAmount = mix(0.5, 0.2, darkFactor);
+    vec3 finalColor = mixedColor + (vec3(1.0) * fresnel * fresnelAmount);
     
     gl_FragColor = vec4(finalColor, uOpacity);
   }
@@ -283,7 +294,9 @@ const JellyVideoMaterialImpl = shaderMaterial(
     uMetalness: 0.1,
     uTransmission: 0.85,
     uThickness: 1.2,
-    uOpacity: 1.0
+    uOpacity: 1.0,
+    uNoiseAmount: 0.0,
+    uTime: 0.0
   },
   `
   uniform sampler2D tPositions;
@@ -322,11 +335,41 @@ const JellyVideoMaterialImpl = shaderMaterial(
   uniform float uTransmission;
   uniform float uThickness;
   uniform float uOpacity;
+  uniform float uNoiseAmount;
+  uniform float uTime;
   
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec4 vScreenPos;
   varying vec3 vViewPosition;
+
+  vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+  float snoise(vec2 v){
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+             -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy) );
+    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 i1;
+    i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod(i, 289.0);
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+    + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+      dot(x12.zw,x12.zw)), 0.0);
+    m = m*m ;
+    m = m*m ;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
 
   void main() {
     vec3 normal = normalize(vNormal);
@@ -337,10 +380,16 @@ const JellyVideoMaterialImpl = shaderMaterial(
     vec2 sphereUv = normal.xy;
     float r = length(sphereUv);
     
-    // Zakřivení optiky / čočky podle uDistortion
+    // Vodový vlnový šum
+    float n1 = snoise(sphereUv * 3.0 + vec2(uTime * 1.5, uTime * 0.8));
+    float n2 = snoise(sphereUv * 6.0 - vec2(uTime * 2.0, uTime * 1.2)) * 0.5;
+    float n = (n1 + n2) / 1.5;
+    
+    // Zakřivení optiky / čočky podle uDistortion + vodový šum při rotaci
     float curvePower = mix(1.0, 0.65, clamp(uDistortion, 0.0, 2.0));
     float curvedR = (r > 0.0001) ? pow(r, curvePower) : 0.0;
     vec2 lensUv = (r > 0.0001) ? (sphereUv / r) * (curvedR * 0.49) + 0.5 : vec2(0.5);
+    lensUv += n * (uNoiseAmount * 0.25);
     lensUv = clamp(lensUv, vec2(0.002), vec2(0.998));
     
     vec4 videoTex = texture2D(tVideo, lensUv);
@@ -353,6 +402,13 @@ const JellyVideoMaterialImpl = shaderMaterial(
     vec3 innerVideoColor = videoTex.rgb * uColor * absorption;
     float trans = clamp(uTransmission, 0.0, 1.0);
     vec3 coreColor = mix(uColor * 0.25 * absorption, innerVideoColor, trans);
+    
+    // Plynulé zatmívání videa do černé při přechodu
+    float darkFactor = clamp(pow(uNoiseAmount, 1.2) * 1.15 + (n * 0.3 * uNoiseAmount), 0.0, 1.0);
+    if (uNoiseAmount >= 0.95) {
+      darkFactor = max(darkFactor, (uNoiseAmount - 0.95) / 0.05);
+    }
+    coreColor = mix(coreColor, vec3(0.0), darkFactor);
     
     // 4. Odlesky a lesklost povrchu (Roughness a Metalness)
     vec3 keyLight = normalize(vec3(0.35, 0.85, 0.55));
@@ -375,10 +431,10 @@ const JellyVideoMaterialImpl = shaderMaterial(
     vec3 rimGlaze = mix(vec3(1.0), uColor, 0.4) * (fresnel * (1.0 - rough * 0.4) * 0.6);
     
     float sss = pow(max(0.0, dot(viewDir, -keyLight + normal * 0.4)), 2.0) * 0.5;
-    vec3 sssGlow = sss * uColor * (videoTex.rgb + 0.25) * trans;
+    vec3 sssGlow = sss * uColor * (videoTex.rgb + 0.25) * trans * (1.0 - darkFactor * 0.8);
     
     // 6. Výsledný složený vzhled
-    vec3 finalColor = coreColor + totalSpecular + rimGlaze + sssGlow;
+    vec3 finalColor = coreColor + (totalSpecular + rimGlaze) * mix(1.0, 0.4, darkFactor) + sssGlow;
     finalColor = mix(finalColor, finalColor * uColor, metal * 0.5);
     
     gl_FragColor = vec4(finalColor, uOpacity);
@@ -464,6 +520,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
   if (settings.colorMode === 'video' && videoTexture) {
     return (
       <jellyVideoMaterialImpl 
+        ref={matRef}
         tVideo={videoTexture} 
         uColor={new THREE.Color(settings.baseColor || '#6df73b')}
         uDistortion={settings.refractionDistortion ?? 0.6}
