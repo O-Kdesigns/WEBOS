@@ -10,6 +10,8 @@ import config from './config.json';
 import { Editor } from './Editor';
 import { ParticleObject } from './ParticleObject';
 import { MusicPlayer } from './MusicPlayer';
+import { VolumetricLightPass, CenterLight } from './VolumetricLight';
+import { DarkStudioBackground } from './DarkStudioBackground';
 import './App.css';
 
 const resolveAssetUrl = (url) => {
@@ -565,7 +567,9 @@ function App() {
     <div className="app-container" {...bindWheel()}>
       <div className="canvas-container" {...bindDrag()}>
         <Canvas shadows>
-          <Environment preset="city" background blur={0.8} />
+          <DarkStudioBackground appConfig={appConfig} />
+          <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
+          <CenterLight appConfig={appConfig} />
           <spotLight 
             position={[0, 15, 0]} 
             intensity={(appConfig.hdriIntensity ?? 1) * 3} 
@@ -624,6 +628,8 @@ function App() {
             viewMode={viewMode} 
             currentIndex={closestIndex} 
           />
+
+          <VolumetricLightPass appConfig={appConfig} />
         </Canvas>
       </div>
 

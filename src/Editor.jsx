@@ -452,6 +452,113 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
 
           <div className="editor-section">
             <h4 
+              style={{ color: '#f59e0b', borderBottomColor: 'rgba(245, 158, 11, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+              onClick={() => toggleSection('global-volumetric')}
+            >
+              Volumetric Light (God Rays)
+              <span>{openSections['global-volumetric'] ? '▲' : '▼'}</span>
+            </h4>
+            
+            {openSections['global-volumetric'] && (
+              <>
+                <div className="input-group checkbox-group">
+                  <label style={{ fontSize: '1rem', color: '#f59e0b', fontWeight: 'bold' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={appConfig.volumetricLight?.enabled ?? true} 
+                      onChange={e => updateConfig('volumetricLight', { ...appConfig.volumetricLight, enabled: e.target.checked })} 
+                    />
+                    Aktivovat Volumetric Light
+                  </label>
+                </div>
+                <div className="input-group">
+                  <label>Expozice paprsků (Exposure):</label>
+                  <DragNumberInput step={0.05} min={0} max={3} value={appConfig.volumetricLight?.exposure ?? 0.85} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, exposure: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Útlum paprsků (Decay):</label>
+                  <DragNumberInput step={0.01} min={0.5} max={1.0} value={appConfig.volumetricLight?.decay ?? 0.95} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, decay: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Hustota paprsků (Density):</label>
+                  <DragNumberInput step={0.05} min={0.1} max={2.0} value={appConfig.volumetricLight?.density ?? 0.9} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, density: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Váha / síla paprsků (Weight):</label>
+                  <DragNumberInput step={0.05} min={0} max={2.0} value={appConfig.volumetricLight?.weight ?? 0.4} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, weight: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Práh jasu (Threshold):</label>
+                  <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.volumetricLight?.threshold ?? 0.6} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, threshold: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Velikost světelného jádra:</label>
+                  <DragNumberInput step={0.05} min={0.05} max={3.0} value={appConfig.volumetricLight?.lightSize ?? 0.35} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, lightSize: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Intenzita světla:</label>
+                  <DragNumberInput step={1} min={0} max={100} value={appConfig.volumetricLight?.lightIntensity ?? 15} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, lightIntensity: val })} />
+                </div>
+                <div className="input-group">
+                  <label>Barva světla a paprsků:</label>
+                  <input 
+                    type="color" 
+                    value={appConfig.volumetricLight?.color || '#ffffff'} 
+                    onChange={e => updateConfig('volumetricLight', { ...appConfig.volumetricLight, color: e.target.value })} 
+                    style={{ width: '100%', height: '35px', background: 'transparent', border: '1px solid #444', borderRadius: '4px', cursor: 'pointer' }}
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Pozice Y (Výška):</label>
+                  <DragNumberInput step={0.1} value={appConfig.volumetricLight?.posY ?? 0} onChange={val => updateConfig('volumetricLight', { ...appConfig.volumetricLight, posY: val })} />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="editor-section">
+            <h4 
+              style={{ color: '#8b5cf6', borderBottomColor: 'rgba(139, 92, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+              onClick={() => toggleSection('global-background-dark')}
+            >
+              Pozadí a HDRI (Dark Studio)
+              <span>{openSections['global-background-dark'] ? '▲' : '▼'}</span>
+            </h4>
+            
+            {openSections['global-background-dark'] && (
+              <>
+                <div className="input-group">
+                  <label>Intenzita HDRI odlesků:</label>
+                  <DragNumberInput step={0.1} min={0} max={5} value={appConfig.environmentIntensity ?? 0.8} onChange={val => updateConfig('environmentIntensity', val)} />
+                </div>
+                <div className="input-group">
+                  <label>Barva středu pozadí:</label>
+                  <input 
+                    type="color" 
+                    value={appConfig.backgroundSettings?.centerColor || '#060608'} 
+                    onChange={e => updateConfig('backgroundSettings', { ...appConfig.backgroundSettings, centerColor: e.target.value })} 
+                    style={{ width: '100%', height: '35px', background: 'transparent', border: '1px solid #444', borderRadius: '4px', cursor: 'pointer' }}
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Barva okrajů pozadí (Rim):</label>
+                  <input 
+                    type="color" 
+                    value={appConfig.backgroundSettings?.edgeColor || '#232630'} 
+                    onChange={e => updateConfig('backgroundSettings', { ...appConfig.backgroundSettings, edgeColor: e.target.value })} 
+                    style={{ width: '100%', height: '35px', background: 'transparent', border: '1px solid #444', borderRadius: '4px', cursor: 'pointer' }}
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Strmost okrajového přechodu (Rim Power):</label>
+                  <DragNumberInput step={0.1} min={0.5} max={8.0} value={appConfig.backgroundSettings?.rimPower ?? 2.2} onChange={val => updateConfig('backgroundSettings', { ...appConfig.backgroundSettings, rimPower: val })} />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="editor-section">
+            <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-kamera')}
             >
@@ -470,7 +577,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   <DragNumberInput step={0.1} value={appConfig.cameraHeight ?? 1.5} onChange={val => updateConfig('cameraHeight', val)} />
                 </div>
                 <div className="input-group">
-                  <label>Intenzita HDRI (Osvětlení):</label>
+                  <label>Intenzita přímého světla (SpotLight):</label>
                   <DragNumberInput step={0.1} min={0} value={appConfig.hdriIntensity ?? 1} onChange={val => updateConfig('hdriIntensity', val)} />
                 </div>
               </>
