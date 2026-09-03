@@ -14,19 +14,6 @@
       },
       "image": "",
       "color": "#ff4081",
-      "obsahSettings": {
-        "hasLevitate": true,
-        "levitateModel": "obsah/levitate/xelith.glb",
-        "levitateBaseHeight": 0,
-        "levitateSpeed": 1,
-        "levitateRange": 0.1,
-        "hasObject": true,
-        "objectModel": "obsah/levitate/xelith.glb",
-        "objectY": 1.5,
-        "isLevitating": false,
-        "objectZ": 1.3,
-        "objectX": 0
-      },
       "particlesSettings": {
         "hasParticles": true,
         "radius": 2.4,
@@ -54,9 +41,16 @@
           "Particles_Xelith_Obsah001",
           "Particles_Xelith_Obsah002",
           "Particles_Xelith_Backround",
-          "Particles_Xelith_Obsah1",
           "Particles_Xelith_Obsah0",
-          "articles_Xelith_Obsah_starej"
+          "Particles_Xelith_Obsah1",
+          "Particles_Xelith_Obsah0002",
+          "Particles_Xelith_Obsah0001",
+          "Particles_Xelith_Obsah1001",
+          "Particles_Xelith_Obsah1002",
+          "Particles_Xelith_Obsahdruhej0",
+          "Particles_Xelith_Obsahdruhej1",
+          "Particles_Xelith_Obsahtreti0",
+          "Particles_Xelith_Obsahtreti1"
         ]
       },
       "videoUrl": "video/reklama xelith.mp4"
@@ -76,10 +70,6 @@
       },
       "image": "",
       "color": "#ffffff",
-      "obsahSettings": {
-        "hasLevitate": true,
-        "levitateModel": "obsah/levitate/xelith.glb"
-      },
       "particlesSettings": {
         "hasParticles": true,
         "selectedNodes": [

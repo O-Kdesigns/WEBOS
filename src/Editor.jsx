@@ -356,20 +356,6 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     setPages(pages.map(p => p.id === id ? { ...p, [field]: value } : p));
   };
 
-  const updateObsahSettings = (id, field, value) => {
-    setPages(pages.map(p => {
-      if (p.id === id) {
-        return {
-          ...p,
-          obsahSettings: {
-            ...(p.obsahSettings || {}),
-            [field]: value
-          }
-        };
-      }
-      return p;
-    }));
-  };
 
   const updateParticlesSettings = (id, field, value) => {
     setPages(pages.map(p => {
@@ -1045,120 +1031,13 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                 )}
               </div>
 
-              {/* Sekce: MODUL OBSAH (3D Objekt) */}
-              <div className="editor-section">
-                <h4 
-                  style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-                  onClick={() => toggleSection(`page-obsah-${page.id}`)}
-                >
-                  <span>📦 Modul: 3D Objekt (Model)</span>
-                  <span>{openSections[`page-obsah-${page.id}`] ? '▲' : '▼'}</span>
-                </h4>
-                
-                {openSections[`page-obsah-${page.id}`] && (
-                  <>
-                    <div className="input-group checkbox-group">
-                      <label style={{ fontSize: '1rem', color: '#10b981', fontWeight: 'bold' }}>
-                        <input type="checkbox" checked={page.obsahSettings?.hasObject || false} onChange={e => updateObsahSettings(page.id, 'hasObject', e.target.checked)} />
-                        Aktivovat 3D Model
-                      </label>
-                      <span className="input-desc" style={{ width: '100%' }}>Zobrazí 3D GLB model uvnitř scény projektu</span>
-                    </div>
-
-                    {page.obsahSettings?.hasObject && (
-                      <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', borderLeft: '3px solid #10b981', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        
-                        <div className="input-group">
-                          <label>Vyberte GLB model:</label>
-                          <span className="input-desc">Soubor ze složky <code>/obsah/levitate/</code></span>
-                          <select value={page.obsahSettings?.objectModel || ''} onChange={e => updateObsahSettings(page.id, 'objectModel', e.target.value)}>
-                            <option value="">Nevybrán model</option>
-                            {getFilteredAssets(assets.models, 'obsah/levitate/').map(m => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                        </div>
-                        
-                        <div className="editor-subsection">
-                          <h5 
-                            className="editor-subsection-header"
-                            onClick={() => toggleSection(`page-transform-${page.id}`)}
-                          >
-                            <span>📍 3D Transformace a Pozice</span>
-                            <span>{openSections[`page-transform-${page.id}`] ? '▲' : '▼'}</span>
-                          </h5>
-                          {openSections[`page-transform-${page.id}`] && (
-                            <div className="editor-subsection-content">
-                              <div className="input-group">
-                                <label>Vzdálenost Z (Hloubka):</label>
-                                <span className="input-desc">Vzdálenost modelu od středu/kamery</span>
-                                <DragNumberInput step={0.1} value={page.obsahSettings?.objectZ ?? 4.0} onChange={val => updateObsahSettings(page.id, 'objectZ', val)} />
-                              </div>
-                              <div className="input-group">
-                                <label>Pozice X (Horizontálně):</label>
-                                <span className="input-desc">Vodorovný posun modelu</span>
-                                <DragNumberInput step={0.1} value={page.obsahSettings?.objectX ?? 0.0} onChange={val => updateObsahSettings(page.id, 'objectX', val)} />
-                              </div>
-                              <div className="input-group">
-                                <label>Základní výška Y (Od země):</label>
-                                <span className="input-desc">Svislá poloha středu modelu</span>
-                                <DragNumberInput step={0.1} value={page.obsahSettings?.objectY ?? 2.0} onChange={val => updateObsahSettings(page.id, 'objectY', val)} />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="editor-subsection">
-                          <h5 
-                            className="editor-subsection-header"
-                            onClick={() => toggleSection(`page-levitate-${page.id}`)}
-                          >
-                            <span>🕊️ Levitace & Animace</span>
-                            <span>{openSections[`page-levitate-${page.id}`] ? '▲' : '▼'}</span>
-                          </h5>
-                          {openSections[`page-levitate-${page.id}`] && (
-                            <div className="editor-subsection-content">
-                              <div className="input-group checkbox-group">
-                                <label style={{ color: '#60a5fa' }}>
-                                  <input type="checkbox" checked={page.obsahSettings?.isLevitating || false} onChange={e => updateObsahSettings(page.id, 'isLevitating', e.target.checked)} />
-                                  Zapnout levitování (Ping-pong animace)
-                                </label>
-                              </div>
-
-                              {page.obsahSettings?.isLevitating && (
-                                <>
-                                  <div className="input-group">
-                                    <label>Rozsah kmitání (Amplituda):</label>
-                                    <span className="input-desc">Výška zdvihu při vznášení</span>
-                                    <DragNumberInput step={0.1} value={page.obsahSettings?.levitateRange ?? 0.5} onChange={val => updateObsahSettings(page.id, 'levitateRange', val)} />
-                                  </div>
-                                  <div className="input-group">
-                                    <label>Rychlost vznášení:</label>
-                                    <span className="input-desc">Frekvence kmitání</span>
-                                    <DragNumberInput step={0.1} value={page.obsahSettings?.levitateSpeed ?? 1.0} onChange={val => updateObsahSettings(page.id, 'levitateSpeed', val)} />
-                                  </div>
-                                  <div className="input-group">
-                                    <label>Plynulost (Smoothing):</label>
-                                    <span className="input-desc">Jemnost tlumení pohybu</span>
-                                    <DragNumberInput step={0.01} value={page.obsahSettings?.levitateSmoothing ?? 0.1} onChange={val => updateObsahSettings(page.id, 'levitateSmoothing', val)} />
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Sekce: MODUL ČÁSTICE */}
+              {/* Sekce: MODUL OBSAH (Částice & 3D Objekty z Blenderu) */}
               <div className="editor-section">
                 <h4 
                   style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
                   onClick={() => toggleSection(`page-particles-${page.id}`)}
                 >
-                  <span>✨ Modul: Částice projektu</span>
+                  <span>📦 Modul: Obsah (Částice & Objekty)</span>
                   <span>{openSections[`page-particles-${page.id}`] ? '▲' : '▼'}</span>
                 </h4>
                 
@@ -1167,9 +1046,9 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                     <div className="input-group checkbox-group">
                       <label style={{ fontSize: '1rem', color: '#10b981', fontWeight: 'bold' }}>
                         <input type="checkbox" checked={page.particlesSettings?.hasParticles || false} onChange={e => updateParticlesSettings(page.id, 'hasParticles', e.target.checked)} />
-                        Zapnout částice projektu
+                        Aktivovat obsah projektu
                       </label>
-                      <span className="input-desc" style={{ width: '100%' }}>Generuje GPGPU částicový oblak podle vybraných objektů</span>
+                      <span className="input-desc" style={{ width: '100%' }}>Zobrazí vybrané 3D objekty a částice z Blenderu</span>
                     </div>
 
                     {page.particlesSettings?.hasParticles && (

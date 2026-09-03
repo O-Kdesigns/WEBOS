@@ -495,7 +495,7 @@ const JellyVideoMaterialImpl = shaderMaterial(
     
     float metal = clamp(uMetalness, 0.0, 1.0);
     vec3 specTint = mix(vec3(1.0), uColor, metal);
-    totalSpecular = (spec1 + spec2) * specTint * (1.0 - rough * 0.5);
+    vec3 totalSpecular = (spec1 + spec2) * specTint * (1.0 - rough * 0.5);
     
     // 5. Mokrý želatinový Fresnel lem a translucentní podsvícení (Subsurface Scattering)
     float fresnel = pow(1.0 - NdotV, mix(3.5, 2.0, rough));
