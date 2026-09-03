@@ -183,6 +183,7 @@ const VideoRefractionMaterialImpl = shaderMaterial(
   varying vec4 vScreenPos;
   varying vec3 vViewPosition;
   varying vec3 vWorldPos;
+  varying float vScale;
   
   void main() {
     vUv = uv;
@@ -202,6 +203,7 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     vScreenPos = gl_Position;
     vViewPosition = -mvPosition.xyz;
     vWorldPos = instancePosition.xyz;
+    vScale = computedScale;
   }
   `,
   `
@@ -219,6 +221,7 @@ const VideoRefractionMaterialImpl = shaderMaterial(
   varying vec4 vScreenPos;
   varying vec3 vViewPosition;
   varying vec3 vWorldPos;
+  varying float vScale;
 
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
@@ -252,16 +255,32 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     vec2 screenUv = (vScreenPos.xy / vScreenPos.w) * 0.5 + 0.5;
     vec2 distortedUv = screenUv + (vNormal.xy * uDistortion);
     
-    // 1. Vodový vlnový šum (proudění kapaliny na kuličkách)
-    float n1 = snoise(vNormal.xy * 3.0 + vec2(uTime * 1.5, uTime * 0.8));
-    float n2 = snoise(vNormal.xy * 6.0 - vec2(uTime * 2.0, uTime * 1.2)) * 0.5;
-    float waterNoise = (n1 + n2) / 1.5;
+    // 1. Vodový šum se počítá POUZE při rotaci / přechodu (uNoiseAmount > 0.001)
+    // Při klidovém stavu šetří masivní množství GPU cyklů
+    float waterNoise = 0.0;
+    if (uNoiseAmount > 0.001) {
+      waterNoise = snoise(vNormal.xy * 2.5 + vec2(uTime * 1.5, uTime * 0.8));
+      distortedUv += waterNoise * (uNoiseAmount * 0.45);
+      distortedUv = clamp(distortedUv, 0.0, 1.0);
+    }
     
-    // Deformace UV souřadnic podle vodového šumu při rotaci
-    distortedUv += waterNoise * (uNoiseAmount * 0.45);
-    distortedUv = clamp(distortedUv, 0.0, 1.0);
+    // 2. Adaptivní zaostření textury podle velikosti koule (vScale)
+    // Na velkých koulích posilujeme mikro-ostrost hran a detailů
+    float sharpStrength = clamp((vScale - 0.12) * 4.0, 0.0, 1.25);
     
-    vec4 texColor = texture2D(tVideo, distortedUv);
+    vec4 texColor;
+    if (sharpStrength > 0.05) {
+      vec2 texel = vec2(0.00052, 0.00092); // ~1920x1080 texel krok
+      vec4 center = texture2D(tVideo, distortedUv);
+      vec4 n = texture2D(tVideo, distortedUv + vec2(0.0, texel.y));
+      vec4 s = texture2D(tVideo, distortedUv - vec2(0.0, texel.y));
+      vec4 e = texture2D(tVideo, distortedUv + vec2(texel.x, 0.0));
+      vec4 w = texture2D(tVideo, distortedUv - vec2(texel.x, 0.0));
+      vec4 blur = (n + s + e + w) * 0.25;
+      texColor = clamp(center + (center - blur) * sharpStrength, 0.0, 1.0);
+    } else {
+      texColor = texture2D(tVideo, distortedUv);
+    }
     
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(vViewPosition);
@@ -269,28 +288,27 @@ const VideoRefractionMaterialImpl = shaderMaterial(
     fresnel = pow(fresnel, 3.0);
     
     vec3 baseVideoColor = texColor.rgb * uColor;
+    vec3 mixedColor = baseVideoColor;
+    float fresnelAmount = 0.5;
     
-    // 2. Swirling / Zamíchávání tmavé (černé) a světlé (modré) složky směrem ke středu přechodu
-    vec3 p = vWorldPos * 0.25;
-    float swirl1 = snoise(p.xy + vec2(uTime * 0.6, p.z * 0.3));
-    float swirl2 = snoise(vNormal.xy * 2.5 + vec2(swirl1 * 1.6, uTime * 0.9));
-    float swirlMix = clamp((swirl1 * 0.6 + swirl2 * 0.4) * 0.5 + 0.5, 0.0, 1.0);
-    
-    // Tmavá a světlá složka řízená z globálního nastavení (uMinDark a uMaxLight)
-    vec3 darkTarget = mix(vec3(0.0), uColor * 0.3, clamp(uMinDark, 0.0, 1.0));
-    vec3 lightTarget = uColor * clamp(uMaxLight, 0.0, 3.0);
-    vec3 swirledTone = mix(darkTarget, lightTarget, smoothstep(0.2, 0.8, swirlMix));
-    
-    // Plynulý nárůst zamíchávání od portfolia ke středu (uNoiseAmount -> 1.0)
-    float mixProgress = clamp(pow(uNoiseAmount, 1.2) * 1.15 + (waterNoise * 0.25 * uNoiseAmount), 0.0, 1.0);
-    if (uNoiseAmount >= 0.95) {
-      mixProgress = max(mixProgress, (uNoiseAmount - 0.95) / 0.05);
+    // 3. Zamíchávání světlé a tmavé složky POUZE při rotaci
+    if (uNoiseAmount > 0.001) {
+      vec3 p = vWorldPos * 0.25;
+      float swirl = snoise(p.xy + vec2(uTime * 0.5 + waterNoise * 0.5, p.z * 0.3));
+      float swirlMix = clamp(swirl * 0.5 + 0.5, 0.0, 1.0);
+      
+      vec3 darkTarget = mix(vec3(0.0), uColor * 0.3, clamp(uMinDark, 0.0, 1.0));
+      vec3 lightTarget = uColor * clamp(uMaxLight, 0.0, 3.0);
+      vec3 swirledTone = mix(darkTarget, lightTarget, smoothstep(0.2, 0.8, swirlMix));
+      
+      float mixProgress = clamp(pow(uNoiseAmount, 1.2) * 1.15 + (waterNoise * 0.25 * uNoiseAmount), 0.0, 1.0);
+      if (uNoiseAmount >= 0.95) {
+        mixProgress = max(mixProgress, (uNoiseAmount - 0.95) / 0.05);
+      }
+      mixedColor = mix(baseVideoColor, swirledTone, mixProgress);
+      fresnelAmount = mix(0.5, 0.35, mixProgress);
     }
     
-    vec3 mixedColor = mix(baseVideoColor, swirledTone, mixProgress);
-    
-    // Skleněný odlesk kuliček pro zachování plastičnosti
-    float fresnelAmount = mix(0.5, 0.35, mixProgress);
     vec3 finalColor = mixedColor + (vec3(1.0) * fresnel * fresnelAmount);
     
     gl_FragColor = vec4(finalColor, uOpacity);
@@ -326,6 +344,7 @@ const JellyVideoMaterialImpl = shaderMaterial(
   varying vec4 vScreenPos;
   varying vec3 vViewPosition;
   varying vec3 vWorldPos;
+  varying float vScale;
   
   void main() {
     vUv = uv;
@@ -345,6 +364,7 @@ const JellyVideoMaterialImpl = shaderMaterial(
     vScreenPos = gl_Position;
     vViewPosition = -mvPosition.xyz;
     vWorldPos = instancePosition.xyz;
+    vScale = computedScale;
   }
   `,
   `
@@ -366,6 +386,7 @@ const JellyVideoMaterialImpl = shaderMaterial(
   varying vec4 vScreenPos;
   varying vec3 vViewPosition;
   varying vec3 vWorldPos;
+  varying float vScale;
 
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
@@ -404,44 +425,61 @@ const JellyVideoMaterialImpl = shaderMaterial(
     vec2 sphereUv = normal.xy;
     float r = length(sphereUv);
     
-    // Vodový vlnový šum
-    float n1 = snoise(sphereUv * 3.0 + vec2(uTime * 1.5, uTime * 0.8));
-    float n2 = snoise(sphereUv * 6.0 - vec2(uTime * 2.0, uTime * 1.2)) * 0.5;
-    float waterNoise = (n1 + n2) / 1.5;
-    
-    // Zakřivení optiky / čočky podle uDistortion + vodový šum při rotaci
+    // Zakřivení optiky / čočky podle uDistortion
     float curvePower = mix(1.0, 0.65, clamp(uDistortion, 0.0, 2.0));
     float curvedR = (r > 0.0001) ? pow(r, curvePower) : 0.0;
     vec2 lensUv = (r > 0.0001) ? (sphereUv / r) * (curvedR * 0.49) + 0.5 : vec2(0.5);
-    lensUv += waterNoise * (uNoiseAmount * 0.25);
+    
+    // Vodový šum POUZE při rotaci / přechodu (uNoiseAmount > 0.001)
+    float waterNoise = 0.0;
+    if (uNoiseAmount > 0.001) {
+      waterNoise = snoise(sphereUv * 2.5 + vec2(uTime * 1.5, uTime * 0.8));
+      lensUv += waterNoise * (uNoiseAmount * 0.25);
+    }
     lensUv = clamp(lensUv, vec2(0.002), vec2(0.998));
     
-    vec4 videoTex = texture2D(tVideo, lensUv);
+    // 2. Adaptivní zaostření textury podle velikosti koule (vScale)
+    float sharpStrength = clamp((vScale - 0.12) * 4.0, 0.0, 1.25);
+    vec4 videoTex;
+    if (sharpStrength > 0.05) {
+      vec2 texel = vec2(0.00052, 0.00092);
+      vec4 center = texture2D(tVideo, lensUv);
+      vec4 n = texture2D(tVideo, lensUv + vec2(0.0, texel.y));
+      vec4 s = texture2D(tVideo, lensUv - vec2(0.0, texel.y));
+      vec4 e = texture2D(tVideo, lensUv + vec2(texel.x, 0.0));
+      vec4 w = texture2D(tVideo, lensUv - vec2(texel.x, 0.0));
+      vec4 blur = (n + s + e + w) * 0.25;
+      videoTex = clamp(center + (center - blur) * sharpStrength, 0.0, 1.0);
+    } else {
+      videoTex = texture2D(tVideo, lensUv);
+    }
     
-    // 2. Absorpce světla a hloubka želé (Beer-Lambertův zákon pro tloušťku a sytost)
+    // 3. Absorpce světla a hloubka želé (Beer-Lambertův zákon pro tloušťku a sytost)
     float depth = sqrt(max(0.0, 1.0 - r * r)) * (1.0 + max(uThickness, 0.0) * 0.8);
     vec3 absorption = exp(-(vec3(1.0) - uColor) * depth * max(uThickness * 0.8, 0.15));
     
-    // 3. Transmise a vnitřní vyzařování videa skrz želé
+    // 4. Transmise a vnitřní vyzařování videa skrz želé
     vec3 innerVideoColor = videoTex.rgb * uColor * absorption;
     float trans = clamp(uTransmission, 0.0, 1.0);
     vec3 coreColor = mix(uColor * 0.25 * absorption, innerVideoColor, trans);
     
-    // Zamíchávání tmavé a světlé složky
-    vec3 p = vWorldPos * 0.25;
-    float swirl1 = snoise(p.xy + vec2(uTime * 0.6, p.z * 0.3));
-    float swirl2 = snoise(normal.xy * 2.5 + vec2(swirl1 * 1.6, uTime * 0.9));
-    float swirlMix = clamp((swirl1 * 0.6 + swirl2 * 0.4) * 0.5 + 0.5, 0.0, 1.0);
-    
-    vec3 darkTarget = mix(vec3(0.0), uColor * 0.25, clamp(uMinDark, 0.0, 1.0));
-    vec3 lightTarget = uColor * clamp(uMaxLight, 0.0, 3.0);
-    vec3 swirledTone = mix(darkTarget, lightTarget, smoothstep(0.2, 0.8, swirlMix));
-    
-    float mixProgress = clamp(pow(uNoiseAmount, 1.2) * 1.15 + (waterNoise * 0.25 * uNoiseAmount), 0.0, 1.0);
-    if (uNoiseAmount >= 0.95) {
-      mixProgress = max(mixProgress, (uNoiseAmount - 0.95) / 0.05);
+    float mixProgress = 0.0;
+    // 5. Zamíchávání tmavé a světlé složky POUZE při rotaci
+    if (uNoiseAmount > 0.001) {
+      vec3 p = vWorldPos * 0.25;
+      float swirl = snoise(p.xy + vec2(uTime * 0.5 + waterNoise * 0.5, p.z * 0.3));
+      float swirlMix = clamp(swirl * 0.5 + 0.5, 0.0, 1.0);
+      
+      vec3 darkTarget = mix(vec3(0.0), uColor * 0.25, clamp(uMinDark, 0.0, 1.0));
+      vec3 lightTarget = uColor * clamp(uMaxLight, 0.0, 3.0);
+      vec3 swirledTone = mix(darkTarget, lightTarget, smoothstep(0.2, 0.8, swirlMix));
+      
+      mixProgress = clamp(pow(uNoiseAmount, 1.2) * 1.15 + (waterNoise * 0.25 * uNoiseAmount), 0.0, 1.0);
+      if (uNoiseAmount >= 0.95) {
+        mixProgress = max(mixProgress, (uNoiseAmount - 0.95) / 0.05);
+      }
+      coreColor = mix(coreColor, swirledTone, mixProgress);
     }
-    coreColor = mix(coreColor, swirledTone, mixProgress);
     
     // 4. Odlesky a lesklost povrchu (Roughness a Metalness)
     vec3 keyLight = normalize(vec3(0.35, 0.85, 0.55));

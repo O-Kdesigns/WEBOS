@@ -42,7 +42,7 @@ const VolumetricLightShader = {
 
     varying vec2 vUv;
 
-    const int NUM_SAMPLES = 60;
+    const int NUM_SAMPLES = 30;
 
     // Fast screen-space Interleaved Gradient Noise (IGN by Jorge Jimenez)
     float getDither(vec2 coord) {
@@ -157,8 +157,8 @@ export function CenterLight({ appConfig }) {
 export function VolumetricLightPass({ appConfig }) {
   const { gl, scene, camera, size } = useThree();
 
-  // Optimalizace rozlišení: max DPR 1.5 zabrání zahlcení GPU paměti
-  const dpr = Math.min(gl.getPixelRatio(), 1.5);
+  // Optimalizace rozlišení: max DPR 1.25 zabrání zahlcení GPU paměti
+  const dpr = Math.min(gl.getPixelRatio(), 1.25);
   const width = Math.max(1, Math.floor(size.width * dpr));
   const height = Math.max(1, Math.floor(size.height * dpr));
 

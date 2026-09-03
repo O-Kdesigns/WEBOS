@@ -38,11 +38,14 @@ function ensureVideoEntry(url, gl) {
   video.playsInline = true;
   video.preload = 'auto'; // Necháme prohlížeč přednačíst metadata
   
+  const maxAniso = gl.capabilities?.getMaxAnisotropy ? Math.min(gl.capabilities.getMaxAnisotropy(), 16) : 1;
+
   const texture = new THREE.VideoTexture(video);
   texture.colorSpace = gl.outputColorSpace;
   texture.generateMipmaps = false;
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = maxAniso;
   
   const deskTexture = new THREE.VideoTexture(video);
   deskTexture.colorSpace = gl.outputColorSpace;
@@ -51,6 +54,7 @@ function ensureVideoEntry(url, gl) {
   deskTexture.generateMipmaps = false;
   deskTexture.minFilter = THREE.LinearFilter;
   deskTexture.magFilter = THREE.LinearFilter;
+  deskTexture.anisotropy = maxAniso;
 
   const entry = { video, texture, deskTexture, isActive: false, warmedUp: false };
   videoTextureCache.set(url, entry);

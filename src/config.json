@@ -19,7 +19,7 @@
     "posX": 0,
     "posY": 0,
     "posZ": 0,
-    "lightSize": 0.01,
+    "lightSize": 0.005,
     "lightIntensity": 20,
     "color": "#ffffff",
     "hasAura": true,
