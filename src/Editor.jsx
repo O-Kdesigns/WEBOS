@@ -737,6 +737,92 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
             
             {openSections['inside-fog-section'] && (
               <>
+                {/* HLAVNÍ MASTER SLIDER: CELKOVÁ INTENZITA MLHY */}
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.18) 0%, rgba(14, 165, 233, 0.08) 100%)',
+                  border: '1px solid rgba(6, 182, 212, 0.45)',
+                  borderRadius: '8px',
+                  padding: '12px 14px',
+                  marginBottom: '14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  boxShadow: '0 4px 12px rgba(6, 182, 212, 0.1)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.1rem' }}>🎛️</span>
+                      <div>
+                        <span style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#67e8f9', display: 'block' }}>
+                          Celková intenzita mlhy (Master Fog)
+                        </span>
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                          Jednotný slider pro hustotu a svítivost všech typů mlh
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ 
+                        fontWeight: 'bold', 
+                        fontSize: '1.05rem', 
+                        color: '#38bdf8', 
+                        background: 'rgba(0,0,0,0.5)', 
+                        padding: '3px 10px', 
+                        borderRadius: '6px',
+                        border: '1px solid rgba(6, 182, 212, 0.3)',
+                        minWidth: '58px',
+                        textAlign: 'center',
+                        fontVariantNumeric: 'tabular-nums'
+                      }}>
+                        {appConfig.insideFog?.masterFogIntensity ?? 100} %
+                      </span>
+                      {[25, 50, 75, 100].map(pct => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => updateInsideFog('masterFogIntensity', pct)}
+                          style={{
+                            background: (appConfig.insideFog?.masterFogIntensity ?? 100) === pct ? 'rgba(6, 182, 212, 0.4)' : 'rgba(255,255,255,0.06)',
+                            border: '1px solid ' + ((appConfig.insideFog?.masterFogIntensity ?? 100) === pct ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.12)'),
+                            color: (appConfig.insideFog?.masterFogIntensity ?? 100) === pct ? '#67e8f9' : '#94a3b8',
+                            padding: '3px 7px',
+                            borderRadius: '4px',
+                            fontSize: '0.72rem',
+                            cursor: 'pointer',
+                            fontWeight: (appConfig.insideFog?.masterFogIntensity ?? 100) === pct ? '700' : '500'
+                          }}
+                        >
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', minWidth: '22px' }}>0%</span>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      step="1"
+                      value={appConfig.insideFog?.masterFogIntensity ?? 100}
+                      onChange={e => updateInsideFog('masterFogIntensity', Number(e.target.value))}
+                      style={{
+                        flex: 1,
+                        accentColor: '#06b6d4',
+                        cursor: 'pointer',
+                        height: '8px'
+                      }}
+                    />
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', minWidth: '32px', textAlign: 'right' }}>100%</span>
+                  </div>
+
+                  <span className="input-desc" style={{ color: '#94a3b8', fontSize: '0.74rem', margin: 0, lineHeight: 1.4 }}>
+                    💡 <b>100 % = ideální maximum</b> (aktuálně sesynchronizované hodnoty v sekcích níže). Slider škáluje proudění hustoty a jasu přímo do kódu bez přepisování čísel v editovacích polích.
+                  </span>
+                </div>
+
                 {/* OVLÁDACÍ PANEL: RYCHLÉ VYPÍNÁNÍ A SOLO PRO JEDNOTLIVÉ VRSTVY */}
                 <div style={{
                   background: 'rgba(6, 182, 212, 0.08)',

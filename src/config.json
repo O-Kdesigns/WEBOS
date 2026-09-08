@@ -37,6 +37,7 @@
   },
   "insideFog": {
     "enabled": true,
+    "masterFogIntensity": 70,
     "fogColor": "#4a4a4a",
     "fogDensity": 1.5,
     "fogNear": 0.7,
@@ -100,7 +101,7 @@
   },
   "powerSaving": {
     "pauseOnBlur": true,
-    "pauseAudioOnBlur": false,
+    "pauseAudioOnBlur": true,
     "showBadge": true
   }
 }

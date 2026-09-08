@@ -54,7 +54,8 @@ const VolumetricLightShader = {
     uEnableDepthFog: { value: 1.0 },
     uEnableForegroundFog: { value: 1.0 },
     uEnableVignette: { value: 1.0 },
-    uEnableSmoke: { value: 1.0 }
+    uEnableSmoke: { value: 1.0 },
+    uFogMasterIntensity: { value: 1.0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -113,6 +114,7 @@ const VolumetricLightShader = {
     uniform float uEnableForegroundFog;
     uniform float uEnableVignette;
     uniform float uEnableSmoke;
+    uniform float uFogMasterIntensity;
 
     varying vec2 vUv;
 
@@ -227,9 +229,10 @@ const VolumetricLightShader = {
       // Pozvolný náběh: žádná ostrá diagonála, ale jemný pomalý začátek s nastavitelnou křivkou růstu
       float normZ = clamp((linearZ - uFogNear) / max(0.001, uFogFar - uFogNear), 0.0, 1.0);
       float depthFactor = pow(normZ, max(0.01, uFogCurve));
-      // Na konci mlhy (linearZ >= uFogFar) nebo na pozadí dosahuje mlha 100% neprůhlednosti (1.0)
-      float depthFog = (isBackground || normZ >= 1.0) ? 1.0 : clamp(depthFactor * uFogDensity, 0.0, 1.0);
-      depthFog *= uEnableDepthFog;
+      // Na konci mlhy (linearZ >= uFogFar) nebo na pozadí dosahuje mlha maximální neprůhlednosti škálované master intenzitou
+      float maxDepthFog = min(1.0, max(0.0, uFogDensity)) * uEnableDepthFog * uFogMasterIntensity;
+      float depthFog = (isBackground || normZ >= 1.0) ? maxDepthFog : clamp(depthFactor * uFogDensity * uFogMasterIntensity, 0.0, maxDepthFog);
+
 
       // --- FOG 3: Vinětová mlha displeje (Kulatá, hladká, s volitelným směrem a menší organičností) ---
       // Korekce poměru stran pro dokonalý kruh
@@ -342,11 +345,11 @@ const VolumetricLightShader = {
       // 3. Hloubková mlha (Depth Fog) - leží PŘES světlo i stíny myši
       float fogAlpha = depthFog;
       if (uEnableSmoke > 0.5) {
-        // Kouř moduluje náběh, ale s rostoucí hloubkou se zahušťuje, takže na konci mlhy je 100% neprůhledný
+        // Kouř moduluje náběh, ale s rostoucí hloubkou se zahušťuje, takže na konci mlhy dosahuje nastavené max opacity
         float smokeMod = mix(smokeDensityFactor, 1.0, normZ);
-        fogAlpha = clamp(depthFog * smokeMod, 0.0, 1.0);
+        fogAlpha = clamp(depthFog * smokeMod, 0.0, maxDepthFog);
         if (normZ >= 1.0 || isBackground) {
-          fogAlpha = 1.0;
+          fogAlpha = maxDepthFog;
         }
       }
       // Při fogAlpha = 1.0 (na Fog Far a za ním) scéna 100% přechází do barvy mlhy a za ni již není vidět
@@ -516,7 +519,10 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT' }) {
     mat.uniforms.uCameraNear.value = camera.near;
     mat.uniforms.uCameraFar.value = camera.far;
 
-    // INSIDE parametry z konfigurace
+    // INSIDE parametry z konfigurace (včetně master intenzity mlhy)
+    const masterMult = Math.max(0, (fog.masterFogIntensity ?? 100) / 100);
+    mat.uniforms.uFogMasterIntensity.value = masterMult;
+
     if (fog.fogColor) {
       mat.uniforms.uFogColor.value.set(fog.fogColor);
     }
@@ -529,15 +535,15 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT' }) {
     mat.uniforms.uSmokeStrength.value = fog.smokeStrength ?? 0.25;
     mat.uniforms.uSmokeSpeed.value = fog.smokeSpeed ?? 0.4;
     mat.uniforms.uSmokeScale.value = fog.smokeScale ?? 4.5;
-    mat.uniforms.uVignetteStrength.value = fog.vignetteStrength ?? 0.35;
+    mat.uniforms.uVignetteStrength.value = (fog.vignetteStrength ?? 0.35) * masterMult;
     mat.uniforms.uVignetteRoundness.value = fog.vignetteRoundness ?? 1.0;
     mat.uniforms.uVignetteInvert.value = fog.vignetteInvert ? 1.0 : 0.0;
     mat.uniforms.uVignetteOrganic.value = fog.vignetteOrganic ?? 0.1;
     mat.uniforms.uSmokeAngle.value = fog.smokeAngle ?? 135.0;
     mat.uniforms.uEdgeFade.value = fog.edgeFade ?? 0.12;
-    mat.uniforms.uBaseFogBrightness.value = fog.baseFogBrightness ?? 0.6;
-    mat.uniforms.uForegroundFog.value = fog.foregroundFog ?? 0.35;
-    mat.uniforms.uMouseLightExposure.value = fog.mouseLightExposure ?? 1.2;
+    mat.uniforms.uBaseFogBrightness.value = (fog.baseFogBrightness ?? 0.6) * masterMult;
+    mat.uniforms.uForegroundFog.value = (fog.foregroundFog ?? 0.35) * masterMult;
+    mat.uniforms.uMouseLightExposure.value = (fog.mouseLightExposure ?? 1.2) * masterMult;
     mat.uniforms.uMouseLightRadius.value = fog.mouseLightRadius ?? 1.3;
     mat.uniforms.uEnableMouseFog.value = (fog.enableMouseFog ?? true) ? 1.0 : 0.0;
     mat.uniforms.uEnableDepthFog.value = (fog.enableDepthFog ?? true) ? 1.0 : 0.0;
