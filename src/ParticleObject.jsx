@@ -641,6 +641,20 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
   const smoothedMouse = useRef(new THREE.Vector3(9999, 9999, 9999));
   const mouseVelocity = useMemo(() => new THREE.Vector3(), []);
 
+  useEffect(() => {
+    const handleReset = () => {
+      prevMouse.current.set(9999, 9999, 9999);
+      smoothedMouse.current.set(9999, 9999, 9999);
+      mouseVelocity.set(0, 0, 0);
+    };
+    window.addEventListener('blur', handleReset);
+    window.addEventListener('focus', handleReset);
+    return () => {
+      window.removeEventListener('blur', handleReset);
+      window.removeEventListener('focus', handleReset);
+    };
+  }, [mouseVelocity]);
+
   useFrame((state) => {
     if (!meshRef.current || !compute) return;
     const time = state.clock.getElapsedTime();
@@ -703,6 +717,7 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
       }
 
       mouseVelocity.subVectors(smoothedMouse.current, prevMouse.current);
+      mouseVelocity.clampLength(0, 2.0);
       prevMouse.current.copy(smoothedMouse.current);
 
       const rayDir = new THREE.Vector3().subVectors(smoothedMouse.current, localCameraPos).normalize();

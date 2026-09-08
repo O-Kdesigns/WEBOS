@@ -53,7 +53,7 @@ function shuffleArray(array) {
   return arr;
 }
 
-export function MusicPlayer({ tracks, volume = 0.4 }) {
+export function MusicPlayer({ tracks, volume = 0.4, isSuspended = false }) {
   const [playlist, setPlaylist] = useState(() => {
     const baseList = getInitialTracks(tracks);
     return shuffleArray(baseList);
@@ -65,6 +65,19 @@ export function MusicPlayer({ tracks, volume = 0.4 }) {
   const audioRef = useRef(null);
   const userInteractedRef = useRef(false);
   const autoPlayTimerRef = useRef(null);
+  const wasPlayingBeforeSuspendRef = useRef(false);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    if (isSuspended) {
+      wasPlayingBeforeSuspendRef.current = isPlaying;
+      if (isPlaying) {
+        audioRef.current.pause();
+      }
+    } else if (wasPlayingBeforeSuspendRef.current) {
+      audioRef.current.play().catch(() => {});
+    }
+  }, [isSuspended]);
 
   const currentTrack = playlist[currentIndex] || playlist[0];
 

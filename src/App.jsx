@@ -479,9 +479,29 @@ function RotationController({ rotationY, pageDistance, totalPages, setClosestInd
   return null;
 }
 
+function RenderRestorationHandler({ isSuspended }) {
+  const { clock, invalidate } = useThree();
+  const wasSuspendedRef = useRef(false);
+
+  useEffect(() => {
+    if (wasSuspendedRef.current && !isSuspended) {
+      if (clock.running) {
+        clock.oldTime = (typeof performance === 'undefined' ? Date : performance).now();
+      }
+      invalidate();
+    }
+    wasSuspendedRef.current = isSuspended;
+  }, [isSuspended, clock, invalidate]);
+
+  return null;
+}
+
 function App() {
   const [pagesData, setPagesData] = useState(settings.pages || []);
   const [appConfig, setAppConfig] = useState(config || {});
+  
+  const pauseOnBlur = appConfig.powerSaving?.pauseOnBlur ?? true;
+  const [isSuspended, setIsSuspended] = useState(false);
   
   const allVideoUrls = useMemo(() => {
     return [...new Set(pagesData.map(p => p.videoUrl || p?.particlesSettings?.videoUrl).filter(Boolean))];
@@ -497,6 +517,80 @@ function App() {
   const [isEditorOpen, setIsEditorOpen] = useState(() => {
     return window.location.search.includes('editor=true');
   });
+
+  const wheelAccumulatorRef = useRef(0);
+  const wheelTimeoutRef = useRef(null);
+
+  // Sledování fokusu okna a úsporný režim
+  useEffect(() => {
+    if (!pauseOnBlur) {
+      setIsSuspended(false);
+      return;
+    }
+
+    let blurTimeout = null;
+
+    const handleBlur = () => {
+      if (blurTimeout) clearTimeout(blurTimeout);
+      blurTimeout = setTimeout(() => {
+        if (!document.hasFocus() || document.hidden) {
+          setIsSuspended(true);
+        }
+      }, 150);
+    };
+
+    const handleFocus = () => {
+      if (blurTimeout) clearTimeout(blurTimeout);
+      setIsSuspended(false);
+      wheelAccumulatorRef.current = 0;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleBlur();
+      } else if (document.hasFocus()) {
+        handleFocus();
+      }
+    };
+
+    const handleWakeup = () => {
+      if (blurTimeout) clearTimeout(blurTimeout);
+      setIsSuspended(false);
+      wheelAccumulatorRef.current = 0;
+    };
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pointerdown', handleWakeup);
+    window.addEventListener('keydown', handleWakeup);
+
+    return () => {
+      if (blurTimeout) clearTimeout(blurTimeout);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pointerdown', handleWakeup);
+      window.removeEventListener('keydown', handleWakeup);
+    };
+  }, [pauseOnBlur]);
+
+  // Pozastavení a probuzení dekódování videí pro nulovou zátěž GPU a video dekodéru
+  useEffect(() => {
+    if (isSuspended) {
+      videoTextureCache.forEach(entry => {
+        if (entry.video && !entry.video.paused) {
+          entry.video.pause();
+        }
+      });
+    } else {
+      videoTextureCache.forEach(entry => {
+        if (entry.video && entry.isActive && entry.video.paused) {
+          entry.video.play().catch(() => {});
+        }
+      });
+    }
+  }, [isSuspended]);
 
   const [{ rotationY }, api] = useSpring(() => ({
     rotationY: 0,
@@ -529,9 +623,6 @@ function App() {
       api.start({ rotationY: currentRotRef.current, immediate: false });
     }
   }, { axis: 'x' });
-
-  const wheelAccumulatorRef = useRef(0);
-  const wheelTimeoutRef = useRef(null);
 
   const bindWheel = useWheel(({ delta: [, dy] }) => {
     if (totalPages <= 1) return;
@@ -575,7 +666,12 @@ function App() {
   return (
     <div className="app-container" {...bindWheel()}>
       <div className="canvas-container" {...bindDrag()}>
-        <Canvas shadows>
+        <Canvas 
+          shadows 
+          frameloop={isSuspended ? 'never' : 'always'}
+          gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
+        >
+          <RenderRestorationHandler isSuspended={isSuspended} />
           <DarkStudioBackground appConfig={appConfig} />
           <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
           <CenterLight appConfig={appConfig} />
@@ -650,7 +746,22 @@ function App() {
         ⚙️ Editor
       </button>
 
-      <MusicPlayer tracks={appConfig.musicTracks} volume={appConfig.musicVolume ?? 0.4} />
+      {isSuspended && (appConfig.powerSaving?.showBadge ?? true) && (
+        <div 
+          className="eco-mode-badge"
+          onClick={() => setIsSuspended(false)}
+          title="Klikněte pro obnovení výpočtů"
+        >
+          <span className="eco-dot"></span>
+          <span>Úsporný režim (0 % GPU)</span>
+        </div>
+      )}
+
+      <MusicPlayer 
+        tracks={appConfig.musicTracks} 
+        volume={appConfig.musicVolume ?? 0.4} 
+        isSuspended={isSuspended && !!appConfig.powerSaving?.pauseAudioOnBlur}
+      />
 
       {isEditorOpen && <Editor 
         pages={pagesData} 

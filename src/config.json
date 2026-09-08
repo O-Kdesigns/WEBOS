@@ -97,5 +97,10 @@
     "hasParticles": true,
     "transitionMaxLight": 1.19,
     "transitionMinDark": 0
+  },
+  "powerSaving": {
+    "pauseOnBlur": true,
+    "pauseAudioOnBlur": false,
+    "showBadge": true
   }
 }

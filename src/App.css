@@ -57,3 +57,48 @@
   font-weight: bold;
   pointer-events: auto;
 }
+
+.eco-mode-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(10, 10, 15, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: #a7f3d0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  user-select: none;
+  animation: ecoPulse 2.5s infinite ease-in-out;
+  pointer-events: auto;
+}
+
+.eco-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  flex-shrink: 0;
+}
+
+@keyframes ecoPulse {
+  0%, 100% {
+    opacity: 0.85;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    opacity: 1;
+    border-color: rgba(16, 185, 129, 0.8);
+  }
+}

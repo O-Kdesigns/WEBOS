@@ -436,6 +436,16 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     });
   };
 
+  const updatePowerSaving = (field, value) => {
+    setAppConfig({
+      ...appConfig,
+      powerSaving: {
+        ...(appConfig.powerSaving || {}),
+        [field]: value
+      }
+    });
+  };
+
   const addPage = () => {
     setPages([...pages, {
       id: Date.now().toString(),
@@ -484,6 +494,63 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
         <div className="editor-card" style={{ border: '1px solid #3b82f6' }}>
           <div className="card-header">
             <h3 style={{ color: '#3b82f6' }}>⚙️ Globální nastavení (config.json)</h3>
+          </div>
+
+          {/* ÚSPORNÝ REŽIM (POWER SAVING) */}
+          <div className="editor-section">
+            <h4 
+              style={{ color: '#10b981', borderBottomColor: 'rgba(16, 185, 129, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+              onClick={() => toggleSection('global-power-saving')}
+            >
+              <span>⚡ Úsporný režim (Pozastavení při neaktivitě)</span>
+              <span>{openSections['global-power-saving'] ? '▲' : '▼'}</span>
+            </h4>
+            
+            {openSections['global-power-saving'] && (
+              <div className="editor-subsection-content" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <div className="checkbox-group">
+                  <label style={{ fontWeight: '600', color: '#10b981' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={appConfig.powerSaving?.pauseOnBlur ?? true} 
+                      onChange={e => updatePowerSaving('pauseOnBlur', e.target.checked)} 
+                    />
+                    Pozastavit výpočty při ztrátě fokusu (0 % GPU)
+                  </label>
+                  <span className="input-desc" style={{ width: '100%' }}>
+                    Zastaví Three.js render smyčku, GPGPU simulaci částic a dekódování videí, když kliknete do jiné aplikace (např. Antigravity) nebo přepnete záložku.
+                  </span>
+                </div>
+
+                <div className="checkbox-group">
+                  <label>
+                    <input 
+                      type="checkbox" 
+                      checked={appConfig.powerSaving?.pauseAudioOnBlur ?? false} 
+                      onChange={e => updatePowerSaving('pauseAudioOnBlur', e.target.checked)} 
+                    />
+                    Pozastavit také hudbu na pozadí
+                  </label>
+                  <span className="input-desc" style={{ width: '100%' }}>
+                    Pokud je vypnuto (doporučeno), hudba hraje nepřerušovaně na pozadí i při práci v jiném programu.
+                  </span>
+                </div>
+
+                <div className="checkbox-group">
+                  <label>
+                    <input 
+                      type="checkbox" 
+                      checked={appConfig.powerSaving?.showBadge ?? true} 
+                      onChange={e => updatePowerSaving('showBadge', e.target.checked)} 
+                    />
+                    Zobrazit odznak úsporného režimu
+                  </label>
+                  <span className="input-desc" style={{ width: '100%' }}>
+                    Diskrétní odznak v rohu obrazovky informující o pozastavení výpočtů.
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 1. VOLUMETRIC LIGHT (GOD RAYS) */}

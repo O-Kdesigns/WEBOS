@@ -486,16 +486,18 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT' }) {
     const mat = materialRef.current;
     if (!mat) return;
 
+    const safeDelta = Math.min(Math.max(delta, 0), 0.1);
+
     // Plynulý přechod mezi módy
     const targetTransition = viewMode === 'INSIDE' ? 1.0 : 0.0;
-    transitionRef.current = THREE.MathUtils.damp(transitionRef.current, targetTransition, 5, delta);
+    transitionRef.current = THREE.MathUtils.damp(transitionRef.current, targetTransition, 5, safeDelta);
     mat.uniforms.uInsideTransition.value = transitionRef.current;
 
     // Plynulé sledování myši ve screen-space (0.0 až 1.0)
     const targetMouseX = (state.pointer.x + 1.0) * 0.5;
     const targetMouseY = (state.pointer.y + 1.0) * 0.5;
-    smoothMouseRef.current.x = THREE.MathUtils.damp(smoothMouseRef.current.x, targetMouseX, 9, delta);
-    smoothMouseRef.current.y = THREE.MathUtils.damp(smoothMouseRef.current.y, targetMouseY, 9, delta);
+    smoothMouseRef.current.x = THREE.MathUtils.damp(smoothMouseRef.current.x, targetMouseX, 9, safeDelta);
+    smoothMouseRef.current.y = THREE.MathUtils.damp(smoothMouseRef.current.y, targetMouseY, 9, safeDelta);
     mat.uniforms.uMouseScreenPos.value.copy(smoothMouseRef.current);
 
     // Čas a parametry kamery
