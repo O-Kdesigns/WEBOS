@@ -106,13 +106,13 @@
   },
   "volumetricVideo": {
     "enabled": true,
-    "scale": 1.0,
+    "scale": 0.85,
     "zDistance": 1.4,
     "posX": 0.0,
     "posY": 0.0,
     "screenOpacity": 1.0,
     "vignetteSoftness": 0.45,
-    "brightness": 1.0,
+    "brightness": 1.15,
     "contrast": 1.05
   },
   "volumetricDepth": {
@@ -120,6 +120,10 @@
     "startDistance": 2.16,
     "ghostStrength": 0.35,
     "fadeRange": 0.6,
-    "videoScale": 0.72
+    "videoScale": 0.72,
+    "raysExposure": 1.2,
+    "raysRadius": 0.65,
+    "rayLength": 0.45,
+    "rayDensity": 1.0
   }
 }

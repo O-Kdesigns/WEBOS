@@ -67,7 +67,13 @@ const VolumetricLightShader = {
     uVolumetricFadeRange: { value: 0.6 },
     uVolumetricGhostStrength: { value: 0.35 },
     uVolumetricVideoScale: { value: 0.72 },
-    uVolumetricVignetteSoft: { value: 0.45 }
+    uVolumetricVignetteSoft: { value: 0.45 },
+
+    // Center Video God Rays (Paprsky ze středu z videa ohraničené na střed)
+    uCenterRaysExposure: { value: 1.2 },
+    uCenterRaysRadius: { value: 0.65 },
+    uCenterRayLength: { value: 0.45 },
+    uCenterRayDensity: { value: 1.0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -136,6 +142,12 @@ const VolumetricLightShader = {
     uniform float uVolumetricGhostStrength;
     uniform float uVolumetricVideoScale;
     uniform float uVolumetricVignetteSoft;
+
+    // Paprsky ze středu
+    uniform float uCenterRaysExposure;
+    uniform float uCenterRaysRadius;
+    uniform float uCenterRayLength;
+    uniform float uCenterRayDensity;
 
     varying vec2 vUv;
 
@@ -385,6 +397,48 @@ const VolumetricLightShader = {
         }
       }
 
+      // Center Video God Rays (Paprsky ze středu displeje prosvítající přes popředí, ohraničené na střed obrazovky)
+      if (uInsideTransition > 0.01 && uVolumetricGhostEnabled > 0.5 && uCenterRaysExposure > 0.001) {
+        vec2 centerPos = vec2(0.5, 0.5) + (uMouseScreenPos - 0.5) * 0.035;
+        vec2 toCenter = (centerPos - vUv) * vec2(uAspect, 1.0);
+        float distToCenter = length(toCenter);
+        float centerFade = smoothstep(uCenterRaysRadius, uCenterRaysRadius * 0.35, distToCenter);
+
+        if (centerFade > 0.001) {
+          float marchDist = min(length(centerPos - vUv), uCenterRayLength);
+          vec2 dir = normalize(centerPos - vUv);
+          vec2 deltaTex = dir * (marchDist / 32.0) * uCenterRayDensity;
+          vec2 curUv = vUv + deltaTex * dither;
+
+          float decay = 1.0;
+          vec3 accumCenterLight = vec3(0.0);
+
+          for (int k = 0; k < 32; k++) {
+            curUv += deltaTex;
+            vec2 clampedUv = clamp(curUv, vec2(0.0), vec2(1.0));
+            vec2 sVidUv = (clampedUv - centerPos) / max(0.1, uVolumetricVideoScale) + 0.5;
+            if (sVidUv.x >= 0.0 && sVidUv.x <= 1.0 && sVidUv.y >= 0.0 && sVidUv.y <= 1.0) {
+              vec4 sVidCol = texture2D(tVolumetricVideo, sVidUv);
+              float sVidLum = dot(sVidCol.rgb, vec3(0.299, 0.587, 0.114));
+              vec2 svd = abs(sVidUv - 0.5) * 2.0;
+              float svSoft = clamp(uVolumetricVignetteSoft, 0.05, 0.9);
+              float sVignette = pow(smoothstep(1.0, 1.0 - svSoft, svd.x) * smoothstep(1.0, 1.0 - svSoft, svd.y), 1.3);
+
+              float sRawDepth = texture2D(tDepth, clampedUv).r;
+              float isOcc = step(sRawDepth, 0.9998);
+              float sLinZ = getLinearDepth(sRawDepth, uCameraNear, uCameraFar);
+              float occStrength = isOcc * (sLinZ < uVolumetricStartDist ? 0.9 : (0.9 * (1.0 - uVolumetricGhostStrength * 0.8)));
+
+              float lightPass = (sVidLum * sVignette) * (1.0 - occStrength);
+              accumCenterLight += sVidCol.rgb * lightPass * decay;
+            }
+            decay *= 0.92;
+          }
+          vec3 finalCenterRays = accumCenterLight * (uCenterRaysExposure * 0.18) * centerFade * uInsideTransition;
+          sceneColor += finalCenterRays;
+        }
+      }
+
       // 2. Světlo a stíny z myši (vstupují pouze sem, netmaví zbytek světa ani mlhu)
       sceneColor += uLightColor * (volumetricMouseLight * 0.65);
 
@@ -610,6 +664,10 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uVolumetricGhostStrength.value = vDepth.ghostStrength ?? 0.35;
     mat.uniforms.uVolumetricVideoScale.value = (vVid.scale ?? 1.0) * (vDepth.videoScale ?? 0.72);
     mat.uniforms.uVolumetricVignetteSoft.value = vVid.vignetteSoftness ?? 0.45;
+    mat.uniforms.uCenterRaysExposure.value = vDepth.raysExposure ?? 1.2;
+    mat.uniforms.uCenterRaysRadius.value = vDepth.raysRadius ?? 0.65;
+    mat.uniforms.uCenterRayLength.value = vDepth.rayLength ?? 0.45;
+    mat.uniforms.uCenterRayDensity.value = vDepth.rayDensity ?? 1.0;
 
     // ORBIT parametry (středové God Rays)
     const lightPos = new THREE.Vector3(

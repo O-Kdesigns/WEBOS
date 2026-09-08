@@ -1672,6 +1672,43 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                   <span className="input-desc">Délka přechodové zóny hloubky pro měkký náběh průhledu</span>
                   <DragNumberInput step={0.05} min={0.05} max={2.0} value={appConfig.volumetricDepth?.fadeRange ?? 0.6} onChange={val => updateVolumetricDepth('fadeRange', val)} />
                 </div>
+
+                <div style={{
+                  marginTop: '6px',
+                  paddingTop: '10px',
+                  borderTop: '1px solid rgba(168, 85, 247, 0.25)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.8rem'
+                }}>
+                  <div style={{ fontWeight: '600', color: '#c084fc', fontSize: '0.85rem' }}>
+                    ✨ Středové paprsky prosvítání (Center Video God Rays)
+                  </div>
+
+                  <div className="input-group">
+                    <label>Intenzita paprsků (Rays Exposure):</label>
+                    <span className="input-desc">Jak silně světlo z videa prosvítá zprostředka přes objekty v popředí</span>
+                    <DragNumberInput step={0.05} min={0.0} max={3.0} value={appConfig.volumetricDepth?.raysExposure ?? 1.2} onChange={val => updateVolumetricDepth('raysExposure', val)} />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Dosah od středu obrazovky (Rays Radius):</label>
+                    <span className="input-desc">Ohraničení paprsků pouze na střed televizoru (zabraňuje dosahu do rohů obrazovky)</span>
+                    <DragNumberInput step={0.05} min={0.2} max={1.2} value={appConfig.volumetricDepth?.raysRadius ?? 0.65} onChange={val => updateVolumetricDepth('raysRadius', val)} />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Délka paprsků (Ray Length):</label>
+                    <span className="input-desc">Vzdálenost rozptylu paprsků od středu obrazu</span>
+                    <DragNumberInput step={0.05} min={0.1} max={1.5} value={appConfig.volumetricDepth?.rayLength ?? 0.45} onChange={val => updateVolumetricDepth('rayLength', val)} />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Hustota paprsků (Ray Density):</label>
+                    <span className="input-desc">Hustota a sevřenost světelného toku paprsků</span>
+                    <DragNumberInput step={0.05} min={0.2} max={2.0} value={appConfig.volumetricDepth?.rayDensity ?? 1.0} onChange={val => updateVolumetricDepth('rayDensity', val)} />
+                  </div>
+                </div>
               </div>
             )}
           </div>

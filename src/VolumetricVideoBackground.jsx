@@ -160,7 +160,7 @@ export function VolumetricVideoBackground({
         >
           {/* Čisté video na pozadí s měkkým okrajem do ztracena (žádný rámeček, žádné částice) */}
           <mesh position={[0, 0, 0]} renderOrder={1}>
-            <planeGeometry args={[3.2, 1.8]} />
+            <planeGeometry args={[2.5, 1.406]} />
             <primitive object={screenMaterial} ref={screenMatRef} attach="material" />
           </mesh>
         </group>
