@@ -639,7 +639,7 @@ function App() {
             currentIndex={closestIndex} 
           />
 
-          <VolumetricLightPass appConfig={appConfig} />
+          <VolumetricLightPass appConfig={appConfig} viewMode={viewMode} />
         </Canvas>
       </div>
 

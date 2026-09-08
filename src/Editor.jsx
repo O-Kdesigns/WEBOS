@@ -89,14 +89,14 @@ const DragNumberInput = ({ value, onChange, step = 1, min, max }) => {
   );
 };
 
-export function isSolidNode(name) {
+function isSolidNode(name) {
   if (!name) return false;
   const trimmed = name.trim();
   return (/(?:^|[_.\-\s])1$|(?:\.0*1)$|1$/.test(trimmed)) && !trimmed.endsWith('0');
 }
 
 // Sdílená komponenta pro nastavení jakýchkoliv GPGPU částic a objektů
-export function ParticleSettingsPanel({ settings = {}, onUpdate, id, assets, openSections, toggleSection, pageTitle, blenderNodes = [] }) {
+export function ParticleSettingsPanel({ settings = {}, onUpdate, id, openSections, toggleSection, pageTitle, blenderNodes = [] }) {
   let matchedNodes = [];
   if (pageTitle && blenderNodes && blenderNodes.length > 0) {
     const cleanTitle = pageTitle.trim().toLowerCase();
@@ -386,6 +386,16 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     });
   };
 
+  const updateInsideFog = (field, value) => {
+    setAppConfig({
+      ...appConfig,
+      insideFog: {
+        ...(appConfig.insideFog || {}),
+        [field]: value
+      }
+    });
+  };
+
   const updateBackground = (field, value) => {
     setAppConfig({
       ...appConfig,
@@ -640,6 +650,375 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                         <label>Měkkost prahu (Smooth Threshold):</label>
                         <span className="input-desc">Šířka prolínání světla na hranách objektů pro jemnější okraje</span>
                         <DragNumberInput step={0.02} min={0.01} max={0.5} value={appConfig.volumetricLight?.smoothThreshold ?? 0.15} onChange={val => updateVolumetric('smoothThreshold', val)} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* VOLUMETRICKÁ MLHA & STÍNY UVNITŘ (INSIDE FOG & SHADOWS) */}
+          <div className="editor-section">
+            <h4 
+              style={{ color: '#06b6d4', borderBottomColor: 'rgba(6, 182, 212, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+              onClick={() => toggleSection('inside-fog-section')}
+            >
+              <span>🌫️ Inside Volumetric Fog (3 Fogy & Stíny)</span>
+              <span>{openSections['inside-fog-section'] ? '▲' : '▼'}</span>
+            </h4>
+            
+            {openSections['inside-fog-section'] && (
+              <>
+                {/* OVLÁDACÍ PANEL: RYCHLÉ VYPÍNÁNÍ A SOLO PRO JEDNOTLIVÉ VRSTVY */}
+                <div style={{
+                  background: 'rgba(6, 182, 212, 0.08)',
+                  border: '1px solid rgba(6, 182, 212, 0.25)',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  marginBottom: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#06b6d4' }}>
+                      👁️ Izolace a vypínání vrstev mlhy
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppConfig(prev => ({
+                          ...prev,
+                          insideFog: {
+                            ...(prev.insideFog || {}),
+                            enableMouseFog: true,
+                            enableDepthFog: true,
+                            enableForegroundFog: true,
+                            enableVignette: true,
+                            enableSmoke: true
+                          }
+                        }));
+                      }}
+                      style={{
+                        background: 'rgba(6, 182, 212, 0.2)',
+                        border: '1px solid rgba(6, 182, 212, 0.4)',
+                        color: '#67e8f9',
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Zapnout vše (All ON)
+                    </button>
+                  </div>
+
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    Zaškrtni pro zapnutí/vypnutí, nebo klikni na <b>Solo</b> pro zobrazení pouze dané vrstvy:
+                  </span>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '6px', marginTop: '2px' }}>
+                    {[
+                      { key: 'enableMouseFog', label: '🕯️ Myš & stíny' },
+                      { key: 'enableDepthFog', label: '🌫️ Hloubka (3D)' },
+                      { key: 'enableForegroundFog', label: '👁️ Popředí (24/7)' },
+                      { key: 'enableVignette', label: '📺 Viněta' },
+                      { key: 'enableSmoke', label: '💨 Kouř / šum' }
+                    ].map(layer => {
+                      const isEnabled = appConfig.insideFog?.[layer.key] ?? true;
+                      return (
+                        <div key={layer.key} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: isEnabled ? 'rgba(6, 182, 212, 0.15)' : 'rgba(0,0,0,0.3)',
+                          border: isEnabled ? '1px solid rgba(6, 182, 212, 0.4)' : '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '6px',
+                          padding: '4px 6px'
+                        }}>
+                          <label style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            cursor: 'pointer',
+                            fontSize: '0.76rem',
+                            color: isEnabled ? '#fff' : '#64748b',
+                            userSelect: 'none',
+                            margin: 0
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              onChange={e => updateInsideFog(layer.key, e.target.checked)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            {layer.label}
+                          </label>
+
+                          <button
+                            type="button"
+                            title={`Zobrazit pouze ${layer.label}`}
+                            onClick={() => {
+                              setAppConfig(prev => ({
+                                ...prev,
+                                insideFog: {
+                                  ...(prev.insideFog || {}),
+                                  enableMouseFog: layer.key === 'enableMouseFog',
+                                  enableDepthFog: layer.key === 'enableDepthFog',
+                                  enableForegroundFog: layer.key === 'enableForegroundFog',
+                                  enableVignette: layer.key === 'enableVignette',
+                                  enableSmoke: layer.key === 'enableSmoke' ? true : (prev.insideFog?.enableSmoke ?? true)
+                                }
+                              }));
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.1)',
+                              border: 'none',
+                              color: '#cbd5e1',
+                              borderRadius: '3px',
+                              padding: '2px 5px',
+                              fontSize: '0.66rem',
+                              cursor: 'pointer',
+                              fontWeight: '600'
+                            }}
+                          >
+                            Solo
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 1. FOG: MLHA A STÍNY Z MYŠI */}
+                <div className="editor-subsection">
+                  <h5 className="editor-subsection-header" onClick={() => toggleSection('fog-basics')}>
+                    <span>🕯️ 1. Mlha z myši (Kruh s postupnou ztrátou + Stíny)</span>
+                    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: (appConfig.insideFog?.enableMouseFog ?? true) ? '#10b981' : '#6b7280' }}>
+                        {(appConfig.insideFog?.enableMouseFog ?? true) ? '● ON' : '○ OFF'}
+                      </span>
+                      <span>{openSections['fog-basics'] ? '▲' : '▼'}</span>
+                    </span>
+                  </h5>
+                  {openSections['fog-basics'] && (
+                    <div className="editor-subsection-content">
+                      <div className="checkbox-group" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.insideFog?.enableMouseFog ?? true} 
+                            onChange={e => updateInsideFog('enableMouseFog', e.target.checked)} 
+                          />
+                          Povolit světlo a stíny z myši
+                        </label>
+                      </div>
+                      <div className="input-group">
+                        <label>Dosah kruhu světla (Light Radius):</label>
+                        <span className="input-desc">Poloměr kruhu světla kolem kurzoru myši s postupným útlumem</span>
+                        <DragNumberInput step={0.05} min={0.05} max={3.0} value={appConfig.insideFog?.mouseLightRadius ?? 0.2} onChange={val => updateInsideFog('mouseLightRadius', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Intenzita světla z myši (Light Exposure):</label>
+                        <span className="input-desc">Jas kruhového záření a kuželu světla z myši</span>
+                        <DragNumberInput step={0.05} min={0} max={3.0} value={appConfig.insideFog?.mouseLightExposure ?? 0.3} onChange={val => updateInsideFog('mouseLightExposure', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Síla vržených stínů (Shadow Strength):</label>
+                        <span className="input-desc">Jak hlubokou tmu vrhají objekty za sebou směrem od myši (0 = bez stínů, 1 = hluboké kužely tmy)</span>
+                        <DragNumberInput step={0.05} min={0} max={1} value={appConfig.insideFog?.shadowStrength ?? 1.0} onChange={val => updateInsideFog('shadowStrength', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Práh stínění (Shadow Threshold):</label>
+                        <span className="input-desc">Osvětlené povrchy nad tímto prahem propouštějí světlo, tmavé vrhají stín</span>
+                        <DragNumberInput step={0.02} min={0.02} max={1.0} value={appConfig.insideFog?.shadowThreshold ?? 0.14} onChange={val => updateInsideFog('shadowThreshold', val)} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. FOG: HLOUBKOVÁ MLHA */}
+                <div className="editor-subsection">
+                  <h5 className="editor-subsection-header" onClick={() => toggleSection('fog-depth')}>
+                    <span>🌫️ 2. Hloubková mlha (Depth-Aware Fog)</span>
+                    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: (appConfig.insideFog?.enableDepthFog ?? true) ? '#10b981' : '#6b7280' }}>
+                        {(appConfig.insideFog?.enableDepthFog ?? true) ? '● ON' : '○ OFF'}
+                      </span>
+                      <span>{openSections['fog-depth'] ? '▲' : '▼'}</span>
+                    </span>
+                  </h5>
+                  {openSections['fog-depth'] && (
+                    <div className="editor-subsection-content">
+                      <div className="checkbox-group" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.insideFog?.enableDepthFog ?? true} 
+                            onChange={e => updateInsideFog('enableDepthFog', e.target.checked)} 
+                          />
+                          Povolit hloubkovou mlhu (3D Z-Buffer)
+                        </label>
+                      </div>
+                      <div className="input-group">
+                        <label>Barva mlhy (Fog Color):</label>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <input 
+                            type="color" 
+                            value={appConfig.insideFog?.fogColor || '#0b0e14'} 
+                            onChange={e => updateInsideFog('fogColor', e.target.value)} 
+                          />
+                          <span style={{ fontSize: '0.8rem', color: '#888' }}>{appConfig.insideFog?.fogColor || '#0b0e14'}</span>
+                        </div>
+                      </div>
+                      <div className="input-group">
+                        <label>Základní jas mlhy v prostoru (Ambient Light):</label>
+                        <span className="input-desc">Jak silně je mlha vidět a osvětluje celý prostor (nezávisle na myši)</span>
+                        <DragNumberInput step={0.05} min={0} max={2.5} value={appConfig.insideFog?.baseFogBrightness ?? 0.6} onChange={val => updateInsideFog('baseFogBrightness', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Hustota mlhy (Fog Density):</label>
+                        <span className="input-desc">Hustota prostorové mlhy pohlcující vzdálenější objekty v prostoru</span>
+                        <DragNumberInput step={0.05} min={0} max={1.5} value={appConfig.insideFog?.fogDensity ?? 0.65} onChange={val => updateInsideFog('fogDensity', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Začátek mlhy (Fog Near):</label>
+                        <span className="input-desc">Vzdálenost od kamery ve 3D, kde mlha začíná</span>
+                        <DragNumberInput step={0.5} min={0.1} max={10} value={appConfig.insideFog?.fogNear ?? 1.0} onChange={val => updateInsideFog('fogNear', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Konec mlhy (Fog Far):</label>
+                        <span className="input-desc">Vzdálenost od kamery ve 3D, kde je mlha 100% neprůhledná</span>
+                        <DragNumberInput step={1} min={2} max={40} value={appConfig.insideFog?.fogFar ?? 14.0} onChange={val => updateInsideFog('fogFar', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Křivka náběhu / rychlost vzrůstu (Fog Curve):</label>
+                        <span className="input-desc">1.0 = lineární diagonála, 2.0 až 5.0 = pomalý, jemný náběh od začátku, který pozvolna houstne do dálky</span>
+                        <DragNumberInput step={0.1} min={0.5} max={6.0} value={appConfig.insideFog?.fogCurve ?? 2.2} onChange={val => updateInsideFog('fogCurve', val)} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. FOG: POPŘEDOVÁ & VINĚTOVÁ MLHA DISPLEJE */}
+                <div className="editor-subsection">
+                  <h5 className="editor-subsection-header" onClick={() => toggleSection('fog-vignette')}>
+                    <span>📺 3. Popředová & Vinětová mlha (Foreground & Vignette Fog)</span>
+                    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: ((appConfig.insideFog?.enableForegroundFog ?? true) || (appConfig.insideFog?.enableVignette ?? true)) ? '#10b981' : '#6b7280' }}>
+                        {((appConfig.insideFog?.enableForegroundFog ?? true) || (appConfig.insideFog?.enableVignette ?? true)) ? '● ON' : '○ OFF'}
+                      </span>
+                      <span>{openSections['fog-vignette'] ? '▲' : '▼'}</span>
+                    </span>
+                  </h5>
+                  {openSections['fog-vignette'] && (
+                    <div className="editor-subsection-content">
+                      <div className="checkbox-group" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.insideFog?.enableForegroundFog ?? true} 
+                            onChange={e => updateInsideFog('enableForegroundFog', e.target.checked)} 
+                          />
+                          Povolit popředovou mlhu (24/7 před stíny)
+                        </label>
+                        <label>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.insideFog?.enableVignette ?? true} 
+                            onChange={e => updateInsideFog('enableVignette', e.target.checked)} 
+                          />
+                          Povolit vinětovou mlhu displeje
+                        </label>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Popředová mlha před stíny (Foreground Fog):</label>
+                        <span className="input-desc">Množství mlhy přímo před kamerou – svítí 24/7 a je vidět všude i přes vržené stíny</span>
+                        <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.insideFog?.foregroundFog ?? 0.35} onChange={val => updateInsideFog('foregroundFog', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Síla vinětové mlhy (Vignette Strength):</label>
+                        <span className="input-desc">Vinětový opar rámující obrazovku</span>
+                        <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.insideFog?.vignetteStrength ?? 0.35} onChange={val => updateInsideFog('vignetteStrength', val)} />
+                      </div>
+
+                      <div className="checkbox-group" style={{ margin: '4px 0' }}>
+                        <label>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.insideFog?.vignetteInvert ?? false} 
+                            onChange={e => updateInsideFog('vignetteInvert', e.target.checked)} 
+                          />
+                          Invertovat směr viněty (mlha ve středu vs na okrajích)
+                        </label>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Kulatost viněty (Vignette Roundness):</label>
+                        <span className="input-desc">1 = dokonalý kruh na displeji, 0 = širokoúhlá elipsa</span>
+                        <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.insideFog?.vignetteRoundness ?? 1.0} onChange={val => updateInsideFog('vignetteRoundness', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Organičnost viněty (Vignette Smoke Influence):</label>
+                        <span className="input-desc">0 = hladký sametový kruh, 1 = silně modulovaná kouřem</span>
+                        <DragNumberInput step={0.02} min={0} max={1.0} value={appConfig.insideFog?.vignetteOrganic ?? 0.1} onChange={val => updateInsideFog('vignetteOrganic', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Zhasnutí na okrajích displeje (Edge Fade):</label>
+                        <span className="input-desc">Šířka plynulého vymizení mlhy u samých okrajů obrazovky pro čistý rám</span>
+                        <DragNumberInput step={0.02} min={0.01} max={0.4} value={appConfig.insideFog?.edgeFade ?? 0.12} onChange={val => updateInsideFog('edgeFade', val)} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. ORGANICKÝ KOUŘ */}
+                <div className="editor-subsection">
+                  <h5 className="editor-subsection-header" onClick={() => toggleSection('fog-smoke')}>
+                    <span>💨 4. Organický kouř (Smoke Motion)</span>
+                    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: (appConfig.insideFog?.enableSmoke ?? true) ? '#10b981' : '#6b7280' }}>
+                        {(appConfig.insideFog?.enableSmoke ?? true) ? '● ON' : '○ OFF'}
+                      </span>
+                      <span>{openSections['fog-smoke'] ? '▲' : '▼'}</span>
+                    </span>
+                  </h5>
+                  {openSections['fog-smoke'] && (
+                    <div className="editor-subsection-content">
+                      <div className="checkbox-group" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.insideFog?.enableSmoke ?? true} 
+                            onChange={e => updateInsideFog('enableSmoke', e.target.checked)} 
+                          />
+                          Povolit vlnění kouře (Simplex FBM šum)
+                        </label>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Směr proudění / větru (Wind Angle):</label>
+                        <span className="input-desc">Úhel v prostoru (0° = vpravo, 90° = nahoru, 180° = vlevo, 270° = dolů)</span>
+                        <DragNumberInput step={5} min={0} max={360} value={appConfig.insideFog?.smokeAngle ?? 135} onChange={val => updateInsideFog('smokeAngle', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Síla kouře (Smoke Strength):</label>
+                        <span className="input-desc">Vlnění a textura kouřového oparu v mlze</span>
+                        <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.insideFog?.smokeStrength ?? 0.79} onChange={val => updateInsideFog('smokeStrength', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Rychlost kouře (Smoke Speed):</label>
+                        <span className="input-desc">Rychlost proudění a dýchání kouřového oparu</span>
+                        <DragNumberInput step={0.05} min={0} max={3.0} value={appConfig.insideFog?.smokeSpeed ?? 1.37} onChange={val => updateInsideFog('smokeSpeed', val)} />
+                      </div>
+                      <div className="input-group">
+                        <label>Měřítko kouře (Smoke Scale):</label>
+                        <span className="input-desc">Hustota a velikost kouřových vírů v prostoru</span>
+                        <DragNumberInput step={0.5} min={1.0} max={15.0} value={appConfig.insideFog?.smokeScale ?? 4.5} onChange={val => updateInsideFog('smokeScale', val)} />
                       </div>
                     </div>
                   )}
