@@ -2,6 +2,9 @@ import { useMemo, useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
+const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
+dummyTexture.needsUpdate = true;
+
 const VolumetricLightShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -55,7 +58,16 @@ const VolumetricLightShader = {
     uEnableForegroundFog: { value: 1.0 },
     uEnableVignette: { value: 1.0 },
     uEnableSmoke: { value: 1.0 },
-    uFogMasterIntensity: { value: 1.0 }
+    uFogMasterIntensity: { value: 1.0 },
+
+    // Volumetrický průhled videa v prostoru skrz objekty
+    tVolumetricVideo: { value: dummyTexture },
+    uVolumetricGhostEnabled: { value: 1.0 },
+    uVolumetricStartDist: { value: 2.16 },
+    uVolumetricFadeRange: { value: 0.6 },
+    uVolumetricGhostStrength: { value: 0.35 },
+    uVolumetricVideoScale: { value: 0.72 },
+    uVolumetricVignetteSoft: { value: 0.45 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -115,6 +127,15 @@ const VolumetricLightShader = {
     uniform float uEnableVignette;
     uniform float uEnableSmoke;
     uniform float uFogMasterIntensity;
+
+    // Volumetrický průhled videa
+    uniform sampler2D tVolumetricVideo;
+    uniform float uVolumetricGhostEnabled;
+    uniform float uVolumetricStartDist;
+    uniform float uVolumetricFadeRange;
+    uniform float uVolumetricGhostStrength;
+    uniform float uVolumetricVideoScale;
+    uniform float uVolumetricVignetteSoft;
 
     varying vec2 vUv;
 
@@ -336,6 +357,34 @@ const VolumetricLightShader = {
       // 1. 3D Scéna
       vec3 sceneColor = baseColor.rgb;
 
+      // Volumetrický průhled videa v prostoru skrz objekty
+      if (uInsideTransition > 0.01 && uVolumetricGhostEnabled > 0.5 && !isBackground) {
+        if (linearZ >= uVolumetricStartDist) {
+          vec2 parallaxOffset = (uMouseScreenPos - 0.5) * 0.035;
+          vec2 vidUv = (vUv - 0.5 - parallaxOffset) / max(0.1, uVolumetricVideoScale) + 0.5;
+
+          if (vidUv.x >= 0.0 && vidUv.x <= 1.0 && vidUv.y >= 0.0 && vidUv.y <= 1.0) {
+            vec4 vidTex = texture2D(tVolumetricVideo, vidUv);
+
+            // Viněta videa do ztracena
+            vec2 vd = abs(vidUv - 0.5) * 2.0;
+            float vSoft = clamp(uVolumetricVignetteSoft, 0.05, 0.9);
+            float vx = smoothstep(1.0, 1.0 - vSoft, vd.x);
+            float vy = smoothstep(1.0, 1.0 - vSoft, vd.y);
+            float vignette = pow(vx * vy, 1.3);
+
+            // Náběh podle hloubky od zadané vzdálenosti
+            float depthBlend = smoothstep(uVolumetricStartDist, uVolumetricStartDist + max(0.05, uVolumetricFadeRange), linearZ);
+
+            // Lehké zviditelnění videa přes objekty
+            float ghostAlpha = depthBlend * uVolumetricGhostStrength * vignette * uInsideTransition;
+
+            vec3 adjustedVid = max(vec3(0.0), ((vidTex.rgb - 0.5) * 1.05) + 0.5);
+            sceneColor = mix(sceneColor, adjustedVid, ghostAlpha);
+          }
+        }
+      }
+
       // 2. Světlo a stíny z myši (vstupují pouze sem, netmaví zbytek světa ani mlhu)
       sceneColor += uLightColor * (volumetricMouseLight * 0.65);
 
@@ -422,7 +471,7 @@ export function CenterLight({ appConfig }) {
   );
 }
 
-export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT' }) {
+export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTexture = null }) {
   const { gl, scene, camera, size } = useThree();
 
   // Optimalizace rozlišení: max DPR 1.25 zabrání zahlcení GPU paměti
@@ -550,6 +599,17 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT' }) {
     mat.uniforms.uEnableForegroundFog.value = (fog.enableForegroundFog ?? true) ? 1.0 : 0.0;
     mat.uniforms.uEnableVignette.value = (fog.enableVignette ?? true) ? 1.0 : 0.0;
     mat.uniforms.uEnableSmoke.value = (fog.enableSmoke ?? true) ? 1.0 : 0.0;
+
+    // Volumetrický průhled videa v prostoru skrz objekty
+    const vDepth = appConfig?.volumetricDepth || {};
+    const vVid = appConfig?.volumetricVideo || {};
+    mat.uniforms.tVolumetricVideo.value = videoTexture || dummyTexture;
+    mat.uniforms.uVolumetricGhostEnabled.value = (vDepth.enabled ?? true) ? 1.0 : 0.0;
+    mat.uniforms.uVolumetricStartDist.value = vDepth.startDistance ?? 2.16;
+    mat.uniforms.uVolumetricFadeRange.value = vDepth.fadeRange ?? 0.6;
+    mat.uniforms.uVolumetricGhostStrength.value = vDepth.ghostStrength ?? 0.35;
+    mat.uniforms.uVolumetricVideoScale.value = (vVid.scale ?? 1.0) * (vDepth.videoScale ?? 0.72);
+    mat.uniforms.uVolumetricVignetteSoft.value = vVid.vignetteSoftness ?? 0.45;
 
     // ORBIT parametry (středové God Rays)
     const lightPos = new THREE.Vector3(

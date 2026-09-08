@@ -103,5 +103,23 @@
     "pauseOnBlur": true,
     "pauseAudioOnBlur": true,
     "showBadge": true
+  },
+  "volumetricVideo": {
+    "enabled": true,
+    "scale": 1.0,
+    "zDistance": 1.4,
+    "posX": 0.0,
+    "posY": 0.0,
+    "screenOpacity": 1.0,
+    "vignetteSoftness": 0.45,
+    "brightness": 1.0,
+    "contrast": 1.05
+  },
+  "volumetricDepth": {
+    "enabled": true,
+    "startDistance": 2.16,
+    "ghostStrength": 0.35,
+    "fadeRange": 0.6,
+    "videoScale": 0.72
   }
 }

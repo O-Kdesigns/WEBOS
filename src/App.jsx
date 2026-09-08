@@ -12,6 +12,7 @@ import { ParticleObject } from './ParticleObject';
 import { MusicPlayer } from './MusicPlayer';
 import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { DarkStudioBackground } from './DarkStudioBackground';
+import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import './App.css';
 
 const resolveAssetUrl = (url) => {
@@ -715,6 +716,13 @@ function App() {
                     setViewMode('INSIDE');
                   }} 
                 />
+                <VolumetricVideoBackground 
+                  appConfig={appConfig}
+                  videoTexture={activeVideoTex}
+                  visible={viewMode === 'INSIDE'}
+                  currentIndex={closestIndex}
+                  pageDistance={pageDistance}
+                />
                 <ProjectContent 
                   page={pagesData[closestIndex]} 
                   appConfig={appConfig}
@@ -723,6 +731,11 @@ function App() {
                   pageDistance={pageDistance}
                   insideRotationY={insideRotationY}
                   rotationY={rotationY}
+                />
+                <VolumetricLightPass 
+                  appConfig={appConfig} 
+                  viewMode={viewMode} 
+                  videoTexture={activeVideoTex} 
                 />
               </>
             )}}
@@ -734,8 +747,6 @@ function App() {
             viewMode={viewMode} 
             currentIndex={closestIndex} 
           />
-
-          <VolumetricLightPass appConfig={appConfig} viewMode={viewMode} />
         </Canvas>
       </div>
 
