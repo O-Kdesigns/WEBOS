@@ -227,7 +227,9 @@ const VolumetricLightShader = {
       // Pozvolný náběh: žádná ostrá diagonála, ale jemný pomalý začátek s nastavitelnou křivkou růstu
       float normZ = clamp((linearZ - uFogNear) / max(0.001, uFogFar - uFogNear), 0.0, 1.0);
       float depthFactor = pow(normZ, max(0.01, uFogCurve));
-      float depthFog = (isBackground ? 1.0 : depthFactor) * uFogDensity * uEnableDepthFog;
+      // Na konci mlhy (linearZ >= uFogFar) nebo na pozadí dosahuje mlha 100% neprůhlednosti (1.0)
+      float depthFog = (isBackground || normZ >= 1.0) ? 1.0 : clamp(depthFactor * uFogDensity, 0.0, 1.0);
+      depthFog *= uEnableDepthFog;
 
       // --- FOG 3: Vinětová mlha displeje (Kulatá, hladká, s volitelným směrem a menší organičností) ---
       // Korekce poměru stran pro dokonalý kruh
@@ -334,18 +336,26 @@ const VolumetricLightShader = {
       // 2. Světlo a stíny z myši (vstupují pouze sem, netmaví zbytek světa ani mlhu)
       sceneColor += uLightColor * (volumetricMouseLight * 0.65);
 
-      // Samostatně zářící barva mlhy (svítí sama 24/7)
-      vec3 fogBaseColor = max(uFogColor, vec3(0.12));
-      vec3 selfLuminousFog = mix(fogBaseColor, vec3(0.68, 0.78, 0.90), 0.28) * uBaseFogBrightness;
+      // Cílová barva mlhy: plně respektuje zvolenou barvu a jas (při #000000 jde do čistě černé)
+      vec3 targetFogColor = uFogColor * uBaseFogBrightness;
 
       // 3. Hloubková mlha (Depth Fog) - leží PŘES světlo i stíny myši
-      float deepFog = clamp(depthFog * smokeDensityFactor, 0.0, 0.95);
-      sceneColor = mix(sceneColor, selfLuminousFog, deepFog * 0.82);
+      float fogAlpha = depthFog;
+      if (uEnableSmoke > 0.5) {
+        // Kouř moduluje náběh, ale s rostoucí hloubkou se zahušťuje, takže na konci mlhy je 100% neprůhledný
+        float smokeMod = mix(smokeDensityFactor, 1.0, normZ);
+        fogAlpha = clamp(depthFog * smokeMod, 0.0, 1.0);
+        if (normZ >= 1.0 || isBackground) {
+          fogAlpha = 1.0;
+        }
+      }
+      // Při fogAlpha = 1.0 (na Fog Far a za ním) scéna 100% přechází do barvy mlhy a za ni již není vidět
+      sceneColor = mix(sceneColor, targetFogColor, fogAlpha);
 
       // 4. Popředová a vinětová mlha displeje (Foreground & Vignette) - leží v popředí 24/7
       float foregroundPart = uForegroundFog * smokeDensityFactor * screenEdgeFade * uEnableForegroundFog;
       float frontFog = clamp(foregroundPart + finalVignetteFog, 0.0, 1.0);
-      vec3 frontColor = selfLuminousFog + uLightColor * (mouseCore * smokeDensityFactor * 0.35 * uEnableMouseFog);
+      vec3 frontColor = targetFogColor + uLightColor * (mouseCore * smokeDensityFactor * 0.35 * uEnableMouseFog);
       sceneColor = mix(sceneColor, frontColor, frontFog * 0.65);
       sceneColor += frontColor * (frontFog * 0.25);
 
