@@ -301,7 +301,10 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     'vl-source': true,
     'vl-optics': true,
     'global-background-cylinder': true,
-    'part-render-global-cylinder': true
+    'part-render-global-cylinder': true,
+    'global-volumetric-unified': true,
+    'sub-volumetric-screen': true,
+    'sub-volumetric-depth': true
   });
   const [isTransparent, setIsTransparent] = useState(false);
   const [blenderNodes, setBlenderNodes] = useState([]);
@@ -1542,174 +1545,187 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
             )}
           </div>
 
-          {/* 8. VOLUMETRICKÉ VIDEO V POZADÍ (ACTIVE THEORY STYLE) */}
+          {/* 8. VOLUMETRICKÉ VIDEO & PROSTOROVÝ PRŮHLED (ACTIVE THEORY) */}
           <div className="editor-section">
             <h4 
               style={{ color: '#06b6d4', borderBottomColor: 'rgba(6, 182, 212, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-              onClick={() => toggleSection('global-volumetric-video')}
+              onClick={() => toggleSection('global-volumetric-unified')}
             >
-              <span>📹 Volumetrické video v pozadí (Active Theory)</span>
-              <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.7rem', color: (appConfig.volumetricVideo?.enabled ?? true) ? '#10b981' : '#6b7280' }}>
-                  {(appConfig.volumetricVideo?.enabled ?? true) ? '● ON' : '○ OFF'}
-                </span>
-                <span>{openSections['global-volumetric-video'] ? '▲' : '▼'}</span>
-              </span>
+              <span>🎬 Volumetrické video & Hloubkový průhled (Active Theory)</span>
+              <span>{openSections['global-volumetric-unified'] ? '▲' : '▼'}</span>
             </h4>
             
-            {openSections['global-volumetric-video'] && (
-              <div className="editor-subsection-content" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <div className="checkbox-group">
-                  <label style={{ fontWeight: '600', color: '#06b6d4' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={appConfig.volumetricVideo?.enabled ?? true} 
-                      onChange={e => updateVolumetricVideo('enabled', e.target.checked)} 
-                    />
-                    Povolit video na pozadí
-                  </label>
-                  <span className="input-desc" style={{ width: '100%' }}>
-                    Při vstupu do projektu zobrazí video vybrané stránky v pozadí s měkkou vinětou do ztracena (bez rámečku).
-                  </span>
+            {openSections['global-volumetric-unified'] && (
+              <>
+                {/* 1. Obrazovka & Zakřivení videa */}
+                <div className="editor-subsection">
+                  <h5 className="editor-subsection-header" onClick={() => toggleSection('sub-volumetric-screen')}>
+                    <span>📹 1. Obrazovka & Zakřivení videa (Screen & Cylinder Curve)</span>
+                    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: (appConfig.volumetricVideo?.enabled ?? true) ? '#10b981' : '#6b7280' }}>
+                        {(appConfig.volumetricVideo?.enabled ?? true) ? '● ON' : '○ OFF'}
+                      </span>
+                      <span>{openSections['sub-volumetric-screen'] ? '▲' : '▼'}</span>
+                    </span>
+                  </h5>
+                  {openSections['sub-volumetric-screen'] && (
+                    <div className="editor-subsection-content">
+                      <div className="checkbox-group">
+                        <label style={{ fontWeight: '600', color: '#06b6d4' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.volumetricVideo?.enabled ?? true} 
+                            onChange={e => updateVolumetricVideo('enabled', e.target.checked)} 
+                          />
+                          Povolit video na pozadí
+                        </label>
+                        <span className="input-desc" style={{ width: '100%' }}>
+                          Při vstupu do projektu zobrazí video vybrané stránky v pozadí s měkkou vinětou do ztracena (bez rámečku).
+                        </span>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Zakřivení do válce (Cylinder Curvature):</label>
+                        <span className="input-desc">Prohnutí obrazovky do oblouku válce kolem kamery (0 = ploché, 0.35 = přirozený oblouk, 1.0 = výrazné zakřivení)</span>
+                        <DragNumberInput step={0.05} min={-0.5} max={1.5} value={appConfig.volumetricVideo?.curvature ?? 0.35} onChange={val => updateVolumetricVideo('curvature', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Měřítko videa (Scale):</label>
+                        <span className="input-desc">Velikost videa v prostoru (0.85 = kompaktní střed dle reference)</span>
+                        <DragNumberInput step={0.05} min={0.2} max={3.0} value={appConfig.volumetricVideo?.scale ?? 0.85} onChange={val => updateVolumetricVideo('scale', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Vzdálenost za objekty (Z-Distance):</label>
+                        <span className="input-desc">Hloubková pozice za 3D objekty scény (menší hodnota = blíž k popředí)</span>
+                        <DragNumberInput step={0.1} min={0.2} max={8.0} value={appConfig.volumetricVideo?.zDistance ?? 1.4} onChange={val => updateVolumetricVideo('zDistance', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Měkkost viněty do ztracena (Vignette Softness):</label>
+                        <span className="input-desc">Jak jemně a pozvolna okraje videa přechází do tmy (0.1 = ostrý okraj, 0.7 = velmi měkké rozplynutí)</span>
+                        <DragNumberInput step={0.05} min={0.05} max={0.85} value={appConfig.volumetricVideo?.vignetteSoftness ?? 0.45} onChange={val => updateVolumetricVideo('vignetteSoftness', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Průhlednost videa (Opacity):</label>
+                        <span className="input-desc">Celkové krytí videa na pozadí</span>
+                        <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.volumetricVideo?.screenOpacity ?? 1.0} onChange={val => updateVolumetricVideo('screenOpacity', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Vertikální posun (Y Offset):</label>
+                        <span className="input-desc">Posun videa nahoru / dolů</span>
+                        <DragNumberInput step={0.05} min={-3} max={3} value={appConfig.volumetricVideo?.posY ?? 0.0} onChange={val => updateVolumetricVideo('posY', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Horizontální posun (X Offset):</label>
+                        <span className="input-desc">Posun videa doleva / doprava</span>
+                        <DragNumberInput step={0.05} min={-3} max={3} value={appConfig.volumetricVideo?.posX ?? 0.0} onChange={val => updateVolumetricVideo('posX', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Jas videa (Brightness):</label>
+                        <span className="input-desc">Úroveň jasu a svítivosti videa</span>
+                        <DragNumberInput step={0.05} min={0.2} max={2.5} value={appConfig.volumetricVideo?.brightness ?? 1.15} onChange={val => updateVolumetricVideo('brightness', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Kontrast videa (Contrast):</label>
+                        <span className="input-desc">Kontrast obrazu videa</span>
+                        <DragNumberInput step={0.05} min={0.5} max={2.0} value={appConfig.volumetricVideo?.contrast ?? 1.05} onChange={val => updateVolumetricVideo('contrast', val)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="input-group">
-                  <label>Měřítko videa (Scale):</label>
-                  <span className="input-desc">Velikost videa v prostoru (1.0 = cca 50 % obrazovky dle reference)</span>
-                  <DragNumberInput step={0.05} min={0.2} max={3.0} value={appConfig.volumetricVideo?.scale ?? 1.0} onChange={val => updateVolumetricVideo('scale', val)} />
+                {/* 2. Průhled skrz objekty & Středové paprsky */}
+                <div className="editor-subsection">
+                  <h5 className="editor-subsection-header" onClick={() => toggleSection('sub-volumetric-depth')}>
+                    <span>🌌 2. Průhled skrz objekty & Středové paprsky (Depth Ghosting & God Rays)</span>
+                    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: (appConfig.volumetricDepth?.enabled ?? true) ? '#10b981' : '#6b7280' }}>
+                        {(appConfig.volumetricDepth?.enabled ?? true) ? '● ON' : '○ OFF'}
+                      </span>
+                      <span>{openSections['sub-volumetric-depth'] ? '▲' : '▼'}</span>
+                    </span>
+                  </h5>
+                  {openSections['sub-volumetric-depth'] && (
+                    <div className="editor-subsection-content">
+                      <div className="checkbox-group">
+                        <label style={{ fontWeight: '600', color: '#a855f7' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.volumetricDepth?.enabled ?? true} 
+                            onChange={e => updateVolumetricDepth('enabled', e.target.checked)} 
+                          />
+                          Povolit volumetrický průhled skrz objekty
+                        </label>
+                        <span className="input-desc" style={{ width: '100%' }}>
+                          Od nastavené vzdálenosti od kamery začne být video lehce vidět skrz částice a 3D objekty scény.
+                        </span>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Vzdálenost začátku průhledu od kamery (Start Distance):</label>
+                        <span className="input-desc">Vzdálenost ve 3D prostoru, kde video začíná prosvítat skrz objekty (2.16 = střed světa)</span>
+                        <DragNumberInput step={0.05} min={0.5} max={6.0} value={appConfig.volumetricDepth?.startDistance ?? 2.16} onChange={val => updateVolumetricDepth('startDistance', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Síla / viditelnost videa skrz objekty (Ghost Strength):</label>
+                        <span className="input-desc">Jak silně video prosvítá přes částice a kostky (0.0 = neprůhledné objekty, 1.0 = plně viditelné)</span>
+                        <DragNumberInput step={0.05} min={0.0} max={1.0} value={appConfig.volumetricDepth?.ghostStrength ?? 0.35} onChange={val => updateVolumetricDepth('ghostStrength', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Plynulost náběhu hloubky (Fade Range):</label>
+                        <span className="input-desc">Délka přechodové zóny hloubky pro měkký náběh průhledu</span>
+                        <DragNumberInput step={0.05} min={0.05} max={2.0} value={appConfig.volumetricDepth?.fadeRange ?? 0.6} onChange={val => updateVolumetricDepth('fadeRange', val)} />
+                      </div>
+
+                      <div style={{
+                        marginTop: '6px',
+                        paddingTop: '10px',
+                        borderTop: '1px solid rgba(168, 85, 247, 0.25)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.8rem'
+                      }}>
+                        <div style={{ fontWeight: '600', color: '#c084fc', fontSize: '0.85rem' }}>
+                          ✨ Středové paprsky prosvítání (Center Video God Rays)
+                        </div>
+
+                        <div className="input-group">
+                          <label>Intenzita paprsků (Rays Exposure):</label>
+                          <span className="input-desc">Jak silně světlo z videa prosvítá zprostředka přes objekty v popředí</span>
+                          <DragNumberInput step={0.05} min={0.0} max={3.0} value={appConfig.volumetricDepth?.raysExposure ?? 1.2} onChange={val => updateVolumetricDepth('raysExposure', val)} />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Dosah od středu obrazovky (Rays Radius):</label>
+                          <span className="input-desc">Ohraničení paprsků pouze na střed televizoru (zabraňuje dosahu do rohů obrazovky)</span>
+                          <DragNumberInput step={0.05} min={0.2} max={1.2} value={appConfig.volumetricDepth?.raysRadius ?? 0.65} onChange={val => updateVolumetricDepth('raysRadius', val)} />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Délka paprsků (Ray Length):</label>
+                          <span className="input-desc">Vzdálenost rozptylu paprsků od středu obrazu</span>
+                          <DragNumberInput step={0.05} min={0.1} max={1.5} value={appConfig.volumetricDepth?.rayLength ?? 0.45} onChange={val => updateVolumetricDepth('rayLength', val)} />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Hustota paprsků (Ray Density):</label>
+                          <span className="input-desc">Hustota a sevřenost světelného toku paprsků</span>
+                          <DragNumberInput step={0.05} min={0.2} max={2.0} value={appConfig.volumetricDepth?.rayDensity ?? 1.0} onChange={val => updateVolumetricDepth('rayDensity', val)} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                <div className="input-group">
-                  <label>Vzdálenost za objekty (Z-Distance):</label>
-                  <span className="input-desc">Hloubková pozice za 3D objekty scény</span>
-                  <DragNumberInput step={0.1} min={0.2} max={8.0} value={appConfig.volumetricVideo?.zDistance ?? 1.4} onChange={val => updateVolumetricVideo('zDistance', val)} />
-                </div>
-
-                <div className="input-group">
-                  <label>Měkkost viněty do ztracena (Vignette Softness):</label>
-                  <span className="input-desc">Jak jemně a pozvolna okraje videa přechází do tmy (0.1 = ostrý okraj, 0.7 = velmi měkké rozplynutí)</span>
-                  <DragNumberInput step={0.05} min={0.05} max={0.85} value={appConfig.volumetricVideo?.vignetteSoftness ?? 0.45} onChange={val => updateVolumetricVideo('vignetteSoftness', val)} />
-                </div>
-
-                <div className="input-group">
-                  <label>Průhlednost videa (Opacity):</label>
-                  <span className="input-desc">Celkové krytí videa na pozadí</span>
-                  <DragNumberInput step={0.05} min={0} max={1.0} value={appConfig.volumetricVideo?.screenOpacity ?? 1.0} onChange={val => updateVolumetricVideo('screenOpacity', val)} />
-                </div>
-
-                <div className="input-group">
-                  <label>Vertikální posun (Y Offset):</label>
-                  <span className="input-desc">Posun videa nahoru / dolů</span>
-                  <DragNumberInput step={0.05} min={-3} max={3} value={appConfig.volumetricVideo?.posY ?? 0.0} onChange={val => updateVolumetricVideo('posY', val)} />
-                </div>
-
-                <div className="input-group">
-                  <label>Horizontální posun (X Offset):</label>
-                  <span className="input-desc">Posun videa doleva / doprava</span>
-                  <DragNumberInput step={0.05} min={-3} max={3} value={appConfig.volumetricVideo?.posX ?? 0.0} onChange={val => updateVolumetricVideo('posX', val)} />
-                </div>
-
-                <div className="input-group">
-                  <label>Jas videa (Brightness):</label>
-                  <span className="input-desc">Úroveň jasu videa</span>
-                  <DragNumberInput step={0.05} min={0.2} max={2.5} value={appConfig.volumetricVideo?.brightness ?? 1.0} onChange={val => updateVolumetricVideo('brightness', val)} />
-                </div>
-
-                <div className="input-group">
-                  <label>Kontrast videa (Contrast):</label>
-                  <span className="input-desc">Kontrast obrazu videa</span>
-                  <DragNumberInput step={0.05} min={0.5} max={2.0} value={appConfig.volumetricVideo?.contrast ?? 1.05} onChange={val => updateVolumetricVideo('contrast', val)} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 9. VOLUMETRICKÝ PRŮHLED V PROSTORU (VOLUMETRIC DEPTH) */}
-          <div className="editor-section">
-            <h4 
-              style={{ color: '#a855f7', borderBottomColor: 'rgba(168, 85, 247, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
-              onClick={() => toggleSection('global-volumetric-depth')}
-            >
-              <span>🌌 Volumetrický průhled v prostoru (Depth Ghosting)</span>
-              <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.7rem', color: (appConfig.volumetricDepth?.enabled ?? true) ? '#10b981' : '#6b7280' }}>
-                  {(appConfig.volumetricDepth?.enabled ?? true) ? '● ON' : '○ OFF'}
-                </span>
-                <span>{openSections['global-volumetric-depth'] ? '▲' : '▼'}</span>
-              </span>
-            </h4>
-            
-            {openSections['global-volumetric-depth'] && (
-              <div className="editor-subsection-content" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <div className="checkbox-group">
-                  <label style={{ fontWeight: '600', color: '#a855f7' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={appConfig.volumetricDepth?.enabled ?? true} 
-                      onChange={e => updateVolumetricDepth('enabled', e.target.checked)} 
-                    />
-                    Povolit volumetrický průhled skrz objekty
-                  </label>
-                  <span className="input-desc" style={{ width: '100%' }}>
-                    Od nastavené vzdálenosti od kamery začne být video lehce vidět skrz částice a 3D objekty scény.
-                  </span>
-                </div>
-
-                <div className="input-group">
-                  <label>Vzdálenost začátku průhledu od kamery (Start Distance):</label>
-                  <span className="input-desc">Vzdálenost ve 3D prostoru, kde video začíná prosvítat skrz objekty (2.16 = střed světa)</span>
-                  <DragNumberInput step={0.05} min={0.5} max={6.0} value={appConfig.volumetricDepth?.startDistance ?? 2.16} onChange={val => updateVolumetricDepth('startDistance', val)} />
-                </div>
-
-                <div className="input-group">
-                  <label>Síla / viditelnost videa skrz objekty (Ghost Strength):</label>
-                  <span className="input-desc">Jak silně video prosvítá přes částice a kostky (0.0 = neprůhledné objekty, 1.0 = plně viditelné)</span>
-                  <DragNumberInput step={0.05} min={0.0} max={1.0} value={appConfig.volumetricDepth?.ghostStrength ?? 0.35} onChange={val => updateVolumetricDepth('ghostStrength', val)} />
-                </div>
-
-                <div className="input-group">
-                  <label>Plynulost náběhu hloubky (Fade Range):</label>
-                  <span className="input-desc">Délka přechodové zóny hloubky pro měkký náběh průhledu</span>
-                  <DragNumberInput step={0.05} min={0.05} max={2.0} value={appConfig.volumetricDepth?.fadeRange ?? 0.6} onChange={val => updateVolumetricDepth('fadeRange', val)} />
-                </div>
-
-                <div style={{
-                  marginTop: '6px',
-                  paddingTop: '10px',
-                  borderTop: '1px solid rgba(168, 85, 247, 0.25)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.8rem'
-                }}>
-                  <div style={{ fontWeight: '600', color: '#c084fc', fontSize: '0.85rem' }}>
-                    ✨ Středové paprsky prosvítání (Center Video God Rays)
-                  </div>
-
-                  <div className="input-group">
-                    <label>Intenzita paprsků (Rays Exposure):</label>
-                    <span className="input-desc">Jak silně světlo z videa prosvítá zprostředka přes objekty v popředí</span>
-                    <DragNumberInput step={0.05} min={0.0} max={3.0} value={appConfig.volumetricDepth?.raysExposure ?? 1.2} onChange={val => updateVolumetricDepth('raysExposure', val)} />
-                  </div>
-
-                  <div className="input-group">
-                    <label>Dosah od středu obrazovky (Rays Radius):</label>
-                    <span className="input-desc">Ohraničení paprsků pouze na střed televizoru (zabraňuje dosahu do rohů obrazovky)</span>
-                    <DragNumberInput step={0.05} min={0.2} max={1.2} value={appConfig.volumetricDepth?.raysRadius ?? 0.65} onChange={val => updateVolumetricDepth('raysRadius', val)} />
-                  </div>
-
-                  <div className="input-group">
-                    <label>Délka paprsků (Ray Length):</label>
-                    <span className="input-desc">Vzdálenost rozptylu paprsků od středu obrazu</span>
-                    <DragNumberInput step={0.05} min={0.1} max={1.5} value={appConfig.volumetricDepth?.rayLength ?? 0.45} onChange={val => updateVolumetricDepth('rayLength', val)} />
-                  </div>
-
-                  <div className="input-group">
-                    <label>Hustota paprsků (Ray Density):</label>
-                    <span className="input-desc">Hustota a sevřenost světelného toku paprsků</span>
-                    <DragNumberInput step={0.05} min={0.2} max={2.0} value={appConfig.volumetricDepth?.rayDensity ?? 1.0} onChange={val => updateVolumetricDepth('rayDensity', val)} />
-                  </div>
-                </div>
-              </div>
+              </>
             )}
           </div>
         </div>

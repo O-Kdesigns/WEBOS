@@ -17,18 +17,27 @@ const BackgroundVideoShader = {
     uBrightness: { value: 1.0 },
     uContrast: { value: 1.05 },
     uVignetteSoftness: { value: 0.45 },
+    uCurvature: { value: 0.35 },
     uMouseParallax: { value: new THREE.Vector2(0, 0) }
   },
   vertexShader: `
     uniform vec2 uMouseParallax;
+    uniform float uCurvature;
     varying vec2 vUv;
 
     void main() {
       vUv = uv;
       vec3 pos = position;
-      // Velmi jemný 3D parallax podle myši
-      pos.x += uMouseParallax.x * 0.06;
-      pos.y += uMouseParallax.y * 0.04;
+
+      // Zakřivení do oblouku válce podél osy X (prohnuté plátno kolem kamery)
+      if (abs(uCurvature) > 0.001) {
+        // Okraje se stáčejí mírně dopředu (blíže ke kameře) jako prohnutá stěna válce
+        pos.z += (pos.x * pos.x) * (uCurvature * 0.35);
+      }
+
+      // Jemný doplňkový 3D parallax v prostoru pro sjednocení s middle overlay
+      pos.x += uMouseParallax.x * 0.05;
+      pos.y += uMouseParallax.y * 0.035;
 
       gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
     }
@@ -76,8 +85,8 @@ export function VolumetricVideoBackground({
   videoTexture,
   visible,
   appConfig,
-  currentIndex,
-  pageDistance
+  currentIndex = 0,
+  pageDistance = 0
 }) {
   const cfg = appConfig.volumetricVideo || {};
   const isEnabled = cfg.enabled ?? true;
@@ -113,7 +122,7 @@ export function VolumetricVideoBackground({
     });
   }, []);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const currentFade = fade.get();
     if (!groupRef.current) return;
 
@@ -123,11 +132,13 @@ export function VolumetricVideoBackground({
     }
     groupRef.current.visible = true;
 
-    // Sledování myši pro jemný parallax
+    const safeDelta = Math.min(Math.max(delta, 0), 0.1);
+
+    // Plynulé a responzivní sledování myši pro jemný parallax
     const targetX = state.pointer.x;
     const targetY = state.pointer.y;
-    mouseLerp.current.x += (targetX - mouseLerp.current.x) * 0.05;
-    mouseLerp.current.y += (targetY - mouseLerp.current.y) * 0.05;
+    mouseLerp.current.x = THREE.MathUtils.damp(mouseLerp.current.x, targetX, 6.0, safeDelta);
+    mouseLerp.current.y = THREE.MathUtils.damp(mouseLerp.current.y, targetY, 6.0, safeDelta);
 
     const tex = videoTexture || dummyTexture;
 
@@ -139,6 +150,7 @@ export function VolumetricVideoBackground({
       su.uBrightness.value = cfg.brightness ?? 1.0;
       su.uContrast.value = cfg.contrast ?? 1.05;
       su.uVignetteSoftness.value = cfg.vignetteSoftness ?? 0.45;
+      su.uCurvature.value = cfg.curvature ?? 0.35;
       su.uMouseParallax.value.copy(mouseLerp.current);
     }
   });
@@ -158,9 +170,9 @@ export function VolumetricVideoBackground({
           position={[posX, posY, -zDist]}
           scale={[screenScale, screenScale, screenScale]}
         >
-          {/* Čisté video na pozadí s měkkým okrajem do ztracena (žádný rámeček, žádné částice) */}
+          {/* Čisté video na pozadí s měkkým okrajem do ztracena a prohnutím do válce */}
           <mesh position={[0, 0, 0]} renderOrder={1}>
-            <planeGeometry args={[2.5, 1.406]} />
+            <planeGeometry args={[2.5, 1.406, 48, 16]} />
             <primitive object={screenMaterial} ref={screenMatRef} attach="material" />
           </mesh>
         </group>

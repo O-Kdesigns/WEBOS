@@ -203,43 +203,29 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
   const settings = page.particlesSettings;
   const selected = settings.selectedNodes || [];
 
-  return (
-    <group rotation-y={currentIndex * -pageDistance}>
-      <a.group rotation-y={insideRotationY}>
-        {selected.length > 0 ? selected.map(nodeName => {
-          const node = nodes[nodeName];
-          if (!node) return null;
+  const innerContent = (
+    <>
+      {selected.length > 0 ? selected.map(nodeName => {
+        const node = nodes[nodeName];
+        if (!node) return null;
 
-          if (isSolidNode(nodeName)) {
-            return <SolidObject key={nodeName} node={node} />;
-          }
+        if (isSolidNode(nodeName)) {
+          return <SolidObject key={nodeName} node={node} />;
+        }
 
-          return (
-            <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
-              <ParticleObject 
-                settings={{ 
-                  ...settings,
-                  shape: 'geometry', 
-                  customGeometry: node.geometry,
-                  transform: {
-                    position: new THREE.Vector3(0,0,0),
-                    quaternion: new THREE.Quaternion(),
-                    scale: node.getWorldScale(new THREE.Vector3())
-                  }
-                }}
-                appConfig={appConfig} 
-                videoTexture={videoTexture} 
-                opacity={1}
-                renderOrder={3}
-                rotationY={rotationY}
-                pageDistance={pageDistance}
-              />
-            </group>
-          );
-        }) : (
-          <group>
+        return (
+          <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
             <ParticleObject 
-              settings={settings}
+              settings={{ 
+                ...settings,
+                shape: 'geometry', 
+                customGeometry: node.geometry,
+                transform: {
+                  position: new THREE.Vector3(0,0,0),
+                  quaternion: new THREE.Quaternion(),
+                  scale: node.getWorldScale(new THREE.Vector3())
+                }
+              }}
               appConfig={appConfig} 
               videoTexture={videoTexture} 
               opacity={1}
@@ -248,14 +234,105 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
               pageDistance={pageDistance}
             />
           </group>
-        )}
-      </a.group>
+        );
+      }) : (
+        <group>
+          <ParticleObject 
+            settings={settings}
+            appConfig={appConfig} 
+            videoTexture={videoTexture} 
+            opacity={1}
+            renderOrder={3}
+            rotationY={rotationY}
+            pageDistance={pageDistance}
+          />
+        </group>
+      )}
+    </>
+  );
+
+  if (currentIndex !== undefined && pageDistance !== undefined && insideRotationY) {
+    return (
+      <group rotation-y={currentIndex * -pageDistance}>
+        <a.group rotation-y={insideRotationY}>
+          {innerContent}
+        </a.group>
+      </group>
+    );
+  }
+
+  return innerContent;
+}
+
+// Společný pivot pro objekty, částice i televizi rotující kolem bodu 0 v reakci na myš VŽDY RELEVANTNĚ K AKTUÁLNÍ KAMERĚ
+function InsideProjectPivot({ 
+  children, 
+  viewMode, 
+  currentIndex, 
+  pageDistance, 
+  insideRotationY 
+}) {
+  const pivotRef = useRef();
+  const smoothMouse = useRef(new THREE.Vector2(0, 0));
+
+  // Reusable pomocné objekty (žádný garbage collection za běhu)
+  const camQuat = useRef(new THREE.Quaternion());
+  const camRight = useRef(new THREE.Vector3());
+  const camUp = useRef(new THREE.Vector3());
+  const qH = useRef(new THREE.Quaternion());
+  const qV = useRef(new THREE.Quaternion());
+  const qGyro = useRef(new THREE.Quaternion());
+
+  useFrame((state, delta) => {
+    if (!pivotRef.current) return;
+    const safeDelta = Math.min(Math.max(delta, 0), 0.1);
+    const isInside = viewMode === 'INSIDE';
+
+    // Plynulé sledování myši
+    const targetX = isInside ? state.pointer.x : 0;
+    const targetY = isInside ? state.pointer.y : 0;
+    smoothMouse.current.x = THREE.MathUtils.damp(smoothMouse.current.x, targetX, 5.0, safeDelta);
+    smoothMouse.current.y = THREE.MathUtils.damp(smoothMouse.current.y, targetY, 5.0, safeDelta);
+
+    // Získání aktuální orientace a os kamery ve světovém prostoru
+    state.camera.getWorldQuaternion(camQuat.current);
+    // Vektor doprava ve výhledu kamery (horizontální osa obrazovky ve světě)
+    camRight.current.set(1, 0, 0).applyQuaternion(camQuat.current).normalize();
+    // Vektor nahoru ve výhledu kamery (vertikální osa obrazovky ve světě)
+    camUp.current.set(0, 1, 0).applyQuaternion(camQuat.current).normalize();
+
+    // Úhly rotace relevantní k aktuální kameře
+    const mouseRotY = smoothMouse.current.x * 0.14;
+    const mouseRotX = -smoothMouse.current.y * 0.09;
+
+    // Rotace striktně podél os pohledu aktuální kamery:
+    // Pohyb myši doprava/doleva otáčí scénu kolem svislé osy kamery (camUp)
+    qH.current.setFromAxisAngle(camUp.current, mouseRotY);
+    // Pohyb myši nahoru/dolů naklápí scénu kolem vodorovné osy kamery (camRight)
+    qV.current.setFromAxisAngle(camRight.current, mouseRotX);
+
+    // Výsledná světová rotace pivotu relevantní k aktuální kameře
+    qGyro.current.copy(qV.current).multiply(qH.current);
+    pivotRef.current.quaternion.copy(qGyro.current);
+  });
+
+  return (
+    <group ref={pivotRef}>
+      <group rotation-y={currentIndex * -pageDistance}>
+        <a.group rotation-y={insideRotationY}>
+          {children}
+        </a.group>
+      </group>
     </group>
   );
 }
 
 export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, pageDistance }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  const groupRef = useRef();
+  const prevRot = useRef(rotationY.get());
+  const smoothTilt = useRef(0);
+  const cylMouse = useRef(new THREE.Vector2(0, 0));
   
   // Místo mizení (fade) animujeme scatter (rozlet)
   const { scatter } = useSpring({
@@ -267,10 +344,31 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
       : { mass: 15, tension: 10, friction: 60 } 
   });
 
+  useFrame((state, delta) => {
+    if (!groupRef.current) return;
+    const safeDelta = Math.min(Math.max(delta, 0), 0.1);
+
+    // 1. Výpočet rychlosti rotace karuselu pro jemné naklopení (banking) válce
+    const currentRot = rotationY.get();
+    const rotDelta = (currentRot - prevRot.current);
+    prevRot.current = currentRot;
+    const rotVel = rotDelta / Math.max(safeDelta, 0.001);
+
+    const targetTilt = THREE.MathUtils.clamp(rotVel * 0.02, -0.05, 0.05);
+    smoothTilt.current = THREE.MathUtils.damp(smoothTilt.current, targetTilt, 4, safeDelta);
+
+    // 2. Velmi jemná reakce na myš (snížená, diskrétní)
+    cylMouse.current.x = THREE.MathUtils.damp(cylMouse.current.x, state.pointer.x, 2.5, safeDelta);
+    cylMouse.current.y = THREE.MathUtils.damp(cylMouse.current.y, state.pointer.y, 2.5, safeDelta);
+
+    groupRef.current.rotation.z = smoothTilt.current - cylMouse.current.x * 0.012;
+    groupRef.current.rotation.x = cylMouse.current.y * 0.012;
+  });
+
   if (!nodes.Cylinder) return null;
   
   return (
-    <group>
+    <group ref={groupRef}>
       <group position={nodes.Cylinder.getWorldPosition(new THREE.Vector3())} quaternion={nodes.Cylinder.getWorldQuaternion(new THREE.Quaternion())}>
         <ParticleObject 
           settings={{ 
@@ -432,25 +530,42 @@ function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
     config: { duration: 1000 }
   });
 
-  // Vypočítáme výsledné FOV v každém snímku (bude reagovat okamžitě na změnu okna/monitoru)
-  useFrame((state) => {
+  const gyroMouse = useRef(new THREE.Vector2(0, 0));
+
+  // Vypočítáme výsledné FOV a lehký gyroskop v každém snímku
+  useFrame((state, delta) => {
+    const safeDelta = Math.min(Math.max(delta, 0), 0.1);
+
+    // Jemný, plynule vyhlazený gyroskop kamery na myš (subtilní, nezasahuje do posunu částic)
+    gyroMouse.current.x = THREE.MathUtils.damp(gyroMouse.current.x, state.pointer.x, 6.0, safeDelta);
+    gyroMouse.current.y = THREE.MathUtils.damp(gyroMouse.current.y, state.pointer.y, 6.0, safeDelta);
+
     if (cameraRef.current) {
-       const currentAspect = state.size.width / state.size.height;
+      const isInside = viewMode === 'INSIDE';
+      const gyroRotY = isInside ? (gyroMouse.current.x * 0.035) : (-gyroMouse.current.x * 0.008);
+      const gyroRotX = isInside ? (-gyroMouse.current.y * 0.025) : (gyroMouse.current.y * 0.005);
+      const gyroPosX = gyroMouse.current.x * (isInside ? 0.08 : 0.015);
+      const gyroPosY = gyroMouse.current.y * (isInside ? 0.05 : 0.01);
+
+      cameraRef.current.position.set(gyroPosX, gyroPosY, 0);
+      cameraRef.current.rotation.set(gyroRotX, gyroRotY, 0);
+
+      const currentAspect = state.size.width / state.size.height;
        
-       // Interpolace základního FOV (např. mezi 60 a 45) podle toho, kde se nacházíme v animaci
-       const currentBaseFov = THREE.MathUtils.lerp(orbitFov, inFov, baseFovProgress.get());
+      // Interpolace základního FOV (např. mezi 60 a 45) podle toho, kde se nacházíme v animaci
+      const currentBaseFov = THREE.MathUtils.lerp(orbitFov, inFov, baseFovProgress.get());
        
-       // Matematika pro zachování šířky zobrazení
-       const REFERENCE_ASPECT = 16 / 9; 
-       const vFovRad = THREE.MathUtils.degToRad(currentBaseFov);
-       const targetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (REFERENCE_ASPECT / currentAspect));
-       const finalFov = THREE.MathUtils.radToDeg(targetVFovRad);
+      // Matematika pro zachování šířky zobrazení
+      const REFERENCE_ASPECT = 16 / 9; 
+      const vFovRad = THREE.MathUtils.degToRad(currentBaseFov);
+      const targetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (REFERENCE_ASPECT / currentAspect));
+      const finalFov = THREE.MathUtils.radToDeg(targetVFovRad);
        
-       // Pokud se FOV liší, aplikujeme ho okamžitě
-       if (Math.abs(cameraRef.current.fov - finalFov) > 0.01) {
-           cameraRef.current.fov = finalFov;
-           cameraRef.current.updateProjectionMatrix();
-       }
+      // Pokud se FOV liší, aplikujeme ho okamžitě
+      if (Math.abs(cameraRef.current.fov - finalFov) > 0.01) {
+          cameraRef.current.fov = finalFov;
+          cameraRef.current.updateProjectionMatrix();
+      }
     }
   });
 
@@ -723,15 +838,20 @@ function App() {
                   currentIndex={closestIndex}
                   pageDistance={pageDistance}
                 />
-                <ProjectContent 
-                  page={pagesData[closestIndex]} 
-                  appConfig={appConfig}
-                  videoTexture={activeVideoTex}
+                <InsideProjectPivot
+                  viewMode={viewMode}
                   currentIndex={closestIndex}
                   pageDistance={pageDistance}
                   insideRotationY={insideRotationY}
-                  rotationY={rotationY}
-                />
+                >
+                  <ProjectContent 
+                    page={pagesData[closestIndex]} 
+                    appConfig={appConfig} 
+                    videoTexture={activeVideoTex} 
+                    rotationY={rotationY}
+                    pageDistance={pageDistance}
+                  />
+                </InsideProjectPivot>
                 <VolumetricLightPass 
                   appConfig={appConfig} 
                   viewMode={viewMode} 

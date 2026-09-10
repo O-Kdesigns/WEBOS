@@ -106,14 +106,15 @@
   },
   "volumetricVideo": {
     "enabled": true,
-    "scale": 0.85,
+    "scale": 0.9,
     "zDistance": 1.4,
-    "posX": 0.0,
-    "posY": 0.0,
-    "screenOpacity": 1.0,
+    "posX": 0,
+    "posY": 0,
+    "screenOpacity": 1,
     "vignetteSoftness": 0.45,
     "brightness": 1.15,
-    "contrast": 1.05
+    "contrast": 1.05,
+    "curvature": 1.5
   },
   "volumetricDepth": {
     "enabled": true,
@@ -124,6 +125,6 @@
     "raysExposure": 1.2,
     "raysRadius": 0.65,
     "rayLength": 0.45,
-    "rayDensity": 1.0
+    "rayDensity": 1
   }
 }
