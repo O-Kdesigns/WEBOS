@@ -895,13 +895,15 @@ function App() {
                   pageDistance={pageDistance}
                   insideRotationY={insideRotationY}
                 >
-                  <ProjectContent 
-                    page={pagesData[closestIndex]} 
-                    appConfig={appConfig} 
-                    videoTexture={activeVideoTex} 
-                    rotationY={rotationY}
-                    pageDistance={pageDistance}
-                  />
+                  {viewMode === 'INSIDE' && (
+                    <ProjectContent 
+                      page={pagesData[closestIndex]} 
+                      appConfig={appConfig} 
+                      videoTexture={activeVideoTex} 
+                      rotationY={rotationY}
+                      pageDistance={pageDistance}
+                    />
+                  )}
                 </InsideProjectPivot>
                 <VolumetricLightPass 
                   appConfig={appConfig} 

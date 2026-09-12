@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useProgress } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import { videoTextureCache } from './App';
@@ -6,7 +6,7 @@ import './Preloader.css';
 
 const resolveAssetUrl = (url) => {
   if (!url) return '';
-  let finalUrl = url;
+  let finalUrl = '';
   if (url.startsWith('/obsah/')) finalUrl = url;
   else if (url.startsWith('obsah/')) finalUrl = '/' + url;
   else if (url.startsWith('/')) finalUrl = url;
@@ -21,8 +21,12 @@ export function Preloader({ activeVideoUrl, onLoaded }) {
   const [isExiting, setIsExiting] = useState(false);
 
   const targetProgressRef = useRef(0);
-  const startTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(0);
   const onLoadedFiredRef = useRef(false);
+
+  useEffect(() => {
+    startTimeRef.current = Date.now();
+  }, []);
 
   // Monitor active video buffer + 3D assets
   useEffect(() => {
@@ -59,12 +63,9 @@ export function Preloader({ activeVideoUrl, onLoaded }) {
       }
 
       // 2. Combine with Drei 3D asset progress
-      let combined = 0;
-      if (dreiTotal > 0) {
-        combined = Math.floor(dreiProgress * 0.4 + videoPct * 0.6);
-      } else {
-        combined = videoPct;
-      }
+      let combined = dreiTotal > 0
+        ? Math.floor(dreiProgress * 0.4 + videoPct * 0.6)
+        : videoPct;
 
       // Safety timeout: after 4.5 seconds, force 100%
       const totalElapsed = Date.now() - startTimeRef.current;
@@ -112,13 +113,12 @@ export function Preloader({ activeVideoUrl, onLoaded }) {
         }
 
         // Active Theory rapid count-up feeling
-        let step = 1;
         const diff = target - current;
+        let step = 0;
         if (diff > 40) step = 4;
         else if (diff > 20) step = 3;
         else if (diff > 10) step = 2;
         else if (diff > 0) step = 1;
-        else step = 0;
 
         const next = Math.min(100, current + step);
 

@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { debugMetrics } from './DebugMonitor';
 
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 dummyTexture.needsUpdate = true;
@@ -715,6 +716,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     // 1. Vykreslení hlavní scény včetně hloubkového bufferu do render targetu
     gl.setRenderTarget(sceneTarget);
     gl.render(scene, camera);
+
+    // Zachycení reálných metrik hlavní 3D scény (draw calls, trojúhelníky, GPU textury)
+    debugMetrics.drawCalls = gl.info.render.calls;
+    debugMetrics.triangles = gl.info.render.triangles;
+    debugMetrics.textures = gl.info.memory.textures;
 
     // 2. Vykreslení fullscreen quadu s postprocessingem na obrazovku
     gl.setRenderTarget(null);

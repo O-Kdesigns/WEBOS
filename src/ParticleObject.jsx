@@ -102,62 +102,89 @@ void main() {
 
 // --- GPGPU HOOK ---
 function useGPGPU(count, particlesData, gl) {
-  return useMemo(() => {
-      if (!count || count === 0 || !particlesData || !particlesData.length) return null;
-      
-      const size = Math.ceil(Math.sqrt(count));
-      const gpuCompute = new GPUComputationRenderer(size, size, gl);
-      
-      const pos0 = gpuCompute.createTexture();
-      const vel0 = gpuCompute.createTexture();
-      const basePos = gpuCompute.createTexture();
-      
-      let i = 0;
-      for(let y = 0; y < size; y++) {
-          for(let x = 0; x < size; x++) {
-              const idx = i * 4;
-              const p = particlesData[i];
-              if (p) {
-                  // Výchozí pozice pro rendering
-                  pos0.image.data[idx] = p.x;
-                  pos0.image.data[idx+1] = p.y;
-                  pos0.image.data[idx+2] = p.z;
-                  pos0.image.data[idx+3] = p.scale; 
-                  
-                  // Paměť pro původní stav a levitaci
-                  basePos.image.data[idx] = p.x;
-                  basePos.image.data[idx+1] = p.y;
-                  basePos.image.data[idx+2] = p.z;
-                  basePos.image.data[idx+3] = p.offset;
-              }
-              i++;
+  const [compute, setCompute] = useState(null);
+
+  useEffect(() => {
+    if (!count || count === 0 || !particlesData || !particlesData.length) {
+      setCompute(null);
+      return;
+    }
+    
+    const size = Math.ceil(Math.sqrt(count));
+    const gpuCompute = new GPUComputationRenderer(size, size, gl);
+    
+    const pos0 = gpuCompute.createTexture();
+    const vel0 = gpuCompute.createTexture();
+    const basePos = gpuCompute.createTexture();
+    
+    let i = 0;
+    for(let y = 0; y < size; y++) {
+        for(let x = 0; x < size; x++) {
+            const idx = i * 4;
+            const p = particlesData[i];
+            if (p) {
+                // Výchozí pozice pro rendering
+                pos0.image.data[idx] = p.x;
+                pos0.image.data[idx+1] = p.y;
+                pos0.image.data[idx+2] = p.z;
+                pos0.image.data[idx+3] = p.scale; 
+                
+                // Paměť pro původní stav a levitaci
+                basePos.image.data[idx] = p.x;
+                basePos.image.data[idx+1] = p.y;
+                basePos.image.data[idx+2] = p.z;
+                basePos.image.data[idx+3] = p.offset;
+            }
+            i++;
+        }
+    }
+    
+    const velVar = gpuCompute.addVariable("textureVelocity", fragmentShaderVel, vel0);
+    const posVar = gpuCompute.addVariable("texturePosition", fragmentShaderPos, pos0);
+    
+    gpuCompute.setVariableDependencies(velVar, [velVar, posVar]);
+    gpuCompute.setVariableDependencies(posVar, [velVar, posVar]);
+    
+    velVar.material.uniforms.uMousePos = { value: new THREE.Vector3(9999,9999,9999) };
+    velVar.material.uniforms.uMouseDir = { value: new THREE.Vector3(0,0,-1) };
+    velVar.material.uniforms.uMouseVel = { value: new THREE.Vector3(0,0,0) };
+    velVar.material.uniforms.uMouseRadius = { value: 2.0 };
+    velVar.material.uniforms.uMouseForce = { value: 1.0 };
+    
+    posVar.material.uniforms.uTime = { value: 0 };
+    posVar.material.uniforms.uFloatSpeed = { value: 1.0 };
+    posVar.material.uniforms.uFloatAmplitude = { value: 0.1 };
+    posVar.material.uniforms.uReturnSpeed = { value: 0.05 };
+    posVar.material.uniforms.uScatter = { value: 0.0 };
+    posVar.material.uniforms.tBasePosition = { value: basePos };
+    
+    const error = gpuCompute.init();
+    if (error !== null) console.error("GPGPU Error:", error);
+    
+    setCompute({ gpuCompute, velVar, posVar, size });
+
+    return () => {
+      // Úplný úklid alokovaných textur a render targetů v GPU paměti
+      if (pos0?.dispose) pos0.dispose();
+      if (vel0?.dispose) vel0.dispose();
+      if (basePos?.dispose) basePos.dispose();
+
+      if (gpuCompute.variables) {
+        gpuCompute.variables.forEach(v => {
+          if (v.renderTargets) {
+            v.renderTargets.forEach(rt => {
+              if (rt?.texture?.dispose) rt.texture.dispose();
+              if (rt?.dispose) rt.dispose();
+            });
           }
+          if (v.material?.dispose) v.material.dispose();
+        });
       }
-      
-      const velVar = gpuCompute.addVariable("textureVelocity", fragmentShaderVel, vel0);
-      const posVar = gpuCompute.addVariable("texturePosition", fragmentShaderPos, pos0);
-      
-      gpuCompute.setVariableDependencies(velVar, [velVar, posVar]);
-      gpuCompute.setVariableDependencies(posVar, [velVar, posVar]);
-      
-      velVar.material.uniforms.uMousePos = { value: new THREE.Vector3(9999,9999,9999) };
-      velVar.material.uniforms.uMouseDir = { value: new THREE.Vector3(0,0,-1) };
-      velVar.material.uniforms.uMouseVel = { value: new THREE.Vector3(0,0,0) };
-      velVar.material.uniforms.uMouseRadius = { value: 2.0 };
-      velVar.material.uniforms.uMouseForce = { value: 1.0 };
-      
-      posVar.material.uniforms.uTime = { value: 0 };
-      posVar.material.uniforms.uFloatSpeed = { value: 1.0 };
-      posVar.material.uniforms.uFloatAmplitude = { value: 0.1 };
-      posVar.material.uniforms.uReturnSpeed = { value: 0.05 };
-      posVar.material.uniforms.uScatter = { value: 0.0 };
-      posVar.material.uniforms.tBasePosition = { value: basePos };
-      
-      const error = gpuCompute.init();
-      if (error !== null) console.error("GPGPU Error:", error);
-      
-      return { gpuCompute, velVar, posVar, size };
+      if (gpuCompute.dispose) gpuCompute.dispose();
+    };
   }, [count, particlesData, gl]);
+
+  return compute;
 }
 
 // --- MATERIÁLY ---
@@ -875,7 +902,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
   return (
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
-        <sphereGeometry args={[1, 16, 16]} />
+        <sphereGeometry args={[1, 8, 8]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
     </group>
@@ -1019,7 +1046,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
   return (
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
-        <sphereGeometry args={[1, 16, 16]} />
+        <sphereGeometry args={[1, 8, 8]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
     </group>
@@ -1157,7 +1184,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
   return (
     <group {...transform}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
-        <sphereGeometry args={[1, 16, 16]} />
+        <sphereGeometry args={[1, 8, 8]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
     </group>

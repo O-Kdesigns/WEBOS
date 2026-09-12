@@ -48,3 +48,22 @@ Tento soubor definuje kritická pravidla a osvědčené postupy pro zachování 
 * **Důvod:** Pokud se u 1080p MP4 videa spustí dekódování s prázdným bufferem, síťový proud nestačí krmit GPU dekodér, video buffer podtéká (buffer underrun), GPU dekodér zahazuje snímky a renderovací vlákno Three.js trpí mikrozáseky.
 * **Implementace:** Použít stylový lehký Active Theory SVG loader (`Preloader`), který monitoruje vyrovnávací paměť aktivního videa (`video.buffered`) a Drei 3D assety. Až po naplnění bufferu (`isPreloaded = true`) předá řízení `VideoManageru`, který video hladce rozběhne.
 
+---
+
+## 7. Striktní formát kódování videí: H.264 (AVC) s +faststart
+* **Princip:** Všechna videa pro Three.js `VideoTexture` musí být kódována striktně v **H.264 (AVC)** s barevným prostorem `yuv420p` a příznakem `+faststart` (moov atom na začátku souboru). **NIKDY nepoužívat HEVC (H.265)**.
+* **Důvod:** Chromium a Windows GPU dekodéry (NVDEC / DXVA2) při uploadu HEVC snímků do WebGL přes `texSubImage2D` trpí masivními pipeline stally a zahazují tisíce snímků (`droppedVideoFrames`), což způsobuje vizuální slideshow (15–20 FPS) navzdory vysokému číslu FPS renderovací smyčky.
+
+---
+
+## 8. Gating vnitřního obsahu projektů (Žádné částice v ORBIT režimu)
+* **Princip:** Komponenta `<ProjectContent>` (částice a vnitřní objekty projektů) se smí renderovat **POUZE** v režimu `viewMode === 'INSIDE'`.
+* **Důvod:** V ORBIT režimu je vnitřek válce pro uživatele zcela neviditelný (zakrytý pláštěm válce). Vykreslování desítek tisíc částic (až 30 milionů trojúhelníků) a běh GPGPU fyzikálních smyček na pozadí plýtvá až 80 % výkonu GPU.
+
+---
+
+## 9. Likvidace GPU paměti v GPGPU smyčkách (Zero-Leak GPGPU)
+* **Princip:** Každá instance `GPUComputationRenderer` musí mít v `useEffect` cleanup funkci, která při unmountu nebo změně parametrů explicitně zavolá `.dispose()` na všechny render targety (`variable.renderTargets`), textury (`pos0`, `vel0`, `basePos`), materiály i samotný `gpuCompute`.
+* **Důvod:** Bez explicitní likvidace zůstávají staré FBO a textury trvale alokované ve VRAM, což při rotaci karuselu vedlo k nekonečnému hromadění textur (144 -> 288 -> ...), saturaci sběrnice a pádu video dekodéru.
+
+
