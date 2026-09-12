@@ -15,6 +15,7 @@ import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
 import { CanvasDebugTracker, DebugMonitorHUD } from './DebugMonitor';
+import { Preloader } from './Preloader';
 import './App.css';
 
 const resolveAssetUrl = (url) => {
@@ -28,7 +29,7 @@ const resolveAssetUrl = (url) => {
 };
 
 // --- Video Texture Cache (module-level, persists across renders) ---
-const videoTextureCache = new Map();
+export const videoTextureCache = new Map();
 
 function ensureVideoEntry(url, gl) {
   if (videoTextureCache.has(url)) return videoTextureCache.get(url);
@@ -64,7 +65,7 @@ function ensureVideoEntry(url, gl) {
   return entry;
 }
 
-function VideoManager({ allUrls, activeUrl, viewMode, children }) {
+function VideoManager({ allUrls, activeUrl, viewMode, isPreloaded = true, children }) {
   const gl = useThree(state => state.gl);
   const [, setTick] = useState(0);
 
@@ -99,7 +100,10 @@ function VideoManager({ allUrls, activeUrl, viewMode, children }) {
   // Řízení přehrávání podle aktivního videa:
   // V ORBIT i INSIDE režimu hraje POUZE video aktivního projektu.
   // Neaktivní videa se pozastaví na svém snímku a nezatěžují hardware dekodér ani sběrnici GPU.
+  // Přehrávání se spustí až po dokončení preloaderu (isPreloaded = true).
   useEffect(() => {
+    if (!isPreloaded) return;
+
     const resolvedActive = activeUrl ? resolveAssetUrl(activeUrl) : null;
 
     videoTextureCache.forEach((entry, url) => {
@@ -116,7 +120,7 @@ function VideoManager({ allUrls, activeUrl, viewMode, children }) {
         }
       }
     });
-  }, [viewMode, activeUrl]);
+  }, [viewMode, activeUrl, isPreloaded]);
 
   const textures = useMemo(() => {
     const texMap = {};
@@ -655,6 +659,7 @@ function App() {
   }, [pagesData]);
   
   const [closestIndex, setClosestIndex] = useState(0);
+  const [isPreloaded, setIsPreloaded] = useState(false);
   const currentRotRef = useRef(0);
   const [viewMode, setViewMode] = useState('ORBIT'); 
 
@@ -734,18 +739,17 @@ function App() {
       const activeRawUrl = pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl;
       const resolvedActive = activeRawUrl ? resolveAssetUrl(activeRawUrl) : null;
       videoTextureCache.forEach((entry, url) => {
-        if (entry.video && entry.isActive && entry.video.paused) {
-          if (viewMode === 'INSIDE') {
-            if (url === resolvedActive) {
-              entry.video.play().catch(() => {});
-            }
-          } else {
+        if (entry.video && entry.video.paused) {
+          if (url === resolvedActive) {
+            entry.isActive = true;
             entry.video.play().catch(() => {});
+          } else {
+            entry.isActive = false;
           }
         }
       });
     }
-  }, [isSuspended, viewMode, closestIndex, pagesData]);
+  }, [isSuspended, closestIndex, pagesData]);
 
   const [{ rotationY }, api] = useSpring(() => ({
     rotationY: 0,
@@ -848,6 +852,7 @@ function App() {
             allUrls={allVideoUrls}
             activeUrl={pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl}
             viewMode={viewMode}
+            isPreloaded={isPreloaded}
           >
             {(textures) => {
               const activeRawUrl = pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl;
@@ -975,6 +980,11 @@ function App() {
           </div>
         )}
       </div>
+
+      <Preloader 
+        activeVideoUrl={pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl} 
+        onLoaded={() => setIsPreloaded(true)} 
+      />
     </div>
   );
 }
