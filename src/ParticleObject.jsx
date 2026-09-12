@@ -833,7 +833,8 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
         z = r * Math.cos(phi);
       }
 
-      const baseSize = settings.baseSize ?? 0.1;
+      const sizeMult = settings.sizeMultiplier ?? 1.0;
+      const baseSize = (settings.baseSize ?? 0.1) * sizeMult;
       const sizeRandomness = settings.sizeRandomness ?? 0.5;
 
       const isLarge = Math.random() > 0.95;
@@ -858,7 +859,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
       data.push({ x, y, z, scale, color, speed, offset });
     }
     return data;
-  }, [count, radius, shape, colors, settings.baseSize, settings.sizeRandomness, settings.colorMode, settings.baseColor]);
+  }, [count, radius, shape, colors, settings.baseSize, settings.sizeRandomness, settings.colorMode, settings.baseColor, settings.sizeMultiplier]);
 
   const compute = useGPGPU(count, particlesData, gl);
 
@@ -986,7 +987,8 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
         z *= radiusScale;
       }
 
-      const baseSize = settings.baseSize ?? 0.1;
+      const sizeMult = settings.sizeMultiplier ?? 1.0;
+      const baseSize = (settings.baseSize ?? 0.1) * sizeMult;
       const sizeRandomness = settings.sizeRandomness ?? 0.5;
 
       const isLarge = Math.random() > 0.95;
@@ -1002,7 +1004,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
       data.push({ x, y, z, scale, color, speed, offset });
     }
     return data;
-  }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor]);
+  }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier]);
 
   const compute = useGPGPU(count, particlesData, gl);
 
@@ -1123,7 +1125,8 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
         }
       }
 
-      const baseSize = settings.baseSize ?? 0.1;
+      const sizeMult = settings.sizeMultiplier ?? 1.0;
+      const baseSize = (settings.baseSize ?? 0.1) * sizeMult;
       const sizeRandomness = settings.sizeRandomness ?? 0.5;
 
       const isLarge = Math.random() > 0.95;
@@ -1139,7 +1142,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
       data.push({ x, y, z, scale, color, speed, offset });
     }
     return data;
-  }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor]);
+  }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier]);
 
   const compute = useGPGPU(count, particlesData, gl);
 

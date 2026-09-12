@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import './Editor.css';
 
-const DragNumberInput = ({ value, onChange, step = 1, min, max }) => {
+const DragNumberInput = ({ value, onChange, step = 1, min, max, compact = false }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [localVal, setLocalVal] = React.useState(value);
   const isDragging = React.useRef(false);
@@ -70,21 +70,23 @@ const DragNumberInput = ({ value, onChange, step = 1, min, max }) => {
         onChange={e => setLocalVal(e.target.value)}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        className="blender-input editing"
+        className={`blender-input editing ${compact ? 'compact' : ''}`}
+        style={compact ? { height: '24px', padding: '2px 4px', fontSize: '0.78rem', width: '56px' } : undefined}
       />
     );
   }
 
   return (
     <div 
-      className="blender-input drag-mode"
+      className={`blender-input drag-mode ${compact ? 'compact' : ''}`}
+      style={compact ? { height: '24px', padding: '0 4px', fontSize: '0.78rem', width: '56px' } : undefined}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
-      <span className="b-arrow">‹</span>
-      <span className="b-value">{localVal}</span>
-      <span className="b-arrow">›</span>
+      <span className="b-arrow" style={compact ? { fontSize: '0.85rem' } : undefined}>‹</span>
+      <span className="b-value" style={compact ? { fontSize: '0.78rem' } : undefined}>{localVal}</span>
+      <span className="b-arrow" style={compact ? { fontSize: '0.85rem' } : undefined}>›</span>
     </div>
   );
 };
@@ -128,9 +130,25 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, openSection
             {availableNodes.map(nodeName => {
               const isChecked = settings.selectedNodes ? settings.selectedNodes.includes(nodeName) : false;
               const isSolid = isSolidNode(nodeName);
+              const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
+                ? settings.nodeMultipliers[nodeName]
+                : 1;
+
               return (
-                <label key={nodeName} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: isSolid ? '#93c5fd' : '#6ee7b7', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: '4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div 
+                  key={nodeName} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    color: isSolid ? '#93c5fd' : '#6ee7b7', 
+                    background: 'rgba(255,255,255,0.03)', 
+                    padding: '4px 8px', 
+                    borderRadius: '4px',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0, flex: 1, minWidth: 0 }}>
                     <input 
                       type="checkbox" 
                       checked={isChecked}
@@ -144,20 +162,46 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, openSection
                         onUpdate('selectedNodes', current);
                       }} 
                     />
-                    <span>{nodeName}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nodeName}</span>
+                  </label>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                    {!isSolid && (
+                      <div 
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} 
+                        title="Násobič velikosti částic pro tento objekt"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Velikost:</span>
+                        <DragNumberInput 
+                          compact={true}
+                          step={0.1} 
+                          min={0.01} 
+                          max={20} 
+                          value={multiplier} 
+                          onChange={val => {
+                            const current = { ...(settings.nodeMultipliers || {}) };
+                            current[nodeName] = val;
+                            onUpdate('nodeMultipliers', current);
+                          }} 
+                        />
+                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>×</span>
+                      </div>
+                    )}
+
+                    <span style={{ 
+                      fontSize: '0.72rem', 
+                      padding: '2px 6px', 
+                      borderRadius: '3px', 
+                      fontWeight: 'bold',
+                      background: isSolid ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                      color: isSolid ? '#60a5fa' : '#34d399',
+                      border: `1px solid ${isSolid ? 'rgba(59, 130, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`
+                    }}>
+                      {isSolid ? '🔷 SOLID (1)' : '🟢 ČÁSTICE (0)'}
+                    </span>
                   </div>
-                  <span style={{ 
-                    fontSize: '0.72rem', 
-                    padding: '2px 6px', 
-                    borderRadius: '3px', 
-                    fontWeight: 'bold',
-                    background: isSolid ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                    color: isSolid ? '#60a5fa' : '#34d399',
-                    border: `1px solid ${isSolid ? 'rgba(59, 130, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`
-                  }}>
-                    {isSolid ? '🔷 SOLID (1)' : '🟢 ČÁSTICE (0)'}
-                  </span>
-                </label>
+                </div>
               );
             })}
           </div>

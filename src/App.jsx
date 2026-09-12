@@ -234,6 +234,10 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
           return <SolidObject key={nodeName} node={node} />;
         }
 
+        const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
+          ? Number(settings.nodeMultipliers[nodeName])
+          : 1.0;
+
         return (
           <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
             <ParticleObject 
@@ -241,6 +245,7 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
                 ...settings,
                 shape: 'geometry', 
                 customGeometry: node.geometry,
+                sizeMultiplier: multiplier,
                 transform: {
                   position: new THREE.Vector3(0,0,0),
                   quaternion: new THREE.Quaternion(),
