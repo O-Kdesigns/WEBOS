@@ -13,6 +13,7 @@ import { MusicPlayer } from './MusicPlayer';
 import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
+import { CameraSpotLight } from './CameraSpotLight';
 import './App.css';
 
 const resolveAssetUrl = (url) => {
@@ -800,6 +801,7 @@ function App() {
             color="#ffffff" 
           />
           <ambientLight intensity={0.2} />
+          <CameraSpotLight appConfig={appConfig} />
           
           <RotationController rotationY={rotationY} pageDistance={pageDistance} totalPages={totalPages} setClosestIndex={setClosestIndex} />
           

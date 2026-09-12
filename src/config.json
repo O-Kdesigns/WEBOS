@@ -14,6 +14,16 @@
   },
   "hdriIntensity": 1,
   "environmentIntensity": 0.8,
+  "cameraSpotLight": {
+    "enabled": true,
+    "intensity": 25,
+    "color": "#ffffff",
+    "angle": 0.85,
+    "penumbra": 0.85,
+    "decay": 0,
+    "distance": 0,
+    "mouseOffset": 1.5
+  },
   "volumetricLight": {
     "enabled": true,
     "posX": 0,

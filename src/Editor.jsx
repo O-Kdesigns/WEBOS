@@ -304,7 +304,8 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     'part-render-global-cylinder': true,
     'global-volumetric-unified': true,
     'sub-volumetric-screen': true,
-    'sub-volumetric-depth': true
+    'sub-volumetric-depth': true,
+    'cam-spotlight': true
   });
   const [isTransparent, setIsTransparent] = useState(false);
   const [blenderNodes, setBlenderNodes] = useState([]);
@@ -394,6 +395,16 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
       ...appConfig,
       insideFog: {
         ...(appConfig.insideFog || {}),
+        [field]: value
+      }
+    });
+  };
+
+  const updateCameraSpotLight = (field, value) => {
+    setAppConfig({
+      ...appConfig,
+      cameraSpotLight: {
+        ...(appConfig.cameraSpotLight || {}),
         [field]: value
       }
     });
@@ -1328,6 +1339,79 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                     </div>
                   )}
                 </div>
+
+                {/* ČELNÍ SPOTLIGHT Z KAMERY (FOLLOW SPOT) */}
+                <div className="editor-subsection">
+                  <h5 
+                    className="editor-subsection-header"
+                    onClick={() => toggleSection('cam-spotlight')}
+                  >
+                    <span>🎯 Čelní reflektor z kamery (Follow Spot)</span>
+                    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: (appConfig.cameraSpotLight?.enabled ?? true) ? '#10b981' : '#6b7280' }}>
+                        {(appConfig.cameraSpotLight?.enabled ?? true) ? '● ON' : '○ OFF'}
+                      </span>
+                      <span>{openSections['cam-spotlight'] ? '▲' : '▼'}</span>
+                    </span>
+                  </h5>
+                  {openSections['cam-spotlight'] && (
+                    <div className="editor-subsection-content">
+                      <div className="checkbox-group" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input 
+                            type="checkbox" 
+                            checked={appConfig.cameraSpotLight?.enabled ?? true} 
+                            onChange={e => updateCameraSpotLight('enabled', e.target.checked)} 
+                          />
+                          Aktivovat čelní spot světlo
+                        </label>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Intenzita světla (Intensity):</label>
+                        <span className="input-desc">Jas čelního kuželu mířícího z kamery do středu</span>
+                        <DragNumberInput step={1} min={0} max={200} value={appConfig.cameraSpotLight?.intensity ?? 25} onChange={val => updateCameraSpotLight('intensity', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Barva světla (Color):</label>
+                        <span className="input-desc">Barevný tón osvětlení středu scény</span>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <input 
+                            type="color" 
+                            value={appConfig.cameraSpotLight?.color || '#ffffff'} 
+                            onChange={e => updateCameraSpotLight('color', e.target.value)} 
+                          />
+                          <span style={{ fontSize: '0.8rem', color: '#888' }}>{appConfig.cameraSpotLight?.color || '#ffffff'}</span>
+                        </div>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Šířka kuželu / Úhel (Angle):</label>
+                        <span className="input-desc">Rozptyl světelného kuželu (0.2 úzký bod, 0.85 střed, 1.5 široký reflektor)</span>
+                        <DragNumberInput step={0.05} min={0.1} max={1.55} value={appConfig.cameraSpotLight?.angle ?? 0.85} onChange={val => updateCameraSpotLight('angle', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Falloff okrajů / Měkkost (Penumbra):</label>
+                        <span className="input-desc">Měkkost přechodu od středu ke kraji kuželu (0 = ostrý kruh, 1 = plynulý měkký gradient od středu)</span>
+                        <DragNumberInput step={0.05} min={0} max={1} value={appConfig.cameraSpotLight?.penumbra ?? 0.85} onChange={val => updateCameraSpotLight('penumbra', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Posun myší (Mouse Offset):</label>
+                        <span className="input-desc">Mírné vychýlení světla od středu podle polohy myši (0 = pevně na střed, 1.5 = jemný náklon)</span>
+                        <DragNumberInput step={0.1} min={0} max={8} value={appConfig.cameraSpotLight?.mouseOffset ?? 1.5} onChange={val => updateCameraSpotLight('mouseOffset', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Útlum se vzdáleností (Decay):</label>
+                        <span className="input-desc">0 = rovnoměrné osvětlení nezávislé na vzdálenosti kamery, 1 - 2 = fyzikální útlum</span>
+                        <DragNumberInput step={0.1} min={0} max={2} value={appConfig.cameraSpotLight?.decay ?? 0} onChange={val => updateCameraSpotLight('decay', val)} />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -1495,11 +1579,6 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                         <label>Délka průniku (Laser Length):</label>
                         <span className="input-desc">Hloubka laserového paprsku do prostoru scény</span>
                         <DragNumberInput step={0.1} value={appConfig.particlePhysics?.laserLength ?? 5.0} onChange={val => updateParticlePhysics('laserLength', val)} />
-                      </div>
-                      <div className="input-group">
-                        <label>Intenzita světla myši (Laser Light):</label>
-                        <span className="input-desc">Síla bodového osvětlení pod kurzorem</span>
-                        <DragNumberInput step={1} value={appConfig.particlePhysics?.laserIntensity ?? 10.0} onChange={val => updateParticlePhysics('laserIntensity', val)} />
                       </div>
                     </div>
                   )}

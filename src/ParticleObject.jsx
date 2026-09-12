@@ -636,7 +636,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
 }
 
 // --- LOGIKA ---
-function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute) {
+function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
   const prevMouse = useRef(new THREE.Vector3(9999, 9999, 9999));
   const smoothedMouse = useRef(new THREE.Vector3(9999, 9999, 9999));
   const mouseVelocity = useMemo(() => new THREE.Vector3(), []);
@@ -725,17 +725,9 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
       velUniforms.uMousePos.value.copy(localCameraPos);
       velUniforms.uMouseDir.value.copy(rayDir);
       velUniforms.uMouseVel.value.copy(mouseVelocity);
-      
-      if (pointerLightRef.current) {
-        pointerLightRef.current.position.copy(smoothedMouse.current);
-        pointerLightRef.current.position.z += 1.0; 
-      }
     } else {
       velUniforms.uMousePos.value.set(9999,9999,9999);
       velUniforms.uMouseVel.value.set(0,0,0);
-      if (pointerLightRef.current) {
-        pointerLightRef.current.position.set(9999, 9999, 9999);
-      }
     }
     
     compute.gpuCompute.compute();
@@ -764,7 +756,6 @@ function useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, c
 
 function StandardParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
   const meshRef = useRef();
-  const pointerLightRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);
   const { gl } = useThree();
@@ -870,7 +861,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
   }, [count, particlesData, dummy, compute, computeUVs]);
 
-  useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute);
+  useParticleLogic(meshRef, settings, appConfig, posY, compute);
 
   return (
     <group position={[posX, 0, posZ]}>
@@ -878,10 +869,6 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
         <sphereGeometry args={[1, 16, 16]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
-      
-      <group ref={pointerLightRef}>
-        <pointLight distance={15} intensity={appConfig?.particlePhysics?.laserIntensity ?? 10} color="#60a5fa" />
-      </group>
     </group>
   );
 }
@@ -891,7 +878,6 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);
-  const pointerLightRef = useRef();
   const { gl } = useThree();
 
   const posX = settings.objectX ?? 0.0;
@@ -1019,7 +1005,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
   }, [count, particlesData, dummy, compute, computeUVs]);
 
-  useParticleLogic(meshRef, pointerLightRef, settings, appConfig, posY, compute);
+  useParticleLogic(meshRef, settings, appConfig, posY, compute);
 
   return (
     <group position={[posX, 0, posZ]}>
@@ -1027,10 +1013,6 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
         <sphereGeometry args={[1, 16, 16]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
-      
-      <group ref={pointerLightRef}>
-        <pointLight distance={15} intensity={appConfig?.particlePhysics?.laserIntensity ?? 10} color="#60a5fa" />
-      </group>
     </group>
   );
 }
@@ -1039,7 +1021,6 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);
-  const pointerLightRef = useRef();
   const { gl } = useThree();
 
   const posX = settings.objectX ?? 0.0;
@@ -1162,7 +1143,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
   }, [count, particlesData, dummy, compute, computeUVs]);
 
   const transform = settings.transform || { position: [posX, 0, posZ] };
-  useParticleLogic(meshRef, pointerLightRef, settings, appConfig, 0, compute);
+  useParticleLogic(meshRef, settings, appConfig, 0, compute);
 
   return (
     <group {...transform}>
@@ -1170,10 +1151,6 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
         <sphereGeometry args={[1, 16, 16]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
-      
-      <group ref={pointerLightRef}>
-        <pointLight distance={15} intensity={appConfig?.particlePhysics?.laserIntensity ?? 10} color="#60a5fa" />
-      </group>
     </group>
   );
 }
