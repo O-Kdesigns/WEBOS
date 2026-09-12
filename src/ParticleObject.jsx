@@ -526,6 +526,9 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       if (matRef.current.uniforms.uTime) {
         matRef.current.uniforms.uTime.value = time;
       }
+      if (matRef.current.uniforms.tVideo && videoTexture) {
+        matRef.current.uniforms.tVideo.value = videoTexture;
+      }
       if (rotationY && pageDistance) {
         const val = rotationY.get();
         const exactIdx = val / -pageDistance;
@@ -641,6 +644,15 @@ function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
   const smoothedMouse = useRef(new THREE.Vector3(9999, 9999, 9999));
   const mouseVelocity = useMemo(() => new THREE.Vector3(), []);
 
+  const planeNormal = useRef(new THREE.Vector3());
+  const planePoint = useRef(new THREE.Vector3());
+  const plane = useRef(new THREE.Plane());
+  const rawTarget = useRef(new THREE.Vector3());
+  const invMat = useRef(new THREE.Matrix4());
+  const worldCameraPos = useRef(new THREE.Vector3());
+  const localCameraPos = useRef(new THREE.Vector3());
+  const rayDir = useRef(new THREE.Vector3());
+
   useEffect(() => {
     const handleReset = () => {
       prevMouse.current.set(9999, 9999, 9999);
@@ -690,40 +702,37 @@ function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     velUniforms.uMouseForce.value = phys.mouseForce ?? 1.0;
 
     // Rovina pro raycaster musí VŽDY směřovat ke kameře, jinak se při rotaci rozbije interakce
-    const planeNormal = new THREE.Vector3();
-    state.camera.getWorldDirection(planeNormal);
-    planeNormal.negate(); // Normála směřuje proti pohledu kamery
+    state.camera.getWorldDirection(planeNormal.current);
+    planeNormal.current.negate(); // Normála směřuje proti pohledu kamery
     
-    const planePoint = new THREE.Vector3();
-    meshRef.current.getWorldPosition(planePoint); 
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, planePoint);
-    const rawTarget = state.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
+    meshRef.current.getWorldPosition(planePoint.current); 
+    plane.current.setFromNormalAndCoplanarPoint(planeNormal.current, planePoint.current);
+    const hasIntersection = state.raycaster.ray.intersectPlane(plane.current, rawTarget.current);
     
-    const invMat = new THREE.Matrix4().copy(meshRef.current.matrixWorld).invert();
+    invMat.current.copy(meshRef.current.matrixWorld).invert();
     
     // Získat SKUTEČNOU světovou pozici kamery, ne její lokální [0,0,0] z rigu!
-    const worldCameraPos = new THREE.Vector3();
-    state.camera.getWorldPosition(worldCameraPos);
-    const localCameraPos = worldCameraPos.applyMatrix4(invMat);
+    state.camera.getWorldPosition(worldCameraPos.current);
+    localCameraPos.current.copy(worldCameraPos.current).applyMatrix4(invMat.current);
 
-    if (rawTarget) {
-      meshRef.current.worldToLocal(rawTarget);
+    if (hasIntersection) {
+      meshRef.current.worldToLocal(rawTarget.current);
 
       if (smoothedMouse.current.x === 9999) {
-        smoothedMouse.current.copy(rawTarget);
-        prevMouse.current.copy(rawTarget);
+        smoothedMouse.current.copy(rawTarget.current);
+        prevMouse.current.copy(rawTarget.current);
       } else {
-        smoothedMouse.current.lerp(rawTarget, 0.4);
+        smoothedMouse.current.lerp(rawTarget.current, 0.4);
       }
 
       mouseVelocity.subVectors(smoothedMouse.current, prevMouse.current);
       mouseVelocity.clampLength(0, 2.0);
       prevMouse.current.copy(smoothedMouse.current);
 
-      const rayDir = new THREE.Vector3().subVectors(smoothedMouse.current, localCameraPos).normalize();
+      rayDir.current.subVectors(smoothedMouse.current, localCameraPos.current).normalize();
       
-      velUniforms.uMousePos.value.copy(localCameraPos);
-      velUniforms.uMouseDir.value.copy(rayDir);
+      velUniforms.uMousePos.value.copy(localCameraPos.current);
+      velUniforms.uMouseDir.value.copy(rayDir.current);
       velUniforms.uMouseVel.value.copy(mouseVelocity);
     } else {
       velUniforms.uMousePos.value.set(9999,9999,9999);

@@ -23,6 +23,14 @@ export function CameraSpotLight({ appConfig }) {
     }
   }, [targetObj, enabled]);
 
+  // Reusable pomocné objekty pro eliminaci garbage collection (žádný allocation lag v useFrame)
+  const camPos = useRef(new THREE.Vector3());
+  const camQuat = useRef(new THREE.Quaternion());
+  const forward = useRef(new THREE.Vector3());
+  const right = useRef(new THREE.Vector3());
+  const up = useRef(new THREE.Vector3());
+  const targetPos = useRef(new THREE.Vector3());
+
   useFrame((state, delta) => {
     if (!spotRef.current || !targetObj || !enabled) return;
 
@@ -46,29 +54,27 @@ export function CameraSpotLight({ appConfig }) {
       safeDelta
     );
 
-    const camPos = new THREE.Vector3();
-    const camQuat = new THREE.Quaternion();
-    camera.getWorldPosition(camPos);
-    camera.getWorldQuaternion(camQuat);
+    camera.getWorldPosition(camPos.current);
+    camera.getWorldQuaternion(camQuat.current);
 
     // Směrové vektory z orientace kamery
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camQuat);
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camQuat);
+    forward.current.set(0, 0, -1).applyQuaternion(camQuat.current);
+    right.current.set(1, 0, 0).applyQuaternion(camQuat.current);
+    up.current.set(0, 1, 0).applyQuaternion(camQuat.current);
 
     // Pozice světla: přesně na kameře (lehce předsazeno dopředu)
-    spotRef.current.position.copy(camPos).addScaledVector(forward, 0.1);
+    spotRef.current.position.copy(camPos.current).addScaledVector(forward.current, 0.1);
 
     // Cíl míří dopředu do středu zorného pole s mírným offsetem od myši
     const targetDist = 18.0;
-    const targetPos = camPos.clone()
-      .addScaledVector(forward, targetDist)
-      .addScaledVector(right, smoothPointer.current.x * mouseOffset)
-      .addScaledVector(up, smoothPointer.current.y * mouseOffset);
+    targetPos.current.copy(camPos.current)
+      .addScaledVector(forward.current, targetDist)
+      .addScaledVector(right.current, smoothPointer.current.x * mouseOffset)
+      .addScaledVector(up.current, smoothPointer.current.y * mouseOffset);
 
-    targetObj.position.copy(targetPos);
+    targetObj.position.copy(targetPos.current);
     targetObj.updateMatrixWorld();
-  }, 1);
+  });
 
   if (!enabled) return null;
 

@@ -14,6 +14,7 @@ import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
+import { CanvasDebugTracker, DebugMonitorHUD } from './DebugMonitor';
 import './App.css';
 
 const resolveAssetUrl = (url) => {
@@ -38,48 +39,34 @@ function ensureVideoEntry(url, gl) {
   video.loop = true;
   video.muted = true;
   video.playsInline = true;
-  video.preload = 'auto'; // Necháme prohlížeč přednačíst metadata
+  video.preload = 'auto';
   
   const maxAniso = gl.capabilities?.getMaxAnisotropy ? Math.min(gl.capabilities.getMaxAnisotropy(), 16) : 1;
 
+  // Jediná společná VideoTexture pro dané video (pro válec, desku i vnitřek)
   const texture = new THREE.VideoTexture(video);
   texture.colorSpace = gl.outputColorSpace;
   texture.generateMipmaps = false;
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.anisotropy = maxAniso;
-  
-  const deskTexture = new THREE.VideoTexture(video);
-  deskTexture.colorSpace = gl.outputColorSpace;
-  deskTexture.center.set(0.5, 0.5);
-  deskTexture.rotation = Math.PI;
-  deskTexture.generateMipmaps = false;
-  deskTexture.minFilter = THREE.LinearFilter;
-  deskTexture.magFilter = THREE.LinearFilter;
-  deskTexture.anisotropy = maxAniso;
 
-  const entry = { video, texture, deskTexture, isActive: false, warmedUp: false };
+  const entry = { video, texture, isActive: false };
   videoTextureCache.set(url, entry);
-  
-  // Krátké přehrání pro zahřátí dekodéru
-  video.addEventListener('canplay', () => {
-    if (!entry.warmedUp) {
-      entry.warmedUp = true;
-      if (!entry.isActive) {
-        video.pause();
-        video.currentTime = 0; // Připravíme ho hned na začátek
-      }
+
+  // Připravíme první snímek jako poster pro neaktivní desky
+  video.addEventListener('loadeddata', () => {
+    if (!entry.isActive && video.currentTime < 0.05) {
+      video.currentTime = 0.05;
     }
   }, { once: true });
-
-  video.play().catch(() => {});
 
   return entry;
 }
 
-function VideoManager({ allUrls, children }) {
+function VideoManager({ allUrls, activeUrl, viewMode, children }) {
   const gl = useThree(state => state.gl);
-  const [textures, setTextures] = useState({});
+  const [, setTick] = useState(0);
 
   const urlsKey = allUrls.filter(Boolean).join('|');
   useMemo(() => {
@@ -90,27 +77,56 @@ function VideoManager({ allUrls, children }) {
     });
   }, [urlsKey, gl]);
 
+  // Posluchače pro aktualizaci textur, když se video načte nebo rozeběhne
   useEffect(() => {
-    const updateTextures = () => {
-      const newTex = {};
-      videoTextureCache.forEach((entry, url) => {
-        if (entry.video.readyState >= 2) {
-          newTex[url] = entry.texture;
-        }
+    const triggerUpdate = () => setTick(t => t + 1);
+
+    videoTextureCache.forEach((entry) => {
+      entry.video.addEventListener('loadeddata', triggerUpdate);
+      entry.video.addEventListener('canplay', triggerUpdate);
+      entry.video.addEventListener('playing', triggerUpdate);
+    });
+
+    return () => {
+      videoTextureCache.forEach((entry) => {
+        entry.video.removeEventListener('loadeddata', triggerUpdate);
+        entry.video.removeEventListener('canplay', triggerUpdate);
+        entry.video.removeEventListener('playing', triggerUpdate);
       });
-      setTextures(newTex);
     };
+  }, [urlsKey]);
+
+  // Řízení přehrávání podle aktivního videa:
+  // V ORBIT i INSIDE režimu hraje POUZE video aktivního projektu.
+  // Neaktivní videa se pozastaví na svém snímku a nezatěžují hardware dekodér ani sběrnici GPU.
+  useEffect(() => {
+    const resolvedActive = activeUrl ? resolveAssetUrl(activeUrl) : null;
 
     videoTextureCache.forEach((entry, url) => {
-      entry.isActive = true;
-      entry.video.play().catch(() => {});
-      if (entry.video.readyState >= 2) {
-        updateTextures();
+      const isCurrentActive = url === resolvedActive;
+      entry.isActive = isCurrentActive;
+
+      if (isCurrentActive) {
+        if (entry.video.paused) {
+          entry.video.play().catch(() => {});
+        }
       } else {
-        entry.video.addEventListener('loadeddata', updateTextures, { once: true });
+        if (!entry.video.paused) {
+          entry.video.pause();
+        }
       }
     });
-  }, [urlsKey]);
+  }, [viewMode, activeUrl]);
+
+  const textures = useMemo(() => {
+    const texMap = {};
+    videoTextureCache.forEach((entry, url) => {
+      if (entry.video.readyState >= 2) {
+        texMap[url] = entry.texture;
+      }
+    });
+    return texMap;
+  }, [urlsKey, viewMode, activeUrl]);
 
   return <>{children(textures)}</>;
 }
@@ -418,6 +434,20 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
     if (glassKey) baseDeskNode = nodes[glassKey];
   }
 
+  // Rotace UV o 180° přímo na geometrii - eliminuje potřebu duplicitní VideoTexture pro desky
+  const deskGeometry = useMemo(() => {
+    if (!baseDeskNode?.geometry) return null;
+    const geom = baseDeskNode.geometry.clone();
+    const uv = geom.attributes.uv;
+    if (uv) {
+      for (let i = 0; i < uv.count; i++) {
+        uv.setXY(i, 1 - uv.getX(i), 1 - uv.getY(i));
+      }
+      uv.needsUpdate = true;
+    }
+    return geom;
+  }, [baseDeskNode]);
+
   return (
     <a.group visible={fade.to(v => v > 0)}>
       {/* Skleněné desky pro projekty */}
@@ -429,7 +459,8 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
         
         const rawUrl = page.videoUrl || page.particlesSettings?.videoUrl;
         const resolvedUrl = rawUrl ? resolveAssetUrl(rawUrl) : null;
-        const currentDeskTex = resolvedUrl ? (videoTextureCache.get(resolvedUrl)?.deskTexture || textures[resolvedUrl]) : null;
+        // Společný zdroj textury pro vnitřní i vnější režim
+        const currentDeskTex = resolvedUrl ? (videoTextureCache.get(resolvedUrl)?.texture || textures[resolvedUrl]) : null;
 
         return (
           <group 
@@ -445,8 +476,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
               position={deskPos}
               quaternion={deskRot}
               scale={deskScale}
-              geometry={baseDeskNode.geometry} renderOrder={2} 
-              
+              geometry={deskGeometry || baseDeskNode.geometry} renderOrder={2} 
             >
               {currentDeskTex ? (
                 <a.meshBasicMaterial 
@@ -455,7 +485,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
                   transparent={true} 
                   depthWrite={true}
                   opacity={fade} 
-                  side={THREE.BackSide} 
+                  side={THREE.DoubleSide} 
                  />
               ) : (
                 <a.meshPhysicalMaterial 
@@ -701,13 +731,21 @@ function App() {
         }
       });
     } else {
-      videoTextureCache.forEach(entry => {
+      const activeRawUrl = pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl;
+      const resolvedActive = activeRawUrl ? resolveAssetUrl(activeRawUrl) : null;
+      videoTextureCache.forEach((entry, url) => {
         if (entry.video && entry.isActive && entry.video.paused) {
-          entry.video.play().catch(() => {});
+          if (viewMode === 'INSIDE') {
+            if (url === resolvedActive) {
+              entry.video.play().catch(() => {});
+            }
+          } else {
+            entry.video.play().catch(() => {});
+          }
         }
       });
     }
-  }, [isSuspended]);
+  }, [isSuspended, viewMode, closestIndex, pagesData]);
 
   const [{ rotationY }, api] = useSpring(() => ({
     rotationY: 0,
@@ -789,6 +827,7 @@ function App() {
           gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
         >
           <RenderRestorationHandler isSuspended={isSuspended} />
+          <CanvasDebugTracker />
           <DarkStudioBackground appConfig={appConfig} />
           <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
           <CenterLight appConfig={appConfig} />
@@ -805,10 +844,15 @@ function App() {
           
           <RotationController rotationY={rotationY} pageDistance={pageDistance} totalPages={totalPages} setClosestIndex={setClosestIndex} />
           
-          <VideoManager allUrls={allVideoUrls}>
+          <VideoManager 
+            allUrls={allVideoUrls}
+            activeUrl={pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl}
+            viewMode={viewMode}
+          >
             {(textures) => {
               const activeRawUrl = pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl;
-              const activeVideoTex = activeRawUrl ? textures[resolveAssetUrl(activeRawUrl)] : null;
+              const resolvedActiveUrl = activeRawUrl ? resolveAssetUrl(activeRawUrl) : '';
+              const activeVideoTex = resolvedActiveUrl ? (videoTextureCache.get(resolvedActiveUrl)?.texture || textures[resolvedActiveUrl] || null) : null;
               
               return (
               <>
@@ -894,6 +938,13 @@ function App() {
         tracks={appConfig.musicTracks} 
         volume={appConfig.musicVolume ?? 0.4} 
         isSuspended={isSuspended && !!appConfig.powerSaving?.pauseAudioOnBlur}
+      />
+
+      <DebugMonitorHUD 
+        videoTextureCache={videoTextureCache}
+        viewMode={viewMode}
+        activeUrl={pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl}
+        activeTitle={pagesData[closestIndex]?.title}
       />
 
       {isEditorOpen && <Editor 
