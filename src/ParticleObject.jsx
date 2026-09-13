@@ -927,7 +927,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
 
   return (
     <group position={[posX, 0, posZ]}>
-      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
+      <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
         <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
@@ -1073,7 +1073,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
 
   return (
     <group position={[posX, 0, posZ]}>
-      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
+      <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
         <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
@@ -1213,7 +1213,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
 
   return (
     <group {...transform}>
-      <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
+      <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
         <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>

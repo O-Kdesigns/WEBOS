@@ -592,6 +592,12 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
   const transitionRef = useRef(viewMode === 'INSIDE' ? 1.0 : 0.0);
   // Plynule vyhlazená pozice myši
   const smoothMouseRef = useRef(new THREE.Vector2(0.5, 0.5));
+  // Předalokované vektory pro nulové alokace v useFrame (Pravidlo #3 GEMINI.md)
+  const lightPosRef = useRef(new THREE.Vector3());
+  const camWorldPosRef = useRef(new THREE.Vector3());
+  const projRef = useRef(new THREE.Vector3());
+  const camDirRef = useRef(new THREE.Vector3());
+  const toLightRef = useRef(new THREE.Vector3());
 
   useFrame((state, delta) => {
     if (!enabled) {
@@ -623,30 +629,32 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uCameraNear.value = camera.near;
     mat.uniforms.uCameraFar.value = camera.far;
 
-    // INSIDE parametry z konfigurace (včetně master intenzity mlhy)
-    const masterMult = Math.max(0, (fog.masterFogIntensity ?? 100) / 100);
-    mat.uniforms.uFogMasterIntensity.value = masterMult;
+    // Dynamická aktualizace parametrů z config.json
+    const vl = appConfig?.volumetricLight || {};
+    const fog = appConfig?.insideFog || {};
 
-    if (fog.fogColor) {
-      mat.uniforms.uFogColor.value.set(fog.fogColor);
-    }
-    mat.uniforms.uFogDensity.value = fog.fogDensity ?? 0.65;
-    mat.uniforms.uFogNear.value = fog.fogNear ?? 1.0;
-    mat.uniforms.uFogFar.value = fog.fogFar ?? 14.0;
-    mat.uniforms.uFogCurve.value = fog.fogCurve ?? 2.2;
-    mat.uniforms.uShadowStrength.value = fog.shadowStrength ?? 0.85;
-    mat.uniforms.uShadowThreshold.value = fog.shadowThreshold ?? 0.35;
-    mat.uniforms.uSmokeStrength.value = fog.smokeStrength ?? 0.25;
-    mat.uniforms.uSmokeSpeed.value = fog.smokeSpeed ?? 0.4;
-    mat.uniforms.uSmokeScale.value = fog.smokeScale ?? 4.5;
-    mat.uniforms.uVignetteStrength.value = (fog.vignetteStrength ?? 0.35) * masterMult;
+    // Master Fog Intensity přepočtená na násobič 0.0 až 2.0 (slider 0 až 100)
+    const masterMult = (fog.masterFogIntensity ?? 70) / 70.0;
+
+    mat.uniforms.uFogMasterIntensity.value = masterMult;
+    mat.uniforms.uFogDensity.value = (fog.fogDensity ?? 1.5) * masterMult;
+    mat.uniforms.uFogNear.value = fog.fogNear ?? 0.7;
+    mat.uniforms.uFogFar.value = fog.fogFar ?? 4.5;
+    mat.uniforms.uFogCurve.value = fog.fogCurve ?? 1.2;
+    mat.uniforms.uShadowStrength.value = fog.shadowStrength ?? 1.0;
+    mat.uniforms.uShadowThreshold.value = fog.shadowThreshold ?? 1.0;
+    mat.uniforms.uSmokeStrength.value = fog.smokeStrength ?? 0.8;
+    mat.uniforms.uSmokeSpeed.value = fog.smokeSpeed ?? 0.25;
+    mat.uniforms.uSmokeScale.value = fog.smokeScale ?? 3.5;
+    mat.uniforms.uSmokeAngle.value = (fog.smokeAngle ?? 25.0) * (Math.PI / 180.0);
+    mat.uniforms.uVignetteStrength.value = (fog.vignetteStrength ?? 0.6) * masterMult;
     mat.uniforms.uVignetteRoundness.value = fog.vignetteRoundness ?? 1.0;
     mat.uniforms.uVignetteInvert.value = fog.vignetteInvert ? 1.0 : 0.0;
-    mat.uniforms.uVignetteOrganic.value = fog.vignetteOrganic ?? 0.1;
-    mat.uniforms.uSmokeAngle.value = fog.smokeAngle ?? 135.0;
-    mat.uniforms.uEdgeFade.value = fog.edgeFade ?? 0.12;
-    mat.uniforms.uBaseFogBrightness.value = (fog.baseFogBrightness ?? 0.6) * masterMult;
-    mat.uniforms.uForegroundFog.value = (fog.foregroundFog ?? 0.35) * masterMult;
+    mat.uniforms.uVignetteOrganic.value = fog.vignetteOrganic ?? 0.15;
+    mat.uniforms.uEdgeFade.value = fog.edgeFade ?? 0.35;
+    mat.uniforms.uBaseFogBrightness.value = fog.baseFogBrightness ?? 1.0;
+    mat.uniforms.uForegroundFog.value = (fog.foregroundFog ?? 0.8) * masterMult;
+
     mat.uniforms.uMouseLightExposure.value = (fog.mouseLightExposure ?? 1.2) * masterMult;
     mat.uniforms.uMouseLightRadius.value = fog.mouseLightRadius ?? 1.3;
     mat.uniforms.uEnableMouseFog.value = (fog.enableMouseFog ?? true) ? 1.0 : 0.0;
@@ -655,7 +663,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uEnableVignette.value = (fog.enableVignette ?? true) ? 1.0 : 0.0;
     mat.uniforms.uEnableSmoke.value = (fog.enableSmoke ?? true) ? 1.0 : 0.0;
 
-    // Volumetrický průhled videa v prostoru skrz objekty
+    if (fog.fogColor) {
+      mat.uniforms.uFogColor.value.set(fog.fogColor);
+    }
+
+    // Volumetrický video průhled v prostoru (Volumetric Depth & Ghosting)
     const vDepth = appConfig?.volumetricDepth || {};
     const vVid = appConfig?.volumetricVideo || {};
     mat.uniforms.tVolumetricVideo.value = videoTexture || dummyTexture;
@@ -670,31 +682,29 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uCenterRayLength.value = vDepth.rayLength ?? 0.45;
     mat.uniforms.uCenterRayDensity.value = vDepth.rayDensity ?? 1.0;
 
-    // ORBIT parametry (středové God Rays)
-    const lightPos = new THREE.Vector3(
+    // ORBIT parametry (středové God Rays) - bez alokace nových objektů
+    lightPosRef.current.set(
       vl.posX ?? 0,
       vl.posY ?? 0,
       vl.posZ ?? 0
     );
 
     camera.updateMatrixWorld();
-    const camWorldPos = new THREE.Vector3();
-    camera.getWorldPosition(camWorldPos);
+    camera.getWorldPosition(camWorldPosRef.current);
 
     // Screen-space projection
-    const proj = lightPos.clone().project(camera);
-    const screenX = (proj.x + 1.0) * 0.5;
-    const screenY = (proj.y + 1.0) * 0.5;
+    projRef.current.copy(lightPosRef.current).project(camera);
+    const screenX = (projRef.current.x + 1.0) * 0.5;
+    const screenY = (projRef.current.y + 1.0) * 0.5;
 
     // Visibility test
-    const camDir = new THREE.Vector3();
-    camera.getWorldDirection(camDir);
-    const toLight = lightPos.clone().sub(camWorldPos);
-    const dist = toLight.length();
+    camera.getWorldDirection(camDirRef.current);
+    toLightRef.current.copy(lightPosRef.current).sub(camWorldPosRef.current);
+    const dist = toLightRef.current.length();
     let visibility = 1.0;
     if (dist > 0.001) {
-      toLight.normalize();
-      const dot = camDir.dot(toLight);
+      toLightRef.current.normalize();
+      const dot = camDirRef.current.dot(toLightRef.current);
       visibility = dot > 0.0 ? Math.min(dot * 2.5, 1.0) : 0.0;
     }
 

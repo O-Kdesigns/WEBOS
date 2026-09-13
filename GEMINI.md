@@ -66,4 +66,13 @@ Tento soubor definuje kritická pravidla a osvědčené postupy pro zachování 
 * **Princip:** Každá instance `GPUComputationRenderer` musí mít v `useEffect` cleanup funkci, která při unmountu nebo změně parametrů explicitně zavolá `.dispose()` na všechny render targety (`variable.renderTargets`), textury (`pos0`, `vel0`, `basePos`), materiály i samotný `gpuCompute`.
 * **Důvod:** Bez explicitní likvidace zůstávají staré FBO a textury trvale alokované ve VRAM, což při rotaci karuselu vedlo k nekonečnému hromadění textur (144 -> 288 -> ...), saturaci sběrnice a pádu video dekodéru.
 
+---
+
+## 10. Povinné trasování destruktivních změn a Git commit protokol
+* **Princip:** Před jakoukoliv potenciálně destruktivní změnou, refaktorem, experimentem či mazáním kódu/funkcí musí být stav jasně zdokumentován a commitnut do Gitu.
+* **Protokol a struktura popisu (pro AI agenta i uživatele):**
+  1. **Záměr změny (Co a proč):** V commitu musí být jasně popsáno, co přesně chceme udělat, jaká je hypotéza (vliv na FPS, vizuál) a které komponenty/shadery se mění.
+  2. **Zpětná vazba uživatele (Feedback Loop):** Jakmile uživatel změnu otestuje v prohlížeči a poskytne zpětnou vazbu (např. naměřené FPS, stabilita, vizuální postřehy), doplní se tato odezva přímo do popisu/historie commitu (nebo souvisejícího commitu).
+* **Důvod:** Zamezí se ztrátě přehledu o tom, co fungovalo a co ne, a zajistí se, že se k jakémukoliv stabilnímu stavu lze vždy okamžitě a bezpečně vrátit bez nechtěného přenášení skrytých regresí.
+
 

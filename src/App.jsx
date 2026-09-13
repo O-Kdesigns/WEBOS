@@ -194,24 +194,79 @@ function SolidObject({ node }) {
     cl.position.set(0, 0, 0);
     cl.quaternion.set(0, 0, 0, 1);
     cl.scale.set(1, 1, 1);
-    cl.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
     return cl;
   }, [node]);
 
-  if (!node || !cloned) return null;
+  const transforms = useMemo(() => {
+    if (!node) return null;
+    const wp = new THREE.Vector3();
+    const wq = new THREE.Quaternion();
+    const ws = new THREE.Vector3();
+    node.getWorldPosition(wp);
+    node.getWorldQuaternion(wq);
+    node.getWorldScale(ws);
+    return { worldPos: wp, worldQuat: wq, worldScale: ws };
+  }, [node]);
 
-  const worldPos = node.getWorldPosition(new THREE.Vector3());
-  const worldQuat = node.getWorldQuaternion(new THREE.Quaternion());
-  const worldScale = node.getWorldScale(new THREE.Vector3());
+  if (!node || !cloned || !transforms) return null;
 
   return (
-    <group position={worldPos} quaternion={worldQuat} scale={worldScale}>
+    <group position={transforms.worldPos} quaternion={transforms.worldQuat} scale={transforms.worldScale}>
       <primitive object={cloned} />
+    </group>
+  );
+}
+
+function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance }) {
+  const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
+    ? Number(settings.nodeMultipliers[nodeName])
+    : 1.0;
+
+  const mouseMultiplier = (settings.nodeMouseMultipliers && settings.nodeMouseMultipliers[nodeName] !== undefined)
+    ? Number(settings.nodeMouseMultipliers[nodeName])
+    : 1.0;
+
+  const transforms = useMemo(() => {
+    if (!node) return null;
+    const wp = new THREE.Vector3();
+    const wq = new THREE.Quaternion();
+    const ws = new THREE.Vector3();
+    node.getWorldPosition(wp);
+    node.getWorldQuaternion(wq);
+    node.getWorldScale(ws);
+    return {
+      worldPos: wp,
+      worldQuat: wq,
+      scale: ws
+    };
+  }, [node]);
+
+  const particleSettings = useMemo(() => ({
+    ...settings,
+    shape: 'geometry',
+    customGeometry: node.geometry,
+    sizeMultiplier: multiplier,
+    mouseMultiplier: mouseMultiplier,
+    transform: {
+      position: [0, 0, 0],
+      quaternion: [0, 0, 0, 1],
+      scale: transforms ? transforms.scale : [1, 1, 1]
+    }
+  }), [settings, node.geometry, multiplier, mouseMultiplier, transforms]);
+
+  if (!transforms) return null;
+
+  return (
+    <group position={transforms.worldPos} quaternion={transforms.worldQuat}>
+      <ParticleObject 
+        settings={particleSettings}
+        appConfig={appConfig} 
+        videoTexture={videoTexture} 
+        opacity={1}
+        renderOrder={3}
+        rotationY={rotationY}
+        pageDistance={pageDistance}
+      />
     </group>
   );
 }
@@ -234,37 +289,17 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
           return <SolidObject key={nodeName} node={node} />;
         }
 
-        const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
-          ? Number(settings.nodeMultipliers[nodeName])
-          : 1.0;
-
-        const mouseMultiplier = (settings.nodeMouseMultipliers && settings.nodeMouseMultipliers[nodeName] !== undefined)
-          ? Number(settings.nodeMouseMultipliers[nodeName])
-          : 1.0;
-
         return (
-          <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
-            <ParticleObject 
-              settings={{ 
-                ...settings,
-                shape: 'geometry', 
-                customGeometry: node.geometry,
-                sizeMultiplier: multiplier,
-                mouseMultiplier: mouseMultiplier,
-                transform: {
-                  position: new THREE.Vector3(0,0,0),
-                  quaternion: new THREE.Quaternion(),
-                  scale: node.getWorldScale(new THREE.Vector3())
-                }
-              }}
-              appConfig={appConfig} 
-              videoTexture={videoTexture} 
-              opacity={1}
-              renderOrder={3}
-              rotationY={rotationY}
-              pageDistance={pageDistance}
-            />
-          </group>
+          <ProjectParticleNode
+            key={nodeName}
+            node={node}
+            nodeName={nodeName}
+            settings={settings}
+            appConfig={appConfig}
+            videoTexture={videoTexture}
+            rotationY={rotationY}
+            pageDistance={pageDistance}
+          />
         );
       }) : (
         <group>
@@ -848,7 +883,6 @@ function App() {
           <spotLight 
             position={[0, 15, 0]} 
             intensity={(appConfig.hdriIntensity ?? 1) * 3} 
-            castShadow 
             penumbra={1} 
             angle={0.8} 
             color="#ffffff" 
