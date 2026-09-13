@@ -58,9 +58,9 @@
           "Particles_Xelith_Obsahsedmy0",
           "Particles_Xelith_Obsahsedmy1",
           "Particles_Xelith_Obsahosmy1",
+          "Particles_Xelith_Obsahtreti1",
           "Particles_Xelith_Backround",
-          "Particles_Xelith_Obsahosmy0",
-          "Particles_Xelith_Obsahtreti1"
+          "Particles_Xelith_Obsahosmy0"
         ],
         "nodeMultipliers": {
           "Particles_Xelith_Backround": 1,

@@ -790,6 +790,27 @@ function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
   });
 }
 
+// --- ADAPTIVNÍ SEGMENTACE GEOMETRIE PODLE POČTU ČÁSTIC ---
+export function getAdaptiveSphereSegments(count, settings = {}) {
+  if (settings.sphereSegments && Array.isArray(settings.sphereSegments)) {
+    return settings.sphereSegments;
+  }
+  // 1. Do 20 000 částic (např. pozadí ~15k) -> 8x8 (112 trojúhelníků, plná kvalita pro velké/viditelné částice)
+  if (!count || count <= 20000) {
+    return [8, 8];
+  }
+  // 2. 20 000 - 60 000 částic -> 6x5 (48 trojúhelníků, 57% úspora)
+  if (count <= 60000) {
+    return [6, 5];
+  }
+  // 3. 60 000 - 120 000 částic -> 5x4 (30 trojúhelníků, 73% úspora)
+  if (count <= 120000) {
+    return [5, 4];
+  }
+  // 4. Nad 120 000 částic (např. obsah Xelithu 167k a 203k) -> 4x3 (16 trojúhelníků, 86% úspora)
+  return [4, 3];
+}
+
 function StandardParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -797,6 +818,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
   const { gl } = useThree();
 
   const count = settings.count ?? 2000;
+  const [segW, segH] = useMemo(() => getAdaptiveSphereSegments(count, settings), [count, settings]);
   const radius = settings.radius ?? 2.0;
   const shape = settings.shape || 'sphere';
   const posX = settings.objectX ?? 0.0;
@@ -828,6 +850,7 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
         const theta = 2 * Math.PI * u;
         const phi = Math.acos(2 * v - 1);
         const r = radius * Math.pow(Math.random(), 0.7);
+
         x = r * Math.sin(phi) * Math.cos(theta);
         y = r * Math.sin(phi) * Math.sin(theta);
         z = r * Math.cos(phi);
@@ -896,14 +919,14 @@ function StandardParticleObject({ settings, appConfig, videoTexture, opacity, re
     meshRef.current.frustumCulled = false;
     
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
-  }, [count, particlesData, dummy, compute, computeUVs]);
+  }, [count, particlesData, dummy, compute, computeUVs, segW, segH]);
 
   useParticleLogic(meshRef, settings, appConfig, posY, compute);
 
   return (
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
-        <sphereGeometry args={[1, 8, 8]} />
+        <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
     </group>
@@ -961,6 +984,7 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
   const radiusScale = (settings.radius ?? 2.0) / 2.0;
   const densityPercent = settings.densityPercent ?? 100;
   const count = vertices.length > 0 ? Math.max(1, Math.floor(vertices.length * (densityPercent / 100))) : 0;
+  const [segW, segH] = useMemo(() => getAdaptiveSphereSegments(count, settings), [count, settings]);
 
   const particlesData = useMemo(() => {
     const data = [];
@@ -1041,14 +1065,14 @@ function CustomParticleObject({ settings, appConfig, videoTexture, opacity, rend
     meshRef.current.frustumCulled = false;
     
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
-  }, [count, particlesData, dummy, compute, computeUVs]);
+  }, [count, particlesData, dummy, compute, computeUVs, segW, segH]);
 
   useParticleLogic(meshRef, settings, appConfig, posY, compute);
 
   return (
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
-        <sphereGeometry args={[1, 8, 8]} />
+        <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
     </group>
@@ -1103,6 +1127,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
   const radiusScale = settings.radius ?? 1.0;
   const densityPercent = settings.densityPercent ?? 100;
   const count = vertices.length > 0 ? Math.max(1, Math.floor(vertices.length * (densityPercent / 100))) : 0;
+  const [segW, segH] = useMemo(() => getAdaptiveSphereSegments(count, settings), [count, settings]);
 
   const particlesData = useMemo(() => {
     const data = [];
@@ -1179,7 +1204,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
     meshRef.current.frustumCulled = false;
     
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
-  }, [count, particlesData, dummy, compute, computeUVs]);
+  }, [count, particlesData, dummy, compute, computeUVs, segW, segH]);
 
   const transform = settings.transform || { position: [posX, 0, posZ] };
   useParticleLogic(meshRef, settings, appConfig, 0, compute);
@@ -1187,7 +1212,7 @@ function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, re
   return (
     <group {...transform}>
       <instancedMesh ref={meshRef} args={[null, null, count]} castShadow receiveShadow renderOrder={renderOrder}>
-        <sphereGeometry args={[1, 8, 8]} />
+        <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
         <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
     </group>
