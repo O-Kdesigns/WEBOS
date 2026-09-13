@@ -66,8 +66,8 @@ const BackgroundVideoShader = {
       
       // Hladký pokles k nule na okrajích
       float softness = clamp(uVignetteSoftness, 0.05, 0.9);
-      float vx = smoothstep(1.0, 1.0 - softness, d.x);
-      float vy = smoothstep(1.0, 1.0 - softness, d.y);
+      float vx = 1.0 - smoothstep(1.0 - softness, 1.0, d.x);
+      float vy = 1.0 - smoothstep(1.0 - softness, 1.0, d.y);
       float vignette = vx * vy;
 
       // Hladká nelineární křivka pro zcela přirozené rozplynutí do temnoty
@@ -118,7 +118,8 @@ export function VolumetricVideoBackground({
       fragmentShader: BackgroundVideoShader.fragmentShader,
       transparent: true,
       depthWrite: false,
-      blending: THREE.NormalBlending
+      blending: THREE.NormalBlending,
+      side: THREE.DoubleSide
     });
   }, []);
 

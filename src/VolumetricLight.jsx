@@ -633,11 +633,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     const vl = appConfig?.volumetricLight || {};
     const fog = appConfig?.insideFog || {};
 
-    // Master Fog Intensity přepočtená na násobič 0.0 až 2.0 (slider 0 až 100)
-    const masterMult = (fog.masterFogIntensity ?? 70) / 70.0;
+    // Master Fog Intensity přepočtená na násobič 0.0 až 1.0 (slider 0 až 100)
+    const masterMult = Math.max(0, (fog.masterFogIntensity ?? 70) / 100.0);
 
     mat.uniforms.uFogMasterIntensity.value = masterMult;
-    mat.uniforms.uFogDensity.value = (fog.fogDensity ?? 1.5) * masterMult;
+    mat.uniforms.uFogDensity.value = fog.fogDensity ?? 1.5;
     mat.uniforms.uFogNear.value = fog.fogNear ?? 0.7;
     mat.uniforms.uFogFar.value = fog.fogFar ?? 4.5;
     mat.uniforms.uFogCurve.value = fog.fogCurve ?? 1.2;
@@ -677,7 +677,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uVolumetricGhostStrength.value = vDepth.ghostStrength ?? 0.35;
     mat.uniforms.uVolumetricVideoScale.value = (vVid.scale ?? 1.0) * (vDepth.videoScale ?? 0.72);
     mat.uniforms.uVolumetricVignetteSoft.value = vVid.vignetteSoftness ?? 0.45;
-    mat.uniforms.uCenterRaysExposure.value = vDepth.raysExposure ?? 1.2;
+    mat.uniforms.uCenterRaysExposure.value = 0.0;
     mat.uniforms.uCenterRaysRadius.value = vDepth.raysRadius ?? 0.65;
     mat.uniforms.uCenterRayLength.value = vDepth.rayLength ?? 0.45;
     mat.uniforms.uCenterRayDensity.value = vDepth.rayDensity ?? 1.0;

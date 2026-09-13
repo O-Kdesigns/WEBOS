@@ -121,7 +121,7 @@
     "posX": 0,
     "posY": 0,
     "screenOpacity": 1,
-    "vignetteSoftness": 0.85,
+    "vignetteSoftness": 0.45,
     "brightness": 2.5,
     "contrast": 1.09,
     "curvature": 1.5
