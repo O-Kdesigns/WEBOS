@@ -133,46 +133,92 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, openSection
               const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
                 ? settings.nodeMultipliers[nodeName]
                 : 1;
+              const mouseMultiplier = (settings.nodeMouseMultipliers && settings.nodeMouseMultipliers[nodeName] !== undefined)
+                ? settings.nodeMouseMultipliers[nodeName]
+                : 1;
 
               return (
                 <div 
                   key={nodeName} 
                   style={{ 
                     display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'space-between', 
-                    color: isSolid ? '#93c5fd' : '#6ee7b7', 
-                    background: 'rgba(255,255,255,0.03)', 
-                    padding: '4px 8px', 
-                    borderRadius: '4px',
-                    gap: '0.5rem'
+                    flexDirection: 'column',
+                    gap: '0.4rem',
+                    background: isChecked 
+                      ? (isSolid ? 'rgba(59, 130, 246, 0.08)' : 'rgba(16, 185, 129, 0.08)') 
+                      : 'rgba(255,255,255,0.02)', 
+                    border: `1px solid ${isChecked 
+                      ? (isSolid ? 'rgba(59, 130, 246, 0.28)' : 'rgba(16, 185, 129, 0.28)') 
+                      : 'rgba(255,255,255,0.05)'}`,
+                    padding: '6px 10px', 
+                    borderRadius: '6px',
+                    transition: 'background 0.15s ease, border-color 0.15s ease'
                   }}
                 >
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0, flex: 1, minWidth: 0 }}>
-                    <input 
-                      type="checkbox" 
-                      checked={isChecked}
-                      onChange={e => {
-                        let current = settings.selectedNodes || [];
-                        if (e.target.checked) {
-                          current = [...current, nodeName];
-                        } else {
-                          current = current.filter(n => n !== nodeName);
-                        }
-                        onUpdate('selectedNodes', current);
-                      }} 
-                    />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nodeName}</span>
-                  </label>
+                  {/* Horní řádek: Checkbox + Celé jméno bez ořezu + Typ uzlu */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', margin: 0, flex: 1, minWidth: 0 }}>
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked}
+                        onChange={e => {
+                          let current = settings.selectedNodes || [];
+                          if (e.target.checked) {
+                            current = [...current, nodeName];
+                          } else {
+                            current = current.filter(n => n !== nodeName);
+                          }
+                          onUpdate('selectedNodes', current);
+                        }} 
+                        style={{ cursor: 'pointer', width: '16px', height: '16px', flexShrink: 0 }}
+                      />
+                      <span style={{ 
+                        color: isSolid ? '#93c5fd' : '#6ee7b7', 
+                        fontWeight: isChecked ? 600 : 400,
+                        fontSize: '0.84rem',
+                        wordBreak: 'break-word',
+                        lineHeight: 1.35
+                      }}>
+                        {nodeName}
+                      </span>
+                    </label>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                    {!isSolid && (
+                    <span style={{ 
+                      fontSize: '0.68rem', 
+                      padding: '2px 6px', 
+                      borderRadius: '4px', 
+                      fontWeight: 'bold',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      background: isSolid ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                      color: isSolid ? '#60a5fa' : '#34d399',
+                      border: `1px solid ${isSolid ? 'rgba(59, 130, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`
+                    }}>
+                      {isSolid ? '🔷 SOLID (1)' : '🟢 ČÁSTICE (0)'}
+                    </span>
+                  </div>
+
+                  {/* Spodní řádek: Násobiče pro velikost a vliv myši */}
+                  {!isSolid && (
+                    <div 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        flexWrap: 'wrap', 
+                        gap: '0.8rem',
+                        paddingTop: '5px',
+                        borderTop: '1px solid rgba(255,255,255,0.06)',
+                        fontSize: '0.74rem',
+                        color: '#94a3b8'
+                      }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {/* Násobič velikosti */}
                       <div 
                         style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} 
                         title="Násobič velikosti částic pro tento objekt"
-                        onClick={e => e.stopPropagation()}
                       >
-                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Velikost:</span>
+                        <span style={{ color: '#cbd5e1' }}>Velikost:</span>
                         <DragNumberInput 
                           compact={true}
                           step={0.1} 
@@ -185,22 +231,31 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, openSection
                             onUpdate('nodeMultipliers', current);
                           }} 
                         />
-                        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>×</span>
+                        <span>×</span>
                       </div>
-                    )}
 
-                    <span style={{ 
-                      fontSize: '0.72rem', 
-                      padding: '2px 6px', 
-                      borderRadius: '3px', 
-                      fontWeight: 'bold',
-                      background: isSolid ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                      color: isSolid ? '#60a5fa' : '#34d399',
-                      border: `1px solid ${isSolid ? 'rgba(59, 130, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`
-                    }}>
-                      {isSolid ? '🔷 SOLID (1)' : '🟢 ČÁSTICE (0)'}
-                    </span>
-                  </div>
+                      {/* Násobič vlivu myši */}
+                      <div 
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} 
+                        title="Násobič reakce na pohyb myši pro tento objekt (0 = myš částice neovlivňuje)"
+                      >
+                        <span style={{ color: '#cbd5e1' }}>Vliv myši:</span>
+                        <DragNumberInput 
+                          compact={true}
+                          step={0.1} 
+                          min={0} 
+                          max={20} 
+                          value={mouseMultiplier} 
+                          onChange={val => {
+                            const current = { ...(settings.nodeMouseMultipliers || {}) };
+                            current[nodeName] = val;
+                            onUpdate('nodeMouseMultipliers', current);
+                          }} 
+                        />
+                        <span>×</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

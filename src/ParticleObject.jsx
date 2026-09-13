@@ -726,7 +726,9 @@ function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     }
 
     velUniforms.uMouseRadius.value = phys.mouseRadius ?? 2.0;
-    velUniforms.uMouseForce.value = phys.mouseForce ?? 1.0;
+    const baseMouseForce = phys.mouseForce ?? 1.0;
+    const mouseMult = settings.mouseMultiplier !== undefined ? Number(settings.mouseMultiplier) : 1.0;
+    velUniforms.uMouseForce.value = baseMouseForce * mouseMult;
 
     // Rovina pro raycaster musí VŽDY směřovat ke kameře, jinak se při rotaci rozbije interakce
     state.camera.getWorldDirection(planeNormal.current);

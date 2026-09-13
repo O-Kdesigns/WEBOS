@@ -238,6 +238,10 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
           ? Number(settings.nodeMultipliers[nodeName])
           : 1.0;
 
+        const mouseMultiplier = (settings.nodeMouseMultipliers && settings.nodeMouseMultipliers[nodeName] !== undefined)
+          ? Number(settings.nodeMouseMultipliers[nodeName])
+          : 1.0;
+
         return (
           <group key={nodeName} position={node.getWorldPosition(new THREE.Vector3())} quaternion={node.getWorldQuaternion(new THREE.Quaternion())}>
             <ParticleObject 
@@ -246,6 +250,7 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
                 shape: 'geometry', 
                 customGeometry: node.geometry,
                 sizeMultiplier: multiplier,
+                mouseMultiplier: mouseMultiplier,
                 transform: {
                   position: new THREE.Vector3(0,0,0),
                   quaternion: new THREE.Quaternion(),

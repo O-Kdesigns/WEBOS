@@ -65,6 +65,11 @@
         "nodeMultipliers": {
           "Particles_Xelith_Backround": 1,
           "Particles_Xelith_Obsahosmy0": 0.4
+        },
+        "nodeMouseMultipliers": {
+          "Particles_Xelith_Backround": 1,
+          "Particles_Xelith_Obsahosmy0": 0.3,
+          "Particles_Xelith_Obsahtreti1": 1
         }
       },
       "videoUrl": "video/reklama xelith.mp4"
