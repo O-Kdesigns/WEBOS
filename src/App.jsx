@@ -815,8 +815,27 @@ function App() {
     }
   }));
 
+  useEffect(() => {
+    if (viewMode === 'ORBIT') {
+      insideRotRef.current = 0;
+      insideApi.start({ insideRotationY: 0, immediate: true });
+    }
+  }, [viewMode, insideApi]);
+
   const bindDrag = useDrag(({ active, movement: [mx], delta: [dx], velocity: [vx] }) => {
-    if (totalPages <= 1 || viewMode === 'INSIDE') return;
+    if (viewMode === 'INSIDE') {
+      const sensitivity = ((Math.PI * 2) / (window.innerWidth / 1.5)) * (appConfig.scrollSpeed || 1.0);
+      if (active) {
+        insideRotRef.current += dx * sensitivity;
+        insideApi.start({ insideRotationY: insideRotRef.current, immediate: true });
+      } else {
+        insideRotRef.current += (dx * sensitivity) + (vx * 20 * Math.sign(dx) * (appConfig.scrollSpeed || 1.0));
+        insideApi.start({ insideRotationY: insideRotRef.current, immediate: false });
+      }
+      return;
+    }
+
+    if (totalPages <= 1) return;
     const sensitivity = pageDistance / (window.innerWidth / 1.5);
     
     if (active) {
@@ -829,14 +848,14 @@ function App() {
   }, { axis: 'x' });
 
   const bindWheel = useWheel(({ delta: [, dy] }) => {
-    if (totalPages <= 1) return;
-
     if (viewMode === 'INSIDE') {
       // Rotace objektu uvnitř portfolia při scrollu
       insideRotRef.current -= dy * 0.005 * (appConfig.scrollSpeed || 1.0);
       insideApi.start({ insideRotationY: insideRotRef.current, immediate: false });
       return;
     }
+
+    if (totalPages <= 1) return;
     
     if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current);
     wheelTimeoutRef.current = setTimeout(() => {
