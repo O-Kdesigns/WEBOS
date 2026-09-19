@@ -91,6 +91,133 @@ const DragNumberInput = ({ value, onChange, step = 1, min, max, compact = false 
   );
 };
 
+const SPHERE_QUALITY_PRESETS = [
+  { level: 0, label: 'Eco', tris: '16Δ', segments: [4, 3], desc: '4×3' },
+  { level: 1, label: 'Low', tris: '30Δ', segments: [5, 4], desc: '5×4' },
+  { level: 2, label: 'Mid', tris: '48Δ', segments: [6, 5], desc: '6×5' },
+  { level: 3, label: 'High', tris: '112Δ', segments: [8, 8], desc: '8×8' },
+];
+
+function MagneticSegmentSwitch({ value = 1, onChange }) {
+  const trackRef = React.useRef(null);
+  const isDragging = React.useRef(false);
+
+  const snapToClientX = (clientX) => {
+    if (!trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const step = Math.round(ratio * (SPHERE_QUALITY_PRESETS.length - 1));
+    if (step !== value && onChange) {
+      onChange(step);
+    }
+  };
+
+  const handlePointerDown = (e) => {
+    isDragging.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    snapToClientX(e.clientX);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging.current) return;
+    snapToClientX(e.clientX);
+  };
+
+  const handlePointerUp = (e) => {
+    if (isDragging.current) {
+      isDragging.current = false;
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+  };
+
+  const activeIdx = Math.max(0, Math.min(SPHERE_QUALITY_PRESETS.length - 1, value ?? 1));
+
+  return (
+    <div
+      ref={trackRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        width: '100%',
+        height: '28px',
+        background: 'rgba(0, 0, 0, 0.45)',
+        borderRadius: '6px',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        cursor: 'pointer',
+        userSelect: 'none',
+        overflow: 'hidden',
+        touchAction: 'none'
+      }}
+      title="Přetažením myši nebo kliknutím přepnete detail polygonů koule"
+    >
+      {/* Magnetický posuvný indikátor s plynulým přichytáváním */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '2px',
+          bottom: '2px',
+          width: `${100 / SPHERE_QUALITY_PRESETS.length}%`,
+          left: `${activeIdx * (100 / SPHERE_QUALITY_PRESETS.length)}%`,
+          borderRadius: '4px',
+          background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.32) 0%, rgba(16, 185, 129, 0.16) 100%)',
+          border: '1px solid rgba(16, 185, 129, 0.65)',
+          boxShadow: '0 0 10px rgba(16, 185, 129, 0.25)',
+          transition: isDragging.current ? 'left 0.06s ease-out' : 'left 0.18s cubic-bezier(0.2, 0.8, 0.25, 1)',
+          pointerEvents: 'none',
+          zIndex: 1
+        }}
+      />
+
+      {/* 4 kroky / stupně detailu */}
+      {SPHERE_QUALITY_PRESETS.map((preset, idx) => {
+        const isActive = idx === activeIdx;
+        return (
+          <div
+            key={preset.level}
+            style={{
+              flex: 1,
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              zIndex: 2,
+              position: 'relative',
+              borderRight: idx < SPHERE_QUALITY_PRESETS.length - 1 ? '1px solid rgba(255, 255, 255, 0.04)' : 'none'
+            }}
+          >
+            <span
+              style={{
+                fontSize: '0.73rem',
+                fontWeight: isActive ? '700' : '500',
+                color: isActive ? '#6ee7b7' : '#94a3b8',
+                transition: 'color 0.15s ease'
+              }}
+            >
+              {preset.label}
+            </span>
+            <span
+              style={{
+                fontSize: '0.62rem',
+                color: isActive ? '#a7f3d0' : '#64748b',
+                opacity: isActive ? 0.95 : 0.7,
+                transition: 'color 0.15s ease'
+              }}
+            >
+              ({preset.tris})
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function isSolidNode(name) {
   if (!name) return false;
   const trimmed = name.trim();
@@ -119,14 +246,22 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, openSection
       
       {availableNodes.length > 0 ? (
         <div className="input-group">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-            <label style={{ margin: 0, fontWeight: 'bold' }}>
-              Objekty z Blenderu ({matchedNodes.length > 0 ? `${matchedNodes.length} pro '${pageTitle}'` : `všechny (${availableNodes.length})`}):
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+            <label style={{ margin: 0, fontWeight: 'bold', fontSize: '0.88rem', color: '#f1f5f9' }}>
+              3D Objekty scény ({matchedNodes.length > 0 ? `${matchedNodes.length} pro '${pageTitle}'` : `všechny (${availableNodes.length})`}):
             </label>
           </div>
-          <span className="input-desc">💡 <b>0 na konci</b> = Částice | <b>1 na konci</b> (např. <code>_1</code>, <code>.001</code>) = Solid 3D mesh</span>
 
-          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#34d399', padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem' }}>
+              🟢 <b>0</b> = Částice
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.25)', color: '#60a5fa', padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem' }}>
+              🔷 <b>1</b> = Solid mesh
+            </span>
+          </div>
+
+          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.5rem', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {availableNodes.map(nodeName => {
               const isChecked = settings.selectedNodes ? settings.selectedNodes.includes(nodeName) : false;
               const isSolid = isSolidNode(nodeName);
@@ -137,30 +272,35 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, openSection
                 ? settings.nodeMouseMultipliers[nodeName]
                 : 1;
 
+              const isBg = nodeName.toLowerCase().includes('backround') || nodeName.toLowerCase().includes('background');
+              const qualityLevel = (settings.nodeQuality && settings.nodeQuality[nodeName] !== undefined)
+                ? Number(settings.nodeQuality[nodeName])
+                : (isBg ? 0 : 1);
+
               return (
                 <div 
                   key={nodeName} 
                   style={{ 
                     display: 'flex', 
-                    flexDirection: 'column',
-                    gap: '0.4rem',
+                    flexDirection: 'column', 
+                    gap: '0.5rem', 
                     background: isChecked 
                       ? (isSolid ? 'rgba(59, 130, 246, 0.08)' : 'rgba(16, 185, 129, 0.08)') 
                       : 'rgba(255,255,255,0.02)', 
                     border: `1px solid ${isChecked 
                       ? (isSolid ? 'rgba(59, 130, 246, 0.28)' : 'rgba(16, 185, 129, 0.28)') 
-                      : 'rgba(255,255,255,0.05)'}`,
-                    padding: '6px 10px', 
-                    borderRadius: '6px',
-                    transition: 'background 0.15s ease, border-color 0.15s ease'
+                      : 'rgba(255,255,255,0.05)'}`, 
+                    padding: '8px 10px', 
+                    borderRadius: '6px', 
+                    transition: 'background 0.15s ease, border-color 0.15s ease' 
                   }}
                 >
                   {/* Horní řádek: Checkbox + Celé jméno bez ořezu + Typ uzlu */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', margin: 0, flex: 1, minWidth: 0 }}>
                       <input 
                         type="checkbox" 
-                        checked={isChecked}
+                        checked={isChecked} 
                         onChange={e => {
                           let current = settings.selectedNodes || [];
                           if (e.target.checked) {
@@ -172,88 +312,129 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, openSection
                         }} 
                         style={{ cursor: 'pointer', width: '16px', height: '16px', flexShrink: 0 }}
                       />
-                      <span style={{ 
-                        color: isSolid ? '#93c5fd' : '#6ee7b7', 
-                        fontWeight: isChecked ? 600 : 400,
-                        fontSize: '0.84rem',
-                        wordBreak: 'break-word',
-                        lineHeight: 1.35
-                      }}>
+                      <span 
+                        style={{ 
+                          color: isSolid ? '#93c5fd' : '#6ee7b7', 
+                          fontWeight: isChecked ? 600 : 400, 
+                          fontSize: '0.82rem', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap', 
+                          lineHeight: 1.3 
+                        }} 
+                        title={nodeName}
+                      >
                         {nodeName}
                       </span>
                     </label>
 
                     <span style={{ 
                       fontSize: '0.68rem', 
-                      padding: '2px 6px', 
+                      padding: '2px 7px', 
                       borderRadius: '4px', 
-                      fontWeight: 'bold',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                      background: isSolid ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                      color: isSolid ? '#60a5fa' : '#34d399',
-                      border: `1px solid ${isSolid ? 'rgba(59, 130, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`
+                      fontWeight: 'bold', 
+                      whiteSpace: 'nowrap', 
+                      flexShrink: 0, 
+                      background: isSolid ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)', 
+                      color: isSolid ? '#60a5fa' : '#34d399', 
+                      border: `1px solid ${isSolid ? 'rgba(59, 130, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)'}` 
                     }}>
-                      {isSolid ? '🔷 SOLID (1)' : '🟢 ČÁSTICE (0)'}
+                      {isSolid ? '🔷 SOLID' : '🟢 ČÁSTICE'}
                     </span>
                   </div>
 
-                  {/* Spodní řádek: Násobiče pro velikost a vliv myši */}
-                  {!isSolid && (
+                  {/* Nastavení pro částicové uzly */}
+                  {isChecked && !isSolid && (
+                    <div 
+                      style={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: '0.55rem', 
+                        paddingTop: '6px', 
+                        borderTop: '1px solid rgba(255,255,255,0.06)' 
+                      }} 
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {/* Řádek násobičů: Velikost a Vliv myši */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.74rem' }}>
+                        <div 
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }} 
+                          title="Násobič velikosti částic pro tento objekt"
+                        >
+                          <span style={{ color: '#94a3b8' }}>Velikost:</span>
+                          <DragNumberInput 
+                            compact={true} 
+                            step={0.1} 
+                            min={0.01} 
+                            max={20} 
+                            value={multiplier} 
+                            onChange={val => {
+                              const current = { ...(settings.nodeMultipliers || {}) };
+                              current[nodeName] = val;
+                              onUpdate('nodeMultipliers', current);
+                            }} 
+                          />
+                          <span style={{ color: '#64748b' }}>×</span>
+                        </div>
+
+                        <div 
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }} 
+                          title="Násobič reakce na pohyb myši pro tento objekt (0 = myš částice neovlivňuje)"
+                        >
+                          <span style={{ color: '#94a3b8' }}>Vliv myši:</span>
+                          <DragNumberInput 
+                            compact={true} 
+                            step={0.1} 
+                            min={0} 
+                            max={20} 
+                            value={mouseMultiplier} 
+                            onChange={val => {
+                              const current = { ...(settings.nodeMouseMultipliers || {}) };
+                              current[nodeName] = val;
+                              onUpdate('nodeMouseMultipliers', current);
+                            }} 
+                          />
+                          <span style={{ color: '#64748b' }}>×</span>
+                        </div>
+                      </div>
+
+                      {/* Magnetický switch pro přepínání polygonů / kvality sféry */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '1px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.71rem' }}>
+                          <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>🌐</span> Polygony koule:
+                          </span>
+                          <span style={{ color: '#34d399', fontWeight: '600', fontSize: '0.68rem' }}>
+                            {SPHERE_QUALITY_PRESETS[qualityLevel]?.desc} ({SPHERE_QUALITY_PRESETS[qualityLevel]?.tris} / částice)
+                          </span>
+                        </div>
+                        <MagneticSegmentSwitch 
+                          value={qualityLevel} 
+                          onChange={newLevel => {
+                            const current = { ...(settings.nodeQuality || {}) };
+                            current[nodeName] = newLevel;
+                            onUpdate('nodeQuality', current);
+                          }} 
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Informační řádek pro solid 3D meshe */}
+                  {isChecked && isSolid && (
                     <div 
                       style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
-                        flexWrap: 'wrap', 
-                        gap: '0.8rem',
-                        paddingTop: '5px',
-                        borderTop: '1px solid rgba(255,255,255,0.06)',
-                        fontSize: '0.74rem',
-                        color: '#94a3b8'
+                        justifyContent: 'space-between', 
+                        paddingTop: '5px', 
+                        borderTop: '1px solid rgba(59, 130, 246, 0.15)', 
+                        fontSize: '0.72rem', 
+                        color: '#93c5fd' 
                       }}
-                      onClick={e => e.stopPropagation()}
                     >
-                      {/* Násobič velikosti */}
-                      <div 
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} 
-                        title="Násobič velikosti částic pro tento objekt"
-                      >
-                        <span style={{ color: '#cbd5e1' }}>Velikost:</span>
-                        <DragNumberInput 
-                          compact={true}
-                          step={0.1} 
-                          min={0.01} 
-                          max={20} 
-                          value={multiplier} 
-                          onChange={val => {
-                            const current = { ...(settings.nodeMultipliers || {}) };
-                            current[nodeName] = val;
-                            onUpdate('nodeMultipliers', current);
-                          }} 
-                        />
-                        <span>×</span>
-                      </div>
-
-                      {/* Násobič vlivu myši */}
-                      <div 
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} 
-                        title="Násobič reakce na pohyb myši pro tento objekt (0 = myš částice neovlivňuje)"
-                      >
-                        <span style={{ color: '#cbd5e1' }}>Vliv myši:</span>
-                        <DragNumberInput 
-                          compact={true}
-                          step={0.1} 
-                          min={0} 
-                          max={20} 
-                          value={mouseMultiplier} 
-                          onChange={val => {
-                            const current = { ...(settings.nodeMouseMultipliers || {}) };
-                            current[nodeName] = val;
-                            onUpdate('nodeMouseMultipliers', current);
-                          }} 
-                        />
-                        <span>×</span>
-                      </div>
+                      <span>🔷 Solid 3D Mesh</span>
+                      <span style={{ color: '#60a5fa', fontSize: '0.68rem', opacity: 0.85 }}>PBR & pečené osvětlení</span>
                     </div>
                   )}
                 </div>

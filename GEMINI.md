@@ -75,4 +75,11 @@ Tento soubor definuje kritická pravidla a osvědčené postupy pro zachování 
   2. **Zpětná vazba uživatele (Feedback Loop):** Jakmile uživatel změnu otestuje v prohlížeči a poskytne zpětnou vazbu (např. naměřené FPS, stabilita, vizuální postřehy), doplní se tato odezva přímo do popisu/historie commitu (nebo souvisejícího commitu).
 * **Důvod:** Zamezí se ztrátě přehledu o tom, co fungovalo a co ne, a zajistí se, že se k jakémukoliv stabilnímu stavu lze vždy okamžitě a bezpečně vrátit bez nechtěného přenášení skrytých regresí.
 
+---
+
+## 11. Stručná a přímá komunikace (Concise Communication)
+* **Princip:** Žádné dlouhé teoretické slohy ani zahlcování uživatele gigantickými texty.
+* **Pravidlo:** Odpovědi musí být krátké, konkrétní, v bodech a orientované přímo na akci a kód. Komplexní věci řešit postupně po malých krocích.
+
+
 

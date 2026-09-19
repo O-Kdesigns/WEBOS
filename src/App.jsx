@@ -241,18 +241,32 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
     };
   }, [node]);
 
+  const sphereSegments = useMemo(() => {
+    if (settings.nodeQuality && settings.nodeQuality[nodeName] !== undefined) {
+      const q = Number(settings.nodeQuality[nodeName]);
+      const levels = [[4, 3], [5, 4], [6, 5], [8, 8]];
+      return levels[q] || levels[1];
+    }
+    // Výchozí optimalizace: pozadí úsporněji
+    if (nodeName.toLowerCase().includes('backround') || nodeName.toLowerCase().includes('background')) {
+      return [4, 3];
+    }
+    return null;
+  }, [settings.nodeQuality, nodeName]);
+
   const particleSettings = useMemo(() => ({
     ...settings,
     shape: 'geometry',
     customGeometry: node.geometry,
     sizeMultiplier: multiplier,
     mouseMultiplier: mouseMultiplier,
+    ...(sphereSegments ? { sphereSegments } : {}),
     transform: {
       position: [0, 0, 0],
       quaternion: [0, 0, 0, 1],
       scale: transforms ? transforms.scale : [1, 1, 1]
     }
-  }), [settings, node.geometry, multiplier, mouseMultiplier, transforms]);
+  }), [settings, node.geometry, multiplier, mouseMultiplier, sphereSegments, transforms]);
 
   if (!transforms) return null;
 
