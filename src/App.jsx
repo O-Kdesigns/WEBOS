@@ -649,10 +649,11 @@ function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
       // Interpolace základního FOV (např. mezi 60 a 45) podle toho, kde se nacházíme v animaci
       const currentBaseFov = THREE.MathUtils.lerp(orbitFov, inFov, baseFovProgress.get());
        
-      // Matematika pro zachování šířky zobrazení
+      // Matematika pro zachování šířky zobrazení (Hor+ škálování: na širokoúhlých monitorech nezoomuje dovnitř)
       const REFERENCE_ASPECT = 16 / 9; 
+      const aspectFactor = currentAspect < REFERENCE_ASPECT ? (REFERENCE_ASPECT / currentAspect) : 1.0;
       const vFovRad = THREE.MathUtils.degToRad(currentBaseFov);
-      const targetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (REFERENCE_ASPECT / currentAspect));
+      const targetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * aspectFactor);
       const finalFov = THREE.MathUtils.radToDeg(targetVFovRad);
        
       // Pokud se FOV liší, aplikujeme ho okamžitě
