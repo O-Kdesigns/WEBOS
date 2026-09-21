@@ -83,3 +83,10 @@ Tento soubor definuje kritická pravidla a osvědčené postupy pro zachování 
 
 
 
+
+---
+
+## 12. Striktní komponentový přístup a prevence obřích souborů
+* **Princip:** Žádný React soubor nesmí být gigantickým monolitem (nad 500 řádků). UI a 3D logika se musí důsledně dělit do přehledných složek a komponent (např. src/components/...).
+* **Důvod:** Obří soubory (jako starý 2500-řádkový Editor.jsx) absolutně ničí rychlost AI agenta a paralyzují kontextovou paměť. Drobná úprava se pak zbytečně protáhne na minuty.
+* **Pravidlo:** Jakmile soubor začne bobtnat a sdružovat příliš mnoho různých funkcí, MUSÍ se okamžitě refaktorovat na menší, úzce specializované soubory s čistými importy.
