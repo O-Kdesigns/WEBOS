@@ -1,3 +1,28 @@
+/* NB Architekt – Active Theory originální font */
+@font-face {
+  font-family: 'nbarchitekt';
+  src: url('/fonts/nbarchitekt/NBArchitektStd-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'nbarchitekt';
+  src: url('/fonts/nbarchitekt/NBArchitektStd-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'nbarchitekt';
+  src: url('/fonts/nbarchitekt/NBArchitektStd-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
 .hud-2d-container {
   position: absolute;
   top: 0;
@@ -9,27 +34,123 @@
   overflow: hidden;
 }
 
+/* Skupina vlevo dole */
 .hud-bottom-left {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   user-select: none;
-  font-weight: 500;
   line-height: 1.4;
-  transition: opacity 0.2s ease, color 0.2s ease;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
 }
 
-.hud-link {
-  color: inherit;
+/* Nadpis menu (např. WHAT ARE YOU LOOKING FOR?) */
+.hud-menu-header {
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  opacity: 0.85;
+  pointer-events: none;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+/* Seznam položek */
+.hud-menu-items {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Jednotlivý řádek menu */
+.hud-menu-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.hud-menu-item.dimmed {
+  opacity: 0.38;
+}
+
+.hud-menu-item.dimmed:hover {
+  opacity: 1;
+}
+
+/* Odkaz nebo textový prvek řádku */
+.hud-item-link,
+.hud-item-static {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   text-decoration: none;
+  color: inherit;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: 4px;
   cursor: pointer;
   pointer-events: auto;
-  transition: color 0.2s ease, opacity 0.2s ease, text-shadow 0.2s ease;
+  transition: color 0.18s cubic-bezier(0.16, 1, 0.3, 1), text-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 2;
 }
 
-.hud-link:hover {
-  color: #ffffff !important;
-  opacity: 1 !important;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  text-shadow: 0 0 12px rgba(255, 255, 255, 0.5), 0 2px 8px rgba(0, 0, 0, 0.8);
+.hud-item-static {
+  cursor: default;
+}
+
+/* Odrážka / šipka */
+.hud-bullet {
+  display: inline-block;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+/* 2D Bloom & Glare Vignette aura za textem */
+.hud-glare-vignette {
+  position: absolute;
+  top: 50%;
+  left: -15px;
+  transform: translateY(-50%);
+  width: calc(100% + 50px);
+  height: 260%;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s ease-out;
+  z-index: 1;
+}
+
+/* Spodní pilulkové tlačítko (ASK ME ANYTHING...) */
+.hud-pill-button {
+  margin-top: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 24px;
+  border-radius: 999px;
+  border: 1.5px solid;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  font-size: 0.88em;
+  text-transform: uppercase;
+  pointer-events: auto;
+  cursor: pointer;
+  width: fit-content;
+  position: relative;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 2;
+}
+
+.hud-pill-button:hover {
+  transform: translateY(-1px);
 }

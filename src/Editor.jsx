@@ -785,6 +785,48 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
     });
   };
 
+  const updateUi2dBottomLeftItem = (index, field, value) => {
+    const currentItems = [...(appConfig.ui2d?.bottomLeft?.items || [])];
+    if (currentItems[index]) {
+      currentItems[index] = { ...currentItems[index], [field]: value };
+      updateUi2dBottomLeft('items', currentItems);
+    }
+  };
+
+  const addUi2dBottomLeftItem = () => {
+    const currentItems = [...(appConfig.ui2d?.bottomLeft?.items || [])];
+    currentItems.push({
+      id: Date.now().toString(),
+      text: 'NOVÝ ŘÁDEK',
+      link: '',
+      bullet: appConfig.ui2d?.bottomLeft?.defaultBullet || '->',
+      dimmed: false
+    });
+    updateUi2dBottomLeft('items', currentItems);
+  };
+
+  const removeUi2dBottomLeftItem = (index) => {
+    const currentItems = [...(appConfig.ui2d?.bottomLeft?.items || [])];
+    currentItems.splice(index, 1);
+    updateUi2dBottomLeft('items', currentItems);
+  };
+
+  const updateUi2dPillButton = (field, value) => {
+    setAppConfig({
+      ...appConfig,
+      ui2d: {
+        ...(appConfig.ui2d || {}),
+        bottomLeft: {
+          ...(appConfig.ui2d?.bottomLeft || {}),
+          pillButton: {
+            ...(appConfig.ui2d?.bottomLeft?.pillButton || {}),
+            [field]: value
+          }
+        }
+      }
+    });
+  };
+
   const addPage = () => {
     setPages([...pages, {
       id: Date.now().toString(),
@@ -2157,97 +2199,318 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
                             checked={appConfig.ui2d?.bottomLeft?.enabled ?? true} 
                             onChange={e => updateUi2dBottomLeft('enabled', e.target.checked)} 
                           />
-                          Zobrazit text vlevo dole
+                          Zobrazit menu / text vlevo dole
                         </label>
                       </div>
 
+                      {/* ZÁHLAVÍ MENU */}
                       <div className="input-group">
-                        <label>Obsah textu:</label>
-                        <span className="input-desc">Podporuje text nebo markdown odkaz např. [Portfolio](https://...)</span>
+                        <label>Záhlaví menu (Nadpis):</label>
+                        <span className="input-desc">Např. WHAT ARE YOU LOOKING FOR? (nechte prázdné pro vynechání)</span>
                         <input 
                           type="text" 
-                          value={appConfig.ui2d?.bottomLeft?.text ?? 'WEBOS // 2026'} 
-                          onChange={e => updateUi2dBottomLeft('text', e.target.value)} 
-                          placeholder="např. WEBOS // 2026 nebo [Kontakt](mailto:...)"
+                          value={appConfig.ui2d?.bottomLeft?.header ?? 'WHAT ARE YOU LOOKING FOR?'} 
+                          onChange={e => updateUi2dBottomLeft('header', e.target.value)} 
+                          placeholder="WHAT ARE YOU LOOKING FOR?"
                         />
                       </div>
 
                       <div className="input-group">
-                        <label>Hypertext / Odkaz (URL):</label>
-                        <span className="input-desc">Volitelný odkaz (pokud je zadán, celý text funguje jako klikací odkaz)</span>
-                        <input 
-                          type="text" 
-                          value={appConfig.ui2d?.bottomLeft?.link ?? ''} 
-                          onChange={e => updateUi2dBottomLeft('link', e.target.value)} 
-                          placeholder="https://... nebo mailto:..."
-                        />
-                      </div>
-
-                      {appConfig.ui2d?.bottomLeft?.link && (
-                        <div className="checkbox-group">
-                          <label>
-                            <input 
-                              type="checkbox" 
-                              checked={appConfig.ui2d?.bottomLeft?.linkNewTab ?? true} 
-                              onChange={e => updateUi2dBottomLeft('linkNewTab', e.target.checked)} 
-                            />
-                            Otevřít odkaz v novém okně (_blank)
-                          </label>
-                        </div>
-                      )}
-
-                      <div className="input-group">
-                        <label>Velikost písma (Font Size):</label>
-                        <span className="input-desc">Velikost písma v pixelech</span>
-                        <DragNumberInput step={1} min={8} max={64} value={appConfig.ui2d?.bottomLeft?.fontSize ?? 13} onChange={val => updateUi2dBottomLeft('fontSize', val)} />
-                      </div>
-
-                      <div className="input-group">
-                        <label>Barva textu:</label>
-                        <span className="input-desc">Barva písma</span>
+                        <label>Barva záhlaví:</label>
+                        <span className="input-desc">Barva nadpisu nad odrážkami</span>
                         <input 
                           type="color" 
-                          value={appConfig.ui2d?.bottomLeft?.color || '#94a3b8'} 
-                          onChange={e => updateUi2dBottomLeft('color', e.target.value)} 
+                          value={appConfig.ui2d?.bottomLeft?.headerColor || '#a594c7'} 
+                          onChange={e => updateUi2dBottomLeft('headerColor', e.target.value)} 
                         />
                       </div>
 
-                      <div className="input-group">
-                        <label>Průhlednost (Opacity):</label>
-                        <span className="input-desc">Krytí textu (0 = neviditelný, 1 = plně sytý)</span>
-                        <DragNumberInput step={0.05} min={0} max={1} value={appConfig.ui2d?.bottomLeft?.opacity ?? 0.85} onChange={val => updateUi2dBottomLeft('opacity', val)} />
+                      {/* SEZNAM ŘÁDKŮ S ODRÁŽKAMI A HYPERTEXTEM */}
+                      <div style={{
+                        marginTop: '0.6rem',
+                        padding: '0.8rem',
+                        background: 'rgba(0, 0, 0, 0.4)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(236, 72, 153, 0.25)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.6rem'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#f472b6' }}>
+                            📋 Řádky & Odrážky s hypertextem
+                          </span>
+                          <button
+                            type="button"
+                            onClick={addUi2dBottomLeftItem}
+                            style={{
+                              background: '#ec4899',
+                              color: 'white',
+                              border: 'none',
+                              padding: '3px 10px',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                              fontWeight: '600'
+                            }}
+                          >
+                            + Přidat řádek
+                          </button>
+                        </div>
+
+                        {(appConfig.ui2d?.bottomLeft?.items || []).map((item, idx) => (
+                          <div
+                            key={item.id || idx}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              background: 'rgba(255, 255, 255, 0.03)',
+                              padding: '5px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid rgba(255, 255, 255, 0.08)'
+                            }}
+                          >
+                            {/* Odrážka / symbol */}
+                            <input
+                              type="text"
+                              value={item.bullet ?? '->'}
+                              onChange={e => updateUi2dBottomLeftItem(idx, 'bullet', e.target.value)}
+                              title="Odrážka / symbol řádku (např. -> nebo -)"
+                              style={{ width: '38px', textAlign: 'center', padding: '3px 2px', fontSize: '0.78rem' }}
+                            />
+
+                            {/* Text položky */}
+                            <input
+                              type="text"
+                              value={item.text ?? ''}
+                              onChange={e => updateUi2dBottomLeftItem(idx, 'text', e.target.value)}
+                              placeholder="Text řádku"
+                              style={{ flex: 1, padding: '3px 6px', fontSize: '0.78rem' }}
+                            />
+
+                            {/* Odkaz / URL */}
+                            <input
+                              type="text"
+                              value={item.link ?? ''}
+                              onChange={e => updateUi2dBottomLeftItem(idx, 'link', e.target.value)}
+                              placeholder="URL odkaz (např. #websites)"
+                              style={{ flex: 1, padding: '3px 6px', fontSize: '0.78rem', color: '#67e8f9' }}
+                            />
+
+                            {/* Tlumený stav (dimmed) */}
+                            <label
+                              title="Tlumený řádek (nižší průhlednost jako u MULTIPLAYER)"
+                              style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: '#94a3b8', cursor: 'pointer' }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={item.dimmed || false}
+                                onChange={e => updateUi2dBottomLeftItem(idx, 'dimmed', e.target.checked)}
+                              />
+                              Tlumený
+                            </label>
+
+                            {/* Smazat řádek */}
+                            <button
+                              type="button"
+                              onClick={() => removeUi2dBottomLeftItem(idx)}
+                              title="Smazat řádek"
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.25)',
+                                color: '#f87171',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '2px 7px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem'
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* SKLO ZESILOVÁNÍ & BARVY */}
+                      <div style={{
+                        marginTop: '0.5rem',
+                        padding: '0.8rem',
+                        background: 'rgba(168, 85, 247, 0.08)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(168, 85, 247, 0.25)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.8rem'
+                      }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#c084fc' }}>
+                          🔮 Skleněné zesílení pozadí & Barva
+                        </span>
+
+                        <div className="input-group">
+                          <label>Režim skla / zesílení pozadí (Blend Mode):</label>
+                          <span className="input-desc">Sklo zesilující barvy: text násobí a rozzáří barvy videa a 3D scény za sebou</span>
+                          <select 
+                            value={appConfig.ui2d?.bottomLeft?.blendMode || 'screen'} 
+                            onChange={e => updateUi2dBottomLeft('blendMode', e.target.value)}
+                          >
+                            <option value="screen">✨ screen (Zesvětlení / Sklo – doporučeno)</option>
+                            <option value="color-dodge">⚡ color-dodge (Syté neonové zesílení)</option>
+                            <option value="plus-lighter">🌟 plus-lighter (Aditivní světlo)</option>
+                            <option value="overlay">🌓 overlay (Kontrastní sklo)</option>
+                            <option value="normal">⚪ normal (Běžné krytí bez blendu)</option>
+                          </select>
+                        </div>
+
+                        <div className="input-group">
+                          <label>Základní barva textu:</label>
+                          <span className="input-desc">Fialová / zvolená barva textu (v předloze #9d6ef8)</span>
+                          <input 
+                            type="color" 
+                            value={appConfig.ui2d?.bottomLeft?.color || '#9d6ef8'} 
+                            onChange={e => updateUi2dBottomLeft('color', e.target.value)} 
+                          />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Barva při najetí myší (Hover):</label>
+                          <span className="input-desc">Září bíle při najetí (v předloze #ffffff)</span>
+                          <input 
+                            type="color" 
+                            value={appConfig.ui2d?.bottomLeft?.hoverColor || '#ffffff'} 
+                            onChange={e => updateUi2dBottomLeft('hoverColor', e.target.value)} 
+                          />
+                        </div>
+                      </div>
+
+                      {/* 2D FALEŠNÝ BLOOM & GLARE VIGNETTE */}
+                      <div style={{
+                        marginTop: '0.5rem',
+                        padding: '0.8rem',
+                        background: 'rgba(236, 72, 153, 0.08)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(236, 72, 153, 0.25)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.8rem'
+                      }}>
+                        <div className="checkbox-group">
+                          <label style={{ fontWeight: 'bold', color: '#f472b6', fontSize: '0.85rem' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={appConfig.ui2d?.bottomLeft?.enableBloom ?? true} 
+                              onChange={e => updateUi2dBottomLeft('enableBloom', e.target.checked)} 
+                            />
+                            ✨ Povolit 2D Bloom & Glare Vignette
+                          </label>
+                        </div>
+
+                        <div className="input-group">
+                          <label>Barva bloomu / záře:</label>
+                          <span className="input-desc">Odstín aury svítící kolem aktivního / najetého textu</span>
+                          <input 
+                            type="color" 
+                            value={appConfig.ui2d?.bottomLeft?.bloomColor || '#a855f7'} 
+                            onChange={e => updateUi2dBottomLeft('bloomColor', e.target.value)} 
+                          />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Intenzita bloomu (Záře):</label>
+                          <span className="input-desc">Síla světelné aury při najetí myší (1.4 = výrazná záře jako v předloze)</span>
+                          <DragNumberInput step={0.1} min={0.2} max={3.0} value={appConfig.ui2d?.bottomLeft?.bloomIntensity ?? 1.4} onChange={val => updateUi2dBottomLeft('bloomIntensity', val)} />
+                        </div>
+                      </div>
+
+                      {/* TYPOGRAFIE & PÍSMO */}
+                      <div className="input-group" style={{ marginTop: '0.5rem' }}>
+                        <label>Typ písma (Font):</label>
+                        <span className="input-desc">Originální Active Theory font (NB Architekt)</span>
+                        <select 
+                          value={appConfig.ui2d?.bottomLeft?.fontFamily || 'nbarchitekt'} 
+                          onChange={e => updateUi2dBottomLeft('fontFamily', e.target.value)}
+                        >
+                          <option value="nbarchitekt">🏛️ NB Architekt (Active Theory originál)</option>
+                          <option value="mono">💻 Systémový Monospace</option>
+                          <option value="sans">🔡 Sans-Serif (Inter)</option>
+                        </select>
                       </div>
 
                       <div className="input-group">
-                        <label>Mezery mezi písmeny (Letter Spacing):</label>
-                        <span className="input-desc">Rozpal písma v px</span>
-                        <DragNumberInput step={0.5} min={-2} max={10} value={appConfig.ui2d?.bottomLeft?.letterSpacing ?? 1.5} onChange={val => updateUi2dBottomLeft('letterSpacing', val)} />
+                        <label>Velikost písma (Font Size px):</label>
+                        <span className="input-desc">Velikost písma v pixelech (v předloze ~13-14px)</span>
+                        <DragNumberInput step={1} min={8} max={48} value={appConfig.ui2d?.bottomLeft?.fontSize ?? 13} onChange={val => updateUi2dBottomLeft('fontSize', val)} />
                       </div>
 
+                      <div className="input-group">
+                        <label>Mezera mezi řádky (Line Spacing px):</label>
+                        <span className="input-desc">Vertikální rozestup mezi jednotlivými řádky</span>
+                        <DragNumberInput step={1} min={2} max={36} value={appConfig.ui2d?.bottomLeft?.lineSpacing ?? 11} onChange={val => updateUi2dBottomLeft('lineSpacing', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Rozpal písma (Letter Spacing px):</label>
+                        <span className="input-desc">Odsazení mezi písmeny pro přesný geometrický styl</span>
+                        <DragNumberInput step={0.1} min={-1} max={8} value={appConfig.ui2d?.bottomLeft?.letterSpacing ?? 1.4} onChange={val => updateUi2dBottomLeft('letterSpacing', val)} />
+                      </div>
+
+                      {/* POZICIONOVÁNÍ */}
                       <div className="input-group">
                         <label>Pozice zleva (X Offset px):</label>
                         <span className="input-desc">Vzdálenost od levého okraje obrazovky v px</span>
-                        <DragNumberInput step={2} min={0} max={500} value={appConfig.ui2d?.bottomLeft?.posX ?? 28} onChange={val => updateUi2dBottomLeft('posX', val)} />
+                        <DragNumberInput step={2} min={0} max={500} value={appConfig.ui2d?.bottomLeft?.posX ?? 36} onChange={val => updateUi2dBottomLeft('posX', val)} />
                       </div>
 
                       <div className="input-group">
                         <label>Pozice zdola (Y Offset px):</label>
                         <span className="input-desc">Vzdálenost od spodního okraje obrazovky v px</span>
-                        <DragNumberInput step={2} min={0} max={500} value={appConfig.ui2d?.bottomLeft?.posY ?? 28} onChange={val => updateUi2dBottomLeft('posY', val)} />
+                        <DragNumberInput step={2} min={0} max={500} value={appConfig.ui2d?.bottomLeft?.posY ?? 36} onChange={val => updateUi2dBottomLeft('posY', val)} />
                       </div>
 
-                      <div className="input-group">
-                        <label>Transformace textu:</label>
-                        <span className="input-desc">Styl velikosti písmen</span>
-                        <select 
-                          value={appConfig.ui2d?.bottomLeft?.textTransform || 'uppercase'} 
-                          onChange={e => updateUi2dBottomLeft('textTransform', e.target.value)}
-                        >
-                          <option value="none">Normální (Bez změny)</option>
-                          <option value="uppercase">VELKÁ PÍSMENA (UPPERCASE)</option>
-                          <option value="lowercase">malá písmena (lowercase)</option>
-                          <option value="capitalize">První Velké (Capitalize)</option>
-                        </select>
+                      {/* SPODNÍ PILULKOVÉ TLAČÍTKO */}
+                      <div style={{
+                        marginTop: '0.6rem',
+                        padding: '0.8rem',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.7rem'
+                      }}>
+                        <div className="checkbox-group">
+                          <label style={{ fontWeight: '600', color: '#cbd5e1' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={appConfig.ui2d?.bottomLeft?.pillButton?.enabled ?? true} 
+                              onChange={e => updateUi2dPillButton('enabled', e.target.checked)} 
+                            />
+                            🔘 Zobrazit pilulkové tlačítko (ASK ME ANYTHING...)
+                          </label>
+                        </div>
+
+                        {appConfig.ui2d?.bottomLeft?.pillButton?.enabled && (
+                          <>
+                            <div className="input-group">
+                              <label>Text tlačítka:</label>
+                              <input 
+                                type="text" 
+                                value={appConfig.ui2d?.bottomLeft?.pillButton?.text ?? 'ASK ME ANYTHING...'} 
+                                onChange={e => updateUi2dPillButton('text', e.target.value)} 
+                              />
+                            </div>
+
+                            <div className="input-group">
+                              <label>Odkaz / URL tlačítka:</label>
+                              <input 
+                                type="text" 
+                                value={appConfig.ui2d?.bottomLeft?.pillButton?.link ?? '#ask'} 
+                                onChange={e => updateUi2dPillButton('link', e.target.value)} 
+                                placeholder="např. #ask nebo https://..."
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
