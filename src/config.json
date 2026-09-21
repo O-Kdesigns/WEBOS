@@ -145,11 +145,41 @@
       "headerColor": "#a594c7",
       "defaultBullet": "->",
       "items": [
-        { "id": "1", "text": "WEBSITES", "link": "#websites", "bullet": "->", "dimmed": false },
-        { "id": "2", "text": "INSTALLATIONS", "link": "#installations", "bullet": "->", "dimmed": false },
-        { "id": "3", "text": "XR / VR / AI", "link": "#xr", "bullet": "->", "dimmed": false },
-        { "id": "4", "text": "MULTIPLAYER", "link": "#multiplayer", "bullet": "->", "dimmed": true },
-        { "id": "5", "text": "GAMES", "link": "#games", "bullet": "->", "dimmed": false }
+        {
+          "id": "1",
+          "text": "OLIVER KANTOR",
+          "link": "#websites",
+          "bullet": "->",
+          "dimmed": false
+        },
+        {
+          "id": "2",
+          "text": "INSTALLATIONS",
+          "link": "#installations",
+          "bullet": "->",
+          "dimmed": false
+        },
+        {
+          "id": "3",
+          "text": "XR / VR / AI",
+          "link": "#xr",
+          "bullet": "->",
+          "dimmed": false
+        },
+        {
+          "id": "4",
+          "text": "MULTIPLAYER",
+          "link": "#multiplayer",
+          "bullet": "->",
+          "dimmed": true
+        },
+        {
+          "id": "5",
+          "text": "GAMES",
+          "link": "#games",
+          "bullet": "->",
+          "dimmed": false
+        }
       ],
       "color": "#9d6ef8",
       "hoverColor": "#ffffff",
