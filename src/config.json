@@ -186,7 +186,7 @@
       "bloomColor": "#a855f7",
       "enableBloom": true,
       "bloomIntensity": 1.4,
-      "blendMode": "screen",
+      "blendMode": "color-dodge",
       "fontSize": 13,
       "fontFamily": "nbarchitekt",
       "letterSpacing": 1.4,

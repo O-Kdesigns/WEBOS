@@ -134,7 +134,7 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                               value={item.text ?? ''}
                               onChange={e => updateUi2dBottomLeftItem(idx, 'text', e.target.value)}
                               placeholder="Text řádku"
-                              style={{ flex: 1, padding: '3px 6px', fontSize: '0.78rem' }}
+                              style={{ flex: 1, minWidth: '60px', padding: '3px 6px', fontSize: '0.78rem' }}
                             />
 
                             {/* Odkaz / URL */}
@@ -143,13 +143,13 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                               value={item.link ?? ''}
                               onChange={e => updateUi2dBottomLeftItem(idx, 'link', e.target.value)}
                               placeholder="URL odkaz (např. #websites)"
-                              style={{ flex: 1, padding: '3px 6px', fontSize: '0.78rem', color: '#67e8f9' }}
+                              style={{ flex: 1, minWidth: '60px', padding: '3px 6px', fontSize: '0.78rem', color: '#67e8f9' }}
                             />
 
                             {/* Tlumený stav (dimmed) */}
                             <label
                               title="Tlumený řádek (nižší průhlednost jako u MULTIPLAYER)"
-                              style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: '#94a3b8', cursor: 'pointer' }}
+                              style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: '#94a3b8', cursor: 'pointer', flexShrink: 0 }}
                             >
                               <input
                                 type="checkbox"
@@ -171,7 +171,8 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                                 borderRadius: '4px',
                                 padding: '2px 7px',
                                 cursor: 'pointer',
-                                fontSize: '0.75rem'
+                                fontSize: '0.75rem',
+                                flexShrink: 0
                               }}
                             >
                               ✕
@@ -199,11 +200,11 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                           <label>Režim skla / zesílení pozadí (Blend Mode):</label>
                           <span className="input-desc">Sklo zesilující barvy: text násobí a rozzáří barvy videa a 3D scény za sebou</span>
                           <select 
-                            value={appConfig.ui2d?.bottomLeft?.blendMode || 'screen'} 
+                            value={appConfig.ui2d?.bottomLeft?.blendMode || 'color-dodge'} 
                             onChange={e => updateUi2dBottomLeft('blendMode', e.target.value)}
                           >
-                            <option value="screen">✨ screen (Zesvětlení / Sklo – doporučeno)</option>
-                            <option value="color-dodge">⚡ color-dodge (Syté neonové zesílení)</option>
+                            <option value="color-dodge">⚡ color-dodge (Zrcadlo zesilující jas – doporučeno)</option>
+                            <option value="screen">✨ screen (Jemnější sklo)</option>
                             <option value="plus-lighter">🌟 plus-lighter (Aditivní světlo)</option>
                             <option value="overlay">🌓 overlay (Kontrastní sklo)</option>
                             <option value="normal">⚪ normal (Běžné krytí bez blendu)</option>

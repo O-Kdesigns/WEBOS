@@ -119,10 +119,10 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
                   <div
                     className="hud-glare-vignette"
                     style={{
-                      opacity: isHovered ? Math.min(1, 0.75 * bloomIntensity) : 0,
-                      transform: isHovered ? 'translateY(-50%) scale(1.05)' : 'translateY(-50%) scale(0.9)',
-                      background: `radial-gradient(ellipse 130% 220% at 30% 50%, rgba(255, 255, 255, 0.75) 0%, rgba(${rgbBloom}, 0.55) 30%, rgba(${rgbBloom}, 0.15) 55%, transparent 75%)`,
-                      filter: 'blur(8px)',
+                      opacity: isHovered ? Math.min(1, 0.6 * bloomIntensity) : 0,
+                      transform: isHovered ? 'translate(-50%, -50%) scale(1.0)' : 'translate(-50%, -50%) scale(0.85)',
+                      background: `radial-gradient(ellipse 65% 100% at 50% 50%, rgba(255, 255, 255, 0.8) 0%, rgba(${rgbBloom}, 0.6) 25%, rgba(${rgbBloom}, 0.15) 55%, transparent 75%)`,
+                      filter: 'blur(10px)',
                     }}
                   />
                 )}
