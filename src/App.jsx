@@ -16,6 +16,7 @@ import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
 import { CanvasDebugTracker, DebugMonitorHUD } from './DebugMonitor';
 import { Preloader } from './Preloader';
+import { HUD2D } from './HUD2D';
 import './App.css';
 
 const resolveAssetUrl = (url) => {
@@ -1059,6 +1060,8 @@ function App() {
           </div>
         )}
       </div>
+
+      <HUD2D appConfig={appConfig} viewMode={viewMode} />
 
       <Preloader 
         activeVideoUrl={pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl} 

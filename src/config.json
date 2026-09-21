@@ -136,5 +136,21 @@
     "raysRadius": 0.65,
     "rayLength": 0.45,
     "rayDensity": 1
+  },
+  "ui2d": {
+    "enabled": true,
+    "bottomLeft": {
+      "enabled": true,
+      "text": "WEBOS // 2026",
+      "link": "",
+      "linkNewTab": true,
+      "fontSize": 13,
+      "color": "#94a3b8",
+      "opacity": 0.85,
+      "posX": 28,
+      "posY": 28,
+      "letterSpacing": 1.5,
+      "textTransform": "uppercase"
+    }
   }
 }
