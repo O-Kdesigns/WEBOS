@@ -106,7 +106,11 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
             // aby fungovaly jako čistý násobič jasu/kontrastu pozadí a neobarvovaly ho původní barvou textu.
             // Čím světlejší šedá, tím vyšší úroveň bílé a jasu (násobič).
             const isGlass = blendMode !== 'normal';
-            const effectiveColor = isGlass ? '#dfdfdf' : color;
+            const glassBright = bl.glassBrightness ?? 0.88;
+            const glassHex = Math.floor(Math.max(0, Math.min(1, glassBright)) * 255).toString(16).padStart(2, '0');
+            const glassColorHex = `#${glassHex}${glassHex}${glassHex}`;
+            
+            const effectiveColor = isGlass ? glassColorHex : color;
             const effectiveHoverColor = isGlass ? '#ffffff' : hoverColor;
 
             // Výsledný text shadow a bloom efekt
@@ -170,27 +174,32 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
         </div>
 
         {/* Spodní pilulkové tlačítko (např. ASK ME ANYTHING...) */}
-        {bl.pillButton?.enabled && (
-          <a
-            href={bl.pillButton.link || '#'}
-            target={linkNewTab && !bl.pillButton.link?.startsWith('#') ? '_blank' : '_self'}
-            rel="noopener noreferrer"
-            className="hud-pill-button"
-            onMouseEnter={() => setIsPillHovered(true)}
-            onMouseLeave={() => setIsPillHovered(false)}
-            style={{
-              borderColor: isPillHovered ? '#ffffff' : `rgba(${rgbBloom}, 0.45)`,
-              color: isPillHovered ? (blendMode !== 'normal' ? '#ffffff' : '#ffffff') : (blendMode !== 'normal' ? '#dfdfdf' : color),
-              textShadow: isPillHovered ? `0 0 10px #ffffff, 0 0 20px rgba(${rgbBloom}, 0.8)` : 'none',
-              boxShadow: isPillHovered
-                ? `0 0 25px rgba(${rgbBloom}, 0.6), inset 0 0 12px rgba(255, 255, 255, 0.25)`
-                : `0 0 10px rgba(0, 0, 0, 0.5)`,
-              letterSpacing: `${letterSpacing}px`,
-            }}
-          >
-            {bl.pillButton.text || 'ASK ME ANYTHING...'}
-          </a>
-        )}
+        {bl.pillButton?.enabled && (() => {
+          const glassBright = bl.glassBrightness ?? 0.88;
+          const glassHex = Math.floor(Math.max(0, Math.min(1, glassBright)) * 255).toString(16).padStart(2, '0');
+          const glassColorHex = `#${glassHex}${glassHex}${glassHex}`;
+          return (
+            <a
+              href={bl.pillButton.link || '#'}
+              target={linkNewTab && !bl.pillButton.link?.startsWith('#') ? '_blank' : '_self'}
+              rel="noopener noreferrer"
+              className="hud-pill-button"
+              onMouseEnter={() => setIsPillHovered(true)}
+              onMouseLeave={() => setIsPillHovered(false)}
+              style={{
+                borderColor: isPillHovered ? '#ffffff' : `rgba(${rgbBloom}, 0.45)`,
+                color: isPillHovered ? (blendMode !== 'normal' ? '#ffffff' : '#ffffff') : (blendMode !== 'normal' ? glassColorHex : color),
+                textShadow: isPillHovered ? `0 0 10px #ffffff, 0 0 20px rgba(${rgbBloom}, 0.8)` : 'none',
+                boxShadow: isPillHovered
+                  ? `0 0 25px rgba(${rgbBloom}, 0.6), inset 0 0 12px rgba(255, 255, 255, 0.25)`
+                  : `0 0 10px rgba(0, 0, 0, 0.5)`,
+                letterSpacing: `${letterSpacing}px`,
+              }}
+            >
+              {bl.pillButton.text || 'ASK ME ANYTHING...'}
+            </a>
+          );
+        })()}
       </div>
     </div>
   );

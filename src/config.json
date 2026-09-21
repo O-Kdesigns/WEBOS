@@ -160,18 +160,11 @@
           "dimmed": false
         },
         {
-          "id": "3",
-          "text": "XR / VR / AI",
-          "link": "#xr",
-          "bullet": "->",
-          "dimmed": false
-        },
-        {
           "id": "4",
           "text": "MULTIPLAYER",
           "link": "#multiplayer",
           "bullet": "->",
-          "dimmed": true
+          "dimmed": false
         },
         {
           "id": "5",
@@ -181,12 +174,13 @@
           "dimmed": false
         }
       ],
-      "color": "#9d6ef8",
+      "color": "#5c0000",
       "hoverColor": "#ffffff",
-      "bloomColor": "#a855f7",
-      "enableBloom": true,
-      "bloomIntensity": 1.4,
+      "bloomColor": "#cc0000",
+      "enableBloom": false,
+      "bloomIntensity": 3,
       "blendMode": "color-dodge",
+      "glassBrightness": 0.88,
       "fontSize": 13,
       "fontFamily": "nbarchitekt",
       "letterSpacing": 1.4,

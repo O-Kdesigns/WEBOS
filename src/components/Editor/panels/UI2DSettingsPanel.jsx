@@ -212,8 +212,14 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                         </div>
 
                         <div className="input-group">
-                          <label>Základní barva textu:</label>
-                          <span className="input-desc">Fialová / zvolená barva textu (v předloze #9d6ef8)</span>
+                          <label>Úroveň bílé / Jas skla (Glass Brightness):</label>
+                          <span className="input-desc">Pro skleněné režimy určuje sílu zesvětlení/násobení pozadí (0.1 = tmavé sklo, 1.0 = extrémní svítivost/zrcadlo).</span>
+                          <DragNumberInput step={0.01} min={0.1} max={1.0} value={appConfig.ui2d?.bottomLeft?.glassBrightness ?? 0.88} onChange={val => updateUi2dBottomLeft('glassBrightness', val)} />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Základní barva textu (Záloha pro Normal mód):</label>
+                          <span className="input-desc">Tato barva se ignoruje v režimech skla (aby text mohl násobit pozadí čistě). Platí jen pro "normal".</span>
                           <input 
                             type="color" 
                             value={appConfig.ui2d?.bottomLeft?.color || '#9d6ef8'} 
