@@ -1,0 +1,130 @@
+import React, { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import { a } from '@react-spring/three';
+
+import './shaders/VideoRefractionMaterial';
+import './shaders/JellyVideoMaterial';
+
+export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotationY, pageDistance }) {
+  const isCylinder = settings.isCylinder || settings.scatterSpring !== undefined || (settings.shape === 'cylinder' && !settings.customGeometry);
+  const matRef = useRef();
+
+  useFrame((state) => {
+    if (!matRef.current) return;
+    const time = state.clock.getElapsedTime();
+    if (matRef.current.uniforms) {
+      if (matRef.current.uniforms.uTime) {
+        matRef.current.uniforms.uTime.value = time;
+      }
+      if (matRef.current.uniforms.tVideo && videoTexture) {
+        matRef.current.uniforms.tVideo.value = videoTexture;
+      }
+      if (rotationY && pageDistance) {
+        const val = rotationY.get();
+        const exactIdx = val / -pageDistance;
+        const remainder = Math.abs(exactIdx - Math.round(exactIdx));
+        const amt = Math.min(remainder * 2.0, 1.0);
+        if (matRef.current.uniforms.uNoiseAmount) {
+          matRef.current.uniforms.uNoiseAmount.value = amt;
+        }
+      }
+      if (matRef.current.uniforms.uMaxLight && settings.transitionMaxLight !== undefined) {
+        matRef.current.uniforms.uMaxLight.value = settings.transitionMaxLight;
+      }
+      if (matRef.current.uniforms.uMinDark && settings.transitionMinDark !== undefined) {
+        matRef.current.uniforms.uMinDark.value = settings.transitionMinDark;
+      }
+    }
+  });
+
+  const onBeforeCompile = React.useCallback((shader) => {
+    shader.uniforms.tPositions = { value: null };
+    
+    shader.vertexShader = `
+      uniform sampler2D tPositions;
+      attribute vec2 aComputeUV;
+      ${shader.vertexShader}
+    `;
+    
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `
+      vec4 computedData = texture2D(tPositions, aComputeUV);
+      vec3 computedPos = computedData.xyz;
+      float computedScale = computedData.w;
+      
+      vec3 transformed = position * computedScale;
+      transformed += computedPos;
+      `
+    );
+  }, []);
+
+  // Pro válec na pozadí (GlobalBackground / Kužel) - NESAHAT NA KUŽEL, PLNÉ ZACHOVÁNÍ
+  if (isCylinder) {
+    if (videoTexture) {
+      return (
+        <videoRefractionMaterialImpl 
+          ref={matRef}
+          tVideo={videoTexture} 
+          uDistortion={settings.refractionDistortion ?? 0.15}
+          uOpacity={opacity}
+          uColor={new THREE.Color(settings.baseColor || '#3b82f6')}
+          uMaxLight={settings.transitionMaxLight ?? 0.8}
+          uMinDark={settings.transitionMinDark ?? 0.05}
+          transparent={true}
+          depthWrite={true}
+        />
+      );
+    } else {
+      return (
+        <a.meshPhysicalMaterial 
+          onBeforeCompile={onBeforeCompile}
+          color={settings.baseColor || '#3b82f6'}
+          metalness={settings.metalness ?? 0.1}
+          roughness={settings.roughness ?? 0.5}
+          transparent={true}
+          depthWrite={true}
+          opacity={opacity}
+        />
+      );
+    }
+  }
+
+  // Pro projektové částice v módu video použijeme nový bohatý Jelly materiál s plným zapojením nastavení
+  if (settings.colorMode === 'video' && videoTexture) {
+    return (
+      <jellyVideoMaterialImpl 
+        ref={matRef}
+        tVideo={videoTexture} 
+        uColor={new THREE.Color(settings.baseColor || '#6df73b')}
+        uDistortion={settings.refractionDistortion ?? 0.6}
+        uRoughness={settings.roughness ?? 0.2}
+        uMetalness={settings.metalness ?? 0.1}
+        uTransmission={settings.transmission !== undefined ? settings.transmission : 0.85}
+        uThickness={settings.thickness !== undefined ? settings.thickness : 1.2}
+        uOpacity={opacity}
+        uMaxLight={settings.transitionMaxLight ?? 0.8}
+        uMinDark={settings.transitionMinDark ?? 0.05}
+        transparent={true}
+        depthWrite={true}
+      />
+    );
+  }
+
+  return (
+    <a.meshPhysicalMaterial 
+      onBeforeCompile={onBeforeCompile}
+      vertexColors={settings.colorMode === 'vertex'}
+      color={settings.colorMode === 'single' ? (settings.baseColor || '#3b82f6') : '#ffffff'}
+      metalness={settings.metalness ?? 0.1}
+      roughness={settings.roughness ?? 0.5}
+      transmission={settings.transmission ?? 0.0}
+      thickness={settings.thickness ?? 0.0}
+      ior={1.5}
+      transparent={true}
+      depthWrite={true}
+      opacity={opacity}
+    />
+  );
+}
