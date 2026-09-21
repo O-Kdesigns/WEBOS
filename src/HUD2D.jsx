@@ -104,8 +104,9 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
 
             // Skleněné režimy (color-dodge, screen, overlay atd.) potřebují neutrální šedou/bílou barvu,
             // aby fungovaly jako čistý násobič jasu/kontrastu pozadí a neobarvovaly ho původní barvou textu.
+            // Čím světlejší šedá, tím vyšší úroveň bílé a jasu (násobič).
             const isGlass = blendMode !== 'normal';
-            const effectiveColor = isGlass ? '#9a9a9a' : color;
+            const effectiveColor = isGlass ? '#dfdfdf' : color;
             const effectiveHoverColor = isGlass ? '#ffffff' : hoverColor;
 
             // Výsledný text shadow a bloom efekt
@@ -179,7 +180,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
             onMouseLeave={() => setIsPillHovered(false)}
             style={{
               borderColor: isPillHovered ? '#ffffff' : `rgba(${rgbBloom}, 0.45)`,
-              color: isPillHovered ? (blendMode !== 'normal' ? '#ffffff' : '#ffffff') : (blendMode !== 'normal' ? '#9a9a9a' : color),
+              color: isPillHovered ? (blendMode !== 'normal' ? '#ffffff' : '#ffffff') : (blendMode !== 'normal' ? '#dfdfdf' : color),
               textShadow: isPillHovered ? `0 0 10px #ffffff, 0 0 20px rgba(${rgbBloom}, 0.8)` : 'none',
               boxShadow: isPillHovered
                 ? `0 0 25px rgba(${rgbBloom}, 0.6), inset 0 0 12px rgba(255, 255, 255, 0.25)`
