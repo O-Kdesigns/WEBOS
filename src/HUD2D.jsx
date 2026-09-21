@@ -100,6 +100,11 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
 
             const isClickable = Boolean(item.link);
 
+            // Když je zapnutý color-dodge (sklo), musíme ignorovat nastavenou barvu textu
+            // a použít neutrální šedou, která matematicky funguje jako násobič jasu pozadí (čím světlejší šedá, tím vyšší jas pozadí).
+            const effectiveColor = blendMode === 'color-dodge' ? '#999999' : color;
+            const effectiveHoverColor = blendMode === 'color-dodge' ? '#cccccc' : hoverColor;
+
             // Výsledný text shadow a bloom efekt
             const itemTextShadow = isHovered
               ? `0 0 5px rgba(255, 255, 255, 0.95), 0 0 12px #ffffff, 0 0 24px rgba(${rgbBloom}, ${0.85 * bloomIntensity}), 0 0 42px rgba(${rgbBloom}, ${0.7 * bloomIntensity})`
@@ -134,7 +139,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
                     rel="noopener noreferrer"
                     className="hud-item-link"
                     style={{
-                      color: isHovered ? hoverColor : color,
+                      color: isHovered ? effectiveHoverColor : effectiveColor,
                       textShadow: itemTextShadow,
                       letterSpacing: `${letterSpacing}px`,
                     }}
@@ -146,7 +151,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
                   <div
                     className="hud-item-static"
                     style={{
-                      color: isHovered ? hoverColor : color,
+                      color: isHovered ? effectiveHoverColor : effectiveColor,
                       textShadow: itemTextShadow,
                       letterSpacing: `${letterSpacing}px`,
                     }}
@@ -171,7 +176,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
             onMouseLeave={() => setIsPillHovered(false)}
             style={{
               borderColor: isPillHovered ? '#ffffff' : `rgba(${rgbBloom}, 0.45)`,
-              color: isPillHovered ? '#ffffff' : color,
+              color: isPillHovered ? (blendMode === 'color-dodge' ? '#cccccc' : '#ffffff') : (blendMode === 'color-dodge' ? '#999999' : color),
               textShadow: isPillHovered ? `0 0 10px #ffffff, 0 0 20px rgba(${rgbBloom}, 0.8)` : 'none',
               boxShadow: isPillHovered
                 ? `0 0 25px rgba(${rgbBloom}, 0.6), inset 0 0 12px rgba(255, 255, 255, 0.25)`
