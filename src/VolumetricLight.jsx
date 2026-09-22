@@ -798,9 +798,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     gl.render(quadScene, quadCamera);
 
     // 3. TextContrastPass - HSV transformace a oříznutí přesně na písmena textu v rohu obrazovky
-    if (appConfig?.ui2d?.enabled !== false) {
-      const hudMask = getHudTextMask(appConfig, size.width, size.height, null);
+    if (appConfig?.ui2d?.enabled !== false && appConfig?.ui2d?.bottomLeft?.enabled !== false) {
+      const hoveredId = (typeof window !== 'undefined') ? window.__webosHoveredHudId : null;
+      const hudMask = getHudTextMask(appConfig, size.width, size.height, hoveredId);
       if (hudMask && hudMask.texture) {
+        const bl = appConfig?.ui2d?.bottomLeft || {};
         textContrastPass.material.uniforms.tDiffuse.value = sceneTarget.texture;
         textContrastPass.material.uniforms.tMask.value = hudMask.texture;
         textContrastPass.material.uniforms.uMaskBounds.value.set(
@@ -810,10 +812,12 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
           hudMask.bounds[3]
         );
         textContrastPass.material.uniforms.uEnableMask.value = 1.0;
-        textContrastPass.material.uniforms.uValueBoost.value = appConfig?.ui2d?.valueBoost ?? 1.0;
-        textContrastPass.material.uniforms.uWhiteShift.value = appConfig?.ui2d?.whiteShift ?? 1.0;
-        textContrastPass.material.uniforms.uHueShift.value = appConfig?.ui2d?.hueShift ?? 0.0;
-        textContrastPass.material.uniforms.uIntensity.value = appConfig?.ui2d?.contrastIntensity ?? 1.0;
+        textContrastPass.material.uniforms.uValueBoost.value = bl.valueBoost ?? appConfig?.ui2d?.valueBoost ?? 1.0;
+        textContrastPass.material.uniforms.uSaturationBoost.value = bl.saturationBoost ?? 1.4;
+        textContrastPass.material.uniforms.uBlackThreshold.value = bl.blackThreshold ?? 0.18;
+        textContrastPass.material.uniforms.uWhiteShift.value = bl.whiteShift ?? 1.0;
+        textContrastPass.material.uniforms.uHueShift.value = bl.hueShift ?? 0.0;
+        textContrastPass.material.uniforms.uIntensity.value = bl.contrastIntensity ?? 1.0;
 
         textContrastPass.render(gl, null);
       }

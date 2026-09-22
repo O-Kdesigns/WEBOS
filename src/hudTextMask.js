@@ -17,10 +17,21 @@ export function getHudTextMask(appConfig, screenWidth, screenHeight, hoveredId) 
     return null;
   }
 
-  // Rozměry plátna pro masku (odpovídají skutečné výšce textového bloku vlevo dole)
   const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
-  const boxW = 300;
-  const boxH = 225;
+  const items = bl.items || [];
+  const header = bl.header || 'WHAT ARE YOU LOOKING FOR?';
+  const fontSize = (bl.fontSize ?? 13) * dpr;
+  const lineSpacing = (bl.lineSpacing ?? 11) * dpr;
+  const defaultBullet = bl.defaultBullet ?? '->';
+
+  // Přesný výpočet potřebné výšky obsahu pro dokonalé zarovnání bez plovoucího offsetu
+  let totalH = 8 * dpr;
+  if (header) totalH += fontSize * 0.95 + 12 * dpr;
+  totalH += items.length * (fontSize + lineSpacing);
+  if (bl.pillButton?.enabled !== false) totalH += 10 * dpr + 34 * dpr + 6 * dpr;
+
+  const boxW = 320;
+  const boxH = Math.ceil(totalH / dpr);
   const canvasW = Math.floor(boxW * dpr);
   const canvasH = Math.floor(boxH * dpr);
 
@@ -36,12 +47,6 @@ export function getHudTextMask(appConfig, screenWidth, screenHeight, hoveredId) 
     maskCanvas.width = canvasW;
     maskCanvas.height = canvasH;
   }
-
-  const items = bl.items || [];
-  const header = bl.header || 'WHAT ARE YOU LOOKING FOR?';
-  const fontSize = (bl.fontSize ?? 13) * dpr;
-  const lineSpacing = (bl.lineSpacing ?? 11) * dpr;
-  const defaultBullet = bl.defaultBullet ?? '->';
 
   // Pozice v pixelech na obrazovce (odspodu a zleva)
   const posX = (bl.posX ?? 36);

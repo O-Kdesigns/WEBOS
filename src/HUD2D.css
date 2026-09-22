@@ -34,7 +34,7 @@
   overflow: hidden;
 }
 
-/* Skupina vlevo dole */
+/* Skupina vlevo dole (Vizuální vykreslení zajišťuje WebGL TextContrastPass, DOM slouží jako interaktivní neviditelná vrstva) */
 .hud-bottom-left {
   user-select: none;
   line-height: 1.4;
@@ -42,6 +42,7 @@
   flex-direction: column;
   transition: opacity 0.2s ease, transform 0.2s ease;
   pointer-events: none;
+  opacity: 0 !important;
 }
 
 /* Nadpis menu (např. WHAT ARE YOU LOOKING FOR?) */

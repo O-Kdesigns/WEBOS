@@ -137,8 +137,14 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
               <div
                 key={itemId}
                 className={`hud-menu-item ${item.dimmed ? 'dimmed' : ''}`}
-                onMouseEnter={() => setHoveredId(itemId)}
-                onMouseLeave={() => setHoveredId(null)}
+                onMouseEnter={() => {
+                  setHoveredId(itemId);
+                  if (typeof window !== 'undefined') window.__webosHoveredHudId = itemId;
+                }}
+                onMouseLeave={() => {
+                  setHoveredId(null);
+                  if (typeof window !== 'undefined') window.__webosHoveredHudId = null;
+                }}
               >
                 {/* 2D Bloom & Glare Vignette (eliptická záře pod textem) */}
                 {enableBloom && (

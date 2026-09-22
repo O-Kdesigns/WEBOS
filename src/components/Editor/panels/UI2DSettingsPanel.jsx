@@ -193,30 +193,37 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                         gap: '0.8rem'
                       }}>
                         <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#c084fc' }}>
-                          🔮 Skleněné zesílení pozadí & Barva
+                          🔮 WebGL TextContrastPass (HSV Kontrast & Barva)
                         </span>
 
                         <div className="input-group">
-                          <label>Režim skla / zesílení pozadí (Blend Mode):</label>
-                          <span className="input-desc">Sklo zesilující barvy: text násobí a rozzáří barvy videa a 3D scény za sebou</span>
-                          <select 
-                            value={appConfig.ui2d?.bottomLeft?.blendMode || 'luminosity'} 
-                            onChange={e => updateUi2dBottomLeft('blendMode', e.target.value)}
-                          >
-                            <option value="luminosity">⚡ luminosity (Aktivní sklo: sytá barva + bílá na černé – doporučeno)</option>
-                            <option value="color-dodge">✨ color-dodge (Zrcadlo zesilující jas)</option>
-                            <option value="screen">🌟 screen (Jemnější sklo)</option>
-                            <option value="overlay">🌓 overlay (Kontrastní sklo)</option>
-                            <option value="plus-lighter">➕ plus-lighter (Aditivní světlo)</option>
-                            <option value="difference">🔄 difference (Inverzní kontrast)</option>
-                            <option value="normal">⚪ normal (Běžné krytí bez blendu)</option>
-                          </select>
+                          <label>Jas textu do maxima (Value Boost):</label>
+                          <span className="input-desc">Vytáhne Value v HSV prostoru do plného jasu (1.0 = plný svítivý jas, 1.2+ = záře). Text má vysoký kontrast.</span>
+                          <DragNumberInput step={0.05} min={0.2} max={2.0} value={appConfig.ui2d?.bottomLeft?.valueBoost ?? 1.0} onChange={val => updateUi2dBottomLeft('valueBoost', val)} />
                         </div>
 
                         <div className="input-group">
-                          <label>Úroveň bílé / Jas skla (Glass Brightness):</label>
-                          <span className="input-desc">Pro skleněné režimy určuje sílu zesvětlení/násobení pozadí (0.1 = tmavé sklo, 1.0 = extrémní svítivost/zrcadlo).</span>
-                          <DragNumberInput step={0.01} min={0.1} max={1.0} value={appConfig.ui2d?.bottomLeft?.glassBrightness ?? 0.85} onChange={val => updateUi2dBottomLeft('glassBrightness', val)} />
+                          <label>Zvýšení sytosti barvy (Saturation Boost):</label>
+                          <span className="input-desc">Zabraňuje vyblednutí do šedé a vytahuje sytost barvy textu z podkladu (1.0 = původní sytost, 1.4 = zářivé neonové barvy).</span>
+                          <DragNumberInput step={0.05} min={0.5} max={2.5} value={appConfig.ui2d?.bottomLeft?.saturationBoost ?? 1.4} onChange={val => updateUi2dBottomLeft('saturationBoost', val)} />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Práh černé (Black Threshold):</label>
+                          <span className="input-desc">Pod touto úrovní jasu podkladu text plynule ubírá saturaci a přechází do čistě bílé, aby byl perfektně čitelný na černé.</span>
+                          <DragNumberInput step={0.02} min={0.02} max={0.6} value={appConfig.ui2d?.bottomLeft?.blackThreshold ?? 0.18} onChange={val => updateUi2dBottomLeft('blackThreshold', val)} />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Síla přechodu do bílé (White Shift):</label>
+                          <span className="input-desc">Míra úbytku saturace směrem k bílé na tmavém podkladu (1.0 = 100% čistá bílá na černé).</span>
+                          <DragNumberInput step={0.05} min={0.0} max={1.0} value={appConfig.ui2d?.bottomLeft?.whiteShift ?? 1.0} onChange={val => updateUi2dBottomLeft('whiteShift', val)} />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Posun odstínu (Hue Shift):</label>
+                          <span className="input-desc">Volitelný posun barvy po kruhu (0.0 = věrná barva podkladu).</span>
+                          <DragNumberInput step={0.02} min={-0.5} max={0.5} value={appConfig.ui2d?.bottomLeft?.hueShift ?? 0.0} onChange={val => updateUi2dBottomLeft('hueShift', val)} />
                         </div>
 
                         {/* TESTOVACÍ DESKA PRO ZKOUŠENÍ SKLA */}
