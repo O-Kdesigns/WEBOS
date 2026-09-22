@@ -200,13 +200,15 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                           <label>Režim skla / zesílení pozadí (Blend Mode):</label>
                           <span className="input-desc">Sklo zesilující barvy: text násobí a rozzáří barvy videa a 3D scény za sebou</span>
                           <select 
-                            value={appConfig.ui2d?.bottomLeft?.blendMode || 'color-dodge'} 
+                            value={appConfig.ui2d?.bottomLeft?.blendMode || 'luminosity'} 
                             onChange={e => updateUi2dBottomLeft('blendMode', e.target.value)}
                           >
-                            <option value="color-dodge">⚡ color-dodge (Zrcadlo zesilující jas – doporučeno)</option>
-                            <option value="screen">✨ screen (Jemnější sklo)</option>
-                            <option value="plus-lighter">🌟 plus-lighter (Aditivní světlo)</option>
+                            <option value="luminosity">⚡ luminosity (Aktivní sklo: sytá barva + bílá na černé – doporučeno)</option>
+                            <option value="color-dodge">✨ color-dodge (Zrcadlo zesilující jas)</option>
+                            <option value="screen">🌟 screen (Jemnější sklo)</option>
                             <option value="overlay">🌓 overlay (Kontrastní sklo)</option>
+                            <option value="plus-lighter">➕ plus-lighter (Aditivní světlo)</option>
+                            <option value="difference">🔄 difference (Inverzní kontrast)</option>
                             <option value="normal">⚪ normal (Běžné krytí bez blendu)</option>
                           </select>
                         </div>

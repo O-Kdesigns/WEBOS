@@ -102,11 +102,11 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
 
             const isClickable = Boolean(item.link);
 
-            // Skleněné režimy (color-dodge, screen, overlay atd.) potřebují neutrální šedou/bílou barvu,
-            // aby fungovaly jako čistý násobič jasu/kontrastu pozadí a neobarvovaly ho původní barvou textu.
-            // Čím světlejší šedá, tím vyšší úroveň bílé a jasu (násobič).
+            // Skleněné režimy (luminosity, color-dodge, screen, overlay atd.) potřebují neutrální barvu,
+            // aby fungovaly jako čistý přenos jasu/kontrastu pozadí a neobarvovaly ho původní barvou textu.
+            // U 'luminosity' určuje cílový jas (Value) pozadí a přechod černé na bílou.
             const isGlass = blendMode !== 'normal';
-            const glassBright = bl.glassBrightness ?? 0.88;
+            const glassBright = bl.glassBrightness ?? 0.85;
             const glassHex = Math.floor(Math.max(0, Math.min(1, glassBright)) * 255).toString(16).padStart(2, '0');
             const glassColorHex = `#${glassHex}${glassHex}${glassHex}`;
             
@@ -175,7 +175,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
 
         {/* Spodní pilulkové tlačítko (např. ASK ME ANYTHING...) */}
         {bl.pillButton?.enabled && (() => {
-          const glassBright = bl.glassBrightness ?? 0.88;
+          const glassBright = bl.glassBrightness ?? 0.85;
           const glassHex = Math.floor(Math.max(0, Math.min(1, glassBright)) * 255).toString(16).padStart(2, '0');
           const glassColorHex = `#${glassHex}${glassHex}${glassHex}`;
           return (
