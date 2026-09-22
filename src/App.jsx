@@ -415,9 +415,11 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   const smoothTilt = useRef(0);
   const cylMouse = useRef(new THREE.Vector2(0, 0));
   
-  const { fade } = useSpring({
-    fade: visible ? 1 : 0,
-    config: { duration: 500 }
+  const { scatter } = useSpring({
+    scatter: visible ? 0 : 1,
+    config: visible 
+      ? { mass: 1, tension: 120, friction: 30 } 
+      : { mass: 15, tension: 10, friction: 60 } 
   });
 
   useFrame((state, delta) => {
@@ -442,21 +444,44 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   });
 
   if (!nodes.dna) return null;
+
+  const dnaPos = nodes.dna.getWorldPosition(new THREE.Vector3());
+  const dnaRot = nodes.dna.getWorldQuaternion(new THREE.Quaternion());
+  const dnaScale = nodes.dna.getWorldScale(new THREE.Vector3());
   
   return (
-    <a.group ref={groupRef} visible={fade.to(v => v > 0.001)}>
+    <group ref={groupRef}>
       <a.group rotation-y={rotationY}>
-        <mesh 
-          geometry={nodes.dna.geometry}
-          material={nodes.dna.material}
-          position={nodes.dna.position}
-          quaternion={nodes.dna.quaternion}
-          scale={nodes.dna.scale}
-          castShadow
-          receiveShadow
-        />
+        <group position={dnaPos} quaternion={dnaRot}>
+          <ParticleObject 
+            settings={{ 
+              count: 10000, 
+              hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
+              baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
+              colorMode: appConfig.cylinderSettings?.colorMode || 'video',
+              refractionDistortion: appConfig.cylinderSettings?.refractionDistortion ?? 0.15,
+              transitionMaxLight: appConfig.cylinderSettings?.transitionMaxLight ?? 0.8,
+              transitionMinDark: appConfig.cylinderSettings?.transitionMinDark ?? 0.05,
+              ...appConfig.cylinderSettings,
+              shape: 'geometry', 
+              customGeometry: nodes.dna.geometry,
+              transform: {
+                position: new THREE.Vector3(0,0,0),
+                quaternion: new THREE.Quaternion(),
+                scale: dnaScale
+              },
+              scatterSpring: scatter,
+              isCylinder: true
+            }}
+            appConfig={appConfig} 
+            videoTexture={videoTexture} 
+            opacity={1}
+            rotationY={rotationY}
+            pageDistance={pageDistance}
+          />
+        </group>
       </a.group>
-    </a.group>
+    </group>
   );
 }
 
