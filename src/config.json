@@ -188,6 +188,8 @@
       "testPlateEnabled": false,
       "testPlateColor": "#0055ff",
       "fontSize": 13,
+      "fontWeight": 700,
+      "fontStrokeWidth": 0.0,
       "fontFamily": "nbarchitekt",
       "letterSpacing": 1.4,
       "lineSpacing": 11,

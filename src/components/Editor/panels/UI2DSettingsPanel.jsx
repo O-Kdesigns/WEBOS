@@ -325,21 +325,37 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                       {/* TYPOGRAFIE & PÍSMO */}
                       <div className="input-group" style={{ marginTop: '0.5rem' }}>
                         <label>Typ písma (Font):</label>
-                        <span className="input-desc">Originální Active Theory font (NB Architekt)</span>
+                        <span className="input-desc">Výběr fontu pro HUD menu (NB Architekt originál nebo extra tučné geometrické)</span>
                         <select 
                           value={appConfig.ui2d?.bottomLeft?.fontFamily || 'nbarchitekt'} 
                           onChange={e => updateUi2dBottomLeft('fontFamily', e.target.value)}
                         >
                           <option value="nbarchitekt">🏛️ NB Architekt (Active Theory originál)</option>
-                          <option value="mono">💻 Systémový Monospace</option>
+                          <option value="orbitron">⚡ Orbitron (Futuristický Ultra Bold / Black)</option>
+                          <option value="jetbrains">💻 JetBrains Mono (Ostrý Extra Bold monospace)</option>
+                          <option value="space">🚀 Space Mono (Brutalistický monospace)</option>
+                          <option value="syne">🎨 Syne (Geometrický tučný display)</option>
+                          <option value="mono">⌨️ Systémový Monospace</option>
                           <option value="sans">🔡 Sans-Serif (Inter)</option>
                         </select>
                       </div>
 
                       <div className="input-group">
                         <label>Velikost písma (Font Size px):</label>
-                        <span className="input-desc">Velikost písma v pixelech (v předloze ~13-14px)</span>
+                        <span className="input-desc">Velikost písma v pixelech (výchozí ~13px)</span>
                         <DragNumberInput step={1} min={8} max={48} value={appConfig.ui2d?.bottomLeft?.fontSize ?? 13} onChange={val => updateUi2dBottomLeft('fontSize', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Tučnost písma (Font Weight):</label>
+                        <span className="input-desc">Váha fontu: 300 = Light, 400 = Regular, 700 = Bold (původní styl), 900 = Ultra Black</span>
+                        <DragNumberInput step={50} min={100} max={900} value={appConfig.ui2d?.bottomLeft?.fontWeight ?? 700} onChange={val => updateUi2dBottomLeft('fontWeight', val)} />
+                      </div>
+
+                      <div className="input-group">
+                        <label>Extra zesílení tahu (Bold Stroke px):</label>
+                        <span className="input-desc">Přidá obkreslený tah k písmenům pro maximální tloušťku a masivní údernost (0.0 = čistý font, 0.5 - 2.0 = extra bold)</span>
+                        <DragNumberInput step={0.1} min={0.0} max={3.0} value={appConfig.ui2d?.bottomLeft?.fontStrokeWidth ?? 0.0} onChange={val => updateUi2dBottomLeft('fontStrokeWidth', val)} />
                       </div>
 
                       <div className="input-group">
