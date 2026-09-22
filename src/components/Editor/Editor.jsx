@@ -81,6 +81,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
        gltf.scene.traverse(child => {
           if (child.name && child.name !== 'Scene') {
             const isSystem = child.name === 'Cylinder' || 
+                             child.name === 'dna' ||
                              child.name.startsWith('Camera') || 
                              child.name.startsWith('GlassDesk');
             if (!isSystem && (child.isMesh || child.name.includes('Particles_') || child.geometry)) {

@@ -415,21 +415,16 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   const smoothTilt = useRef(0);
   const cylMouse = useRef(new THREE.Vector2(0, 0));
   
-  // Místo mizení (fade) animujeme scatter (rozlet)
-  const { scatter } = useSpring({
-    scatter: visible ? 0 : 1, 
-    // Při skládání zpět (visible=true) použijeme původní rychlejší pružinu.
-    // Při rozletu (visible=false) použijeme těžší a volnější pružinu, která začne pomaleji a trvá déle.
-    config: visible 
-      ? { mass: 1, tension: 120, friction: 30 } 
-      : { mass: 15, tension: 10, friction: 60 } 
+  const { fade } = useSpring({
+    fade: visible ? 1 : 0,
+    config: { duration: 500 }
   });
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
     const safeDelta = Math.min(Math.max(delta, 0), 0.1);
 
-    // 1. Výpočet rychlosti rotace karuselu pro jemné naklopení (banking) válce
+    // 1. Výpočet rychlosti rotace karuselu pro jemné naklopení (banking)
     const currentRot = rotationY.get();
     const rotDelta = (currentRot - prevRot.current);
     prevRot.current = currentRot;
@@ -446,38 +441,22 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
     groupRef.current.rotation.x = cylMouse.current.y * 0.012;
   });
 
-  if (!nodes.Cylinder) return null;
+  if (!nodes.dna) return null;
   
   return (
-    <group ref={groupRef}>
-      <group position={nodes.Cylinder.getWorldPosition(new THREE.Vector3())} quaternion={nodes.Cylinder.getWorldQuaternion(new THREE.Quaternion())}>
-        <ParticleObject 
-          settings={{ 
-            shape: 'geometry', 
-            customGeometry: nodes.Cylinder.geometry,
-            transform: {
-              position: new THREE.Vector3(0,0,0),
-              quaternion: new THREE.Quaternion(),
-              scale: nodes.Cylinder.getWorldScale(new THREE.Vector3())
-            },
-            count: 10000, 
-            hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
-            baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
-            colorMode: appConfig.cylinderSettings?.colorMode || 'video',
-            refractionDistortion: appConfig.cylinderSettings?.refractionDistortion ?? 0.15,
-            transitionMaxLight: appConfig.cylinderSettings?.transitionMaxLight ?? 0.8,
-            transitionMinDark: appConfig.cylinderSettings?.transitionMinDark ?? 0.05,
-            scatterSpring: scatter, // Předáme spring hodnotu pro animaci shaderu
-            isCylinder: true
-          }}
-          appConfig={appConfig} 
-          videoTexture={videoTexture} 
-          opacity={1} // Válec už nezmizí, jen se rozletí
-          rotationY={rotationY}
-          pageDistance={pageDistance}
+    <a.group ref={groupRef} visible={fade.to(v => v > 0.001)}>
+      <a.group rotation-y={rotationY}>
+        <mesh 
+          geometry={nodes.dna.geometry}
+          material={nodes.dna.material}
+          position={nodes.dna.position}
+          quaternion={nodes.dna.quaternion}
+          scale={nodes.dna.scale}
+          castShadow
+          receiveShadow
         />
-      </group>
-    </group>
+      </a.group>
+    </a.group>
   );
 }
 

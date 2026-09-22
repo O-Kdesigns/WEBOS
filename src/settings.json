@@ -37,22 +37,24 @@
         "refractionDistortion": 0.6,
         "videoUrl": "/obsah/video/reklama xelith.mp4",
         "selectedNodes": [
-          "Particles_Xelith_Obsahtreti1",
+          "Particles_Xelith_Obsah1",
           "Particles_Xelith_Backround",
-          "Particles_Xelith_Obsahosmy0"
+          "Particles_Xelith_Obsah0"
         ],
         "nodeMultipliers": {
           "Particles_Xelith_Backround": 1,
-          "Particles_Xelith_Obsahosmy0": 0.4
+          "Particles_Xelith_Obsah0": 0.4,
+          "Particles_Xelith_Obsah1": 1
         },
         "nodeMouseMultipliers": {
           "Particles_Xelith_Backround": 1,
-          "Particles_Xelith_Obsahosmy0": 0.3,
-          "Particles_Xelith_Obsahtreti1": 1
+          "Particles_Xelith_Obsah0": 0.3,
+          "Particles_Xelith_Obsah1": 1
         },
         "nodeQuality": {
           "Particles_Xelith_Backround": 2,
-          "Particles_Xelith_Obsahosmy0": 1
+          "Particles_Xelith_Obsah0": 1,
+          "Particles_Xelith_Obsah1": 1
         }
       },
       "videoUrl": "video/reklama xelith.mp4"
@@ -76,8 +78,8 @@
         "hasParticles": true,
         "selectedNodes": [
           "Particles_Xelith_Backround",
-          "articles_Xelith_Obsah_starej",
-          "Particles_Xelith_Obsah1"
+          "Particles_Xelith_Obsah1",
+          "Particles_Xelith_Obsah0"
         ],
         "baseSize": 0.01,
         "sizeRandomness": 0.5,
