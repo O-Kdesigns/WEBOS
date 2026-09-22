@@ -78,26 +78,32 @@ export const TextContrastShader = {
         discard;
       }
 
-      // Převod do HSV prostoru
+      // 1. Spočteme jas (luminanci) podkladu
+      float lum = dot(baseColor.rgb, vec3(0.299, 0.587, 0.114));
+
+      // 2. Převod do HSV prostoru
       vec3 hsv = rgb2hsv(baseColor.rgb);
 
-      // Úroveň černé (1.0 = černá, 0.0 = plně jasná)
-      float blackLevel = clamp(1.0 - hsv.z, 0.0, 1.0);
+      // 3. Masivní zvýšení Value: nelineární gamma křivka vytáhne tmavé i střední tóny do vysokého jasu
+      float boostedV = min(1.0, pow(max(hsv.z, 0.02), 0.42) * max(1.0, uValueBoost));
+      hsv.z = boostedV;
 
-      // 2. Zvýšení Value (kontrast jasu): vytáhne jas a kontrast do maxima bez vyblednutí barvy
-      hsv.z = mix(hsv.z, 1.0, uValueBoost);
+      // 4. Zvýšení sytosti: zabrání vyblednutí barvy při vytažení jasu
+      hsv.y = min(1.0, hsv.y * 1.35);
 
-      // 3. Posun do bílé: čím černější barva podkladu byla, tím více se posune do bílé (úbytek saturace)
-      hsv.y = mix(hsv.y, 0.0, clamp(blackLevel * uWhiteShift, 0.0, 1.0));
-
-      // Volitelný Hue posun
+      // 5. Volitelný Hue posun
       hsv.x = fract(hsv.x + uHueShift);
 
-      // Převod zpět do RGB
+      // 6. Převod zpět do RGB
       vec3 finalRgb = hsv2rgb(hsv);
 
-      // Smíchání s původní barvou podle intensity a masky textu
-      vec3 result = mix(baseColor.rgb, finalRgb, mask * uIntensity);
+      // 7. Přechod do čistě bílé na černém / extrémně tmavém podkladu
+      // Pokud je luminace podkladu < 0.07, plynule přejde do čistě bílé
+      float blackFactor = clamp((0.07 - lum) / 0.07, 0.0, 1.0) * uWhiteShift;
+      finalRgb = mix(finalRgb, vec3(1.0), blackFactor);
+
+      // Smíchání s původní barvou podle intensity
+      vec3 result = mix(baseColor.rgb, finalRgb, uIntensity);
 
       gl_FragColor = vec4(result, mask);
     }

@@ -17,10 +17,10 @@ export function getHudTextMask(appConfig, screenWidth, screenHeight, hoveredId) 
     return null;
   }
 
-  // Rozměry plátna pro masku (dostatečné rozlišení pro ostrá písmena)
+  // Rozměry plátna pro masku (odpovídají skutečné výšce textového bloku vlevo dole)
   const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
-  const boxW = 380;
-  const boxH = 340;
+  const boxW = 300;
+  const boxH = 225;
   const canvasW = Math.floor(boxW * dpr);
   const canvasH = Math.floor(boxH * dpr);
 
@@ -68,19 +68,18 @@ export function getHudTextMask(appConfig, screenWidth, screenHeight, hoveredId) 
   // V Three.js CanvasTexture má flipY = true (default):
   // Y = 0 v canvasu odpovídá V = 1 (horní okraj boxu na obrazovce).
   // Y = canvasH v canvasu odpovídá V = 0 (dolní okraj boxu na obrazovce).
-  // Proto text kreslíme odshora dolů (od Y = 10 směrem dolů k Y = canvasH).
   ctx.fillStyle = '#ffffff';
   ctx.textBaseline = 'top';
 
-  let currentY = 16 * dpr;
-  const startX = 16 * dpr;
+  let currentY = 4 * dpr;
+  const startX = 4 * dpr;
 
   // 1. Nadpis menu
   if (header) {
     ctx.font = `700 ${fontSize * 0.95}px nbarchitekt, 'Courier New', monospace`;
     ctx.globalAlpha = 0.9;
     ctx.fillText(header, startX, currentY);
-    currentY += fontSize * 0.95 + 16 * dpr;
+    currentY += fontSize * 0.95 + 12 * dpr;
   }
 
   // 2. Seznam položek
