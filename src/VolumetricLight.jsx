@@ -578,6 +578,14 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     return { quadScene: qScene, quadCamera: qCam, material: mat };
   }, []);
 
+  const materialRef = useRef(material);
+  useEffect(() => {
+    materialRef.current = material;
+    return () => {
+      material.dispose();
+    };
+  }, [material]);
+
   const textContrastPass = useMemo(() => {
     return new TextContrastPass({
       valueBoost: 1.0,
