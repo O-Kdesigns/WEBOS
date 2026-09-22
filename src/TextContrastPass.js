@@ -9,6 +9,9 @@ import * as THREE from 'three';
 export const TextContrastShader = {
   uniforms: {
     tDiffuse: { value: null },
+    tMask: { value: null },           // 2D textová maska pro vykrojení efektu přesně na písmena
+    uMaskBounds: { value: new THREE.Vector4(0, 0, 1, 1) }, // UV hranice textu [minU, minV, maxU, maxV]
+    uEnableMask: { value: 1.0 },      // 1.0 = oříznout na text, 0.0 = celá plocha / roh
     uValueBoost: { value: 1.0 },      // Zvýšení Value (kontrast jasu do maxima)
     uWhiteShift: { value: 1.0 },      // Síla posunu k bílé podle úrovně černé
     uHueShift: { value: 0.0 },        // Jemný posun Hue (0.0 = beze změny)
@@ -23,6 +26,9 @@ export const TextContrastShader = {
   `,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
+    uniform sampler2D tMask;
+    uniform vec4 uMaskBounds;
+    uniform float uEnableMask;
     uniform float uValueBoost;
     uniform float uWhiteShift;
     uniform float uHueShift;
@@ -47,11 +53,29 @@ export const TextContrastShader = {
     }
 
     void main() {
-      // 1. Propustí 100% původní barvy
+      float mask = 1.0;
+
+      // Pokud je zapnuto oříznutí na text (nebo roh obrazovky)
+      if (uEnableMask > 0.5) {
+        if (vUv.x < uMaskBounds.x || vUv.x > uMaskBounds.z ||
+            vUv.y < uMaskBounds.y || vUv.y > uMaskBounds.w) {
+          discard;
+        }
+
+        vec2 maskUv = vec2(
+          (vUv.x - uMaskBounds.x) / max(0.0001, uMaskBounds.z - uMaskBounds.x),
+          (vUv.y - uMaskBounds.y) / max(0.0001, uMaskBounds.w - uMaskBounds.y)
+        );
+
+        mask = texture2D(tMask, maskUv).a;
+        if (mask <= 0.02) {
+          discard;
+        }
+      }
+
       vec4 baseColor = texture2D(tDiffuse, vUv);
       if (baseColor.a <= 0.001) {
-        gl_FragColor = baseColor;
-        return;
+        discard;
       }
 
       // Převod do HSV prostoru
@@ -60,10 +84,10 @@ export const TextContrastShader = {
       // Úroveň černé (1.0 = černá, 0.0 = plně jasná)
       float blackLevel = clamp(1.0 - hsv.z, 0.0, 1.0);
 
-      // 2. Zvýšení Value (kontrast jasu): tmavá fialová -> světlá kontrastní fialová
+      // 2. Zvýšení Value (kontrast jasu): vytáhne jas a kontrast do maxima bez vyblednutí barvy
       hsv.z = mix(hsv.z, 1.0, uValueBoost);
 
-      // 3. Posun do bílé: čím černější barva byla, tím více se posune do bílého středu (hodně světlá fialová)
+      // 3. Posun do bílé: čím černější barva podkladu byla, tím více se posune do bílé (úbytek saturace)
       hsv.y = mix(hsv.y, 0.0, clamp(blackLevel * uWhiteShift, 0.0, 1.0));
 
       // Volitelný Hue posun
@@ -72,10 +96,10 @@ export const TextContrastShader = {
       // Převod zpět do RGB
       vec3 finalRgb = hsv2rgb(hsv);
 
-      // Smíchání s původní barvou podle intensity
-      vec3 result = mix(baseColor.rgb, finalRgb, uIntensity);
+      // Smíchání s původní barvou podle intensity a masky textu
+      vec3 result = mix(baseColor.rgb, finalRgb, mask * uIntensity);
 
-      gl_FragColor = vec4(result, baseColor.a);
+      gl_FragColor = vec4(result, mask);
     }
   `
 };
@@ -95,13 +119,15 @@ export class TextContrastPass {
       fragmentShader: TextContrastShader.fragmentShader,
       depthTest: false,
       depthWrite: false,
-      transparent: true
+      transparent: true,
+      blending: THREE.NormalBlending
     });
 
     if (options.valueBoost !== undefined) this.material.uniforms.uValueBoost.value = options.valueBoost;
     if (options.whiteShift !== undefined) this.material.uniforms.uWhiteShift.value = options.whiteShift;
     if (options.hueShift !== undefined) this.material.uniforms.uHueShift.value = options.hueShift;
     if (options.intensity !== undefined) this.material.uniforms.uIntensity.value = options.intensity;
+    if (options.enableMask !== undefined) this.material.uniforms.uEnableMask.value = options.enableMask;
 
     // Fullscreen quad geometrie a scéna pro vykreslení
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -124,8 +150,17 @@ export class TextContrastPass {
   get intensity() { return this.material.uniforms.uIntensity.value; }
   set intensity(v) { this.material.uniforms.uIntensity.value = v; }
 
+  get mask() { return this.material.uniforms.tMask.value; }
+  set mask(v) { this.material.uniforms.tMask.value = v; }
+
+  get maskBounds() { return this.material.uniforms.uMaskBounds.value; }
+  set maskBounds(v) { this.material.uniforms.uMaskBounds.value = v; }
+
+  get enableMask() { return this.material.uniforms.uEnableMask.value; }
+  set enableMask(v) { this.material.uniforms.uEnableMask.value = v; }
+
   /**
-   * Vykreslení passu (kompatibilní s Three.js EffectComposer i samostatným voláním)
+   * Vykreslení passu
    */
   render(renderer, writeBuffer, readBuffer) {
     if (!this.enabled) return;
@@ -141,7 +176,12 @@ export class TextContrastPass {
       renderer.setRenderTarget(writeBuffer);
     }
 
+    const prevAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
+
     renderer.render(this.scene, this.camera);
+
+    renderer.autoClear = prevAutoClear;
   }
 
   dispose() {

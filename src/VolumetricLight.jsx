@@ -2,6 +2,8 @@ import { useMemo, useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { debugMetrics } from './DebugMonitor';
+import { TextContrastPass } from './TextContrastPass';
+import { getHudTextMask } from './hudTextMask';
 
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 dummyTexture.needsUpdate = true;
@@ -576,13 +578,32 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     return { quadScene: qScene, quadCamera: qCam, material: mat };
   }, []);
 
-  const materialRef = useRef(material);
+  const textContrastPass = useMemo(() => {
+    return new TextContrastPass({
+      valueBoost: 1.0,
+      whiteShift: 1.0,
+      intensity: 1.0,
+      enableMask: 1.0
+    });
+  }, []);
+
+  const testPlateHelper = useMemo(() => {
+    const geo = new THREE.PlaneGeometry(2, 2);
+    const mat = new THREE.MeshBasicMaterial({ color: '#0055ff', depthTest: false, depthWrite: false });
+    const mesh = new THREE.Mesh(geo, mat);
+    const pScene = new THREE.Scene();
+    const pCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    pScene.add(mesh);
+    return { mesh, scene: pScene, camera: pCam, material: mat };
+  }, []);
+
   useEffect(() => {
-    materialRef.current = material;
     return () => {
-      material.dispose();
+      textContrastPass.dispose();
+      testPlateHelper.material.dispose();
+      testPlateHelper.mesh.geometry.dispose();
     };
-  }, [material]);
+  }, [textContrastPass, testPlateHelper]);
 
   const vl = appConfig?.volumetricLight || {};
   const fog = appConfig?.insideFog || {};
@@ -727,6 +748,36 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     gl.setRenderTarget(sceneTarget);
     gl.render(scene, camera);
 
+    // Pokud je aktivní testovací barevná deska pod textem, vykreslíme ji do sceneTarget
+    const isTestPlate = Boolean(appConfig?.ui2d?.bottomLeft?.testPlateEnabled || (typeof window !== 'undefined' && window.__webosTestPlateActive));
+    if (isTestPlate) {
+      const bl = appConfig?.ui2d?.bottomLeft || {};
+      testPlateHelper.material.color.set(bl.testPlateColor || '#0055ff');
+
+      const boxW = 340;
+      const boxH = 300;
+      const posX = bl.posX ?? 36;
+      const posY = bl.posY ?? 36;
+
+      const minU = posX / width;
+      const minV = posY / height;
+      const maxU = (posX + boxW) / width;
+      const maxV = (posY + boxH) / height;
+
+      const ndcMinX = minU * 2.0 - 1.0;
+      const ndcMaxX = maxU * 2.0 - 1.0;
+      const ndcMinY = minV * 2.0 - 1.0;
+      const ndcMaxY = maxV * 2.0 - 1.0;
+
+      testPlateHelper.mesh.position.set((ndcMinX + ndcMaxX) * 0.5, (ndcMinY + ndcMaxY) * 0.5, 0);
+      testPlateHelper.mesh.scale.set((ndcMaxX - ndcMinX) * 0.5, (ndcMaxY - ndcMinY) * 0.5, 1);
+
+      const prevClear = gl.autoClear;
+      gl.autoClear = false;
+      gl.render(testPlateHelper.scene, testPlateHelper.camera);
+      gl.autoClear = prevClear;
+    }
+
     // Zachycení reálných metrik hlavní 3D scény (draw calls, trojúhelníky, GPU textury)
     debugMetrics.drawCalls = gl.info.render.calls;
     debugMetrics.triangles = gl.info.render.triangles;
@@ -737,6 +788,28 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.tDiffuse.value = sceneTarget.texture;
     mat.uniforms.tDepth.value = sceneTarget.depthTexture;
     gl.render(quadScene, quadCamera);
+
+    // 3. TextContrastPass - HSV transformace a oříznutí přesně na písmena textu v rohu obrazovky
+    if (appConfig?.ui2d?.enabled !== false) {
+      const hudMask = getHudTextMask(appConfig, size.width, size.height, null);
+      if (hudMask && hudMask.texture) {
+        textContrastPass.material.uniforms.tDiffuse.value = sceneTarget.texture;
+        textContrastPass.material.uniforms.tMask.value = hudMask.texture;
+        textContrastPass.material.uniforms.uMaskBounds.value.set(
+          hudMask.bounds[0],
+          hudMask.bounds[1],
+          hudMask.bounds[2],
+          hudMask.bounds[3]
+        );
+        textContrastPass.material.uniforms.uEnableMask.value = 1.0;
+        textContrastPass.material.uniforms.uValueBoost.value = appConfig?.ui2d?.valueBoost ?? 1.0;
+        textContrastPass.material.uniforms.uWhiteShift.value = appConfig?.ui2d?.whiteShift ?? 1.0;
+        textContrastPass.material.uniforms.uHueShift.value = appConfig?.ui2d?.hueShift ?? 0.0;
+        textContrastPass.material.uniforms.uIntensity.value = appConfig?.ui2d?.contrastIntensity ?? 1.0;
+
+        textContrastPass.render(gl, null);
+      }
+    }
   }, 1);
 
   return null;

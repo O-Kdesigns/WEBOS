@@ -92,7 +92,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
 
       <div 
         className="hud-2d-container"
-        style={{ mixBlendMode: blendMode }}
+        style={{ mixBlendMode: 'normal' }}
       >
       <div
         className="hud-bottom-left"
@@ -104,14 +104,15 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
           fontSize: `${fontSize}px`,
         }}
       >
-        {/* Záhlaví menu (např. WHAT ARE YOU LOOKING FOR?) */}
+        {/* Záhlaví menu (např. WHAT ARE YOU LOOKING FOR?) - vykresleno v WebGL TextContrastPass */}
         {bl.header && (
           <div
             className="hud-menu-header"
             style={{
-              color: bl.headerColor || 'rgba(255, 255, 255, 0.8)',
+              color: 'transparent',
               fontSize: `${fontSize * 0.95}px`,
               letterSpacing: `${letterSpacing * 1.1}px`,
+              userSelect: 'none',
             }}
           >
             {bl.header}
@@ -127,22 +128,9 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
 
             const isClickable = Boolean(item.link);
 
-            // Skleněné režimy (luminosity, color-dodge, screen, overlay atd.) potřebují neutrální barvu,
-            // aby fungovaly jako čistý přenos jasu/kontrastu pozadí a neobarvovaly ho původní barvou textu.
-            // U 'luminosity' určuje cílový jas (Value) pozadí a přechod černé na bílou.
-            const isGlass = blendMode !== 'normal';
-            const glassBright = bl.glassBrightness ?? 0.85;
-            const glassHex = Math.floor(Math.max(0, Math.min(1, glassBright)) * 255).toString(16).padStart(2, '0');
-            const glassColorHex = `#${glassHex}${glassHex}${glassHex}`;
-            
-            const effectiveColor = isGlass ? glassColorHex : color;
-            const effectiveHoverColor = isGlass ? '#ffffff' : hoverColor;
-
-            // Výsledný text shadow a bloom efekt
+            // Výsledný text shadow a bloom efekt při najetí myší
             const itemTextShadow = isHovered
               ? `0 0 5px rgba(255, 255, 255, 0.95), 0 0 12px #ffffff, 0 0 24px rgba(${rgbBloom}, ${0.85 * bloomIntensity}), 0 0 42px rgba(${rgbBloom}, ${0.7 * bloomIntensity})`
-              : enableBloom
-              ? `0 0 6px rgba(${rgbBloom}, ${0.35 * bloomIntensity}), 0 0 14px rgba(${rgbBloom}, ${0.2 * bloomIntensity})`
               : 'none';
 
             return (
@@ -172,9 +160,10 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
                     rel="noopener noreferrer"
                     className="hud-item-link"
                     style={{
-                      color: isHovered ? effectiveHoverColor : effectiveColor,
+                      color: isHovered ? '#ffffff' : 'transparent',
                       textShadow: itemTextShadow,
                       letterSpacing: `${letterSpacing}px`,
+                      cursor: 'pointer',
                     }}
                   >
                     {bulletStr && <span className="hud-bullet">{bulletStr}</span>}
@@ -184,7 +173,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
                   <div
                     className="hud-item-static"
                     style={{
-                      color: isHovered ? effectiveHoverColor : effectiveColor,
+                      color: isHovered ? '#ffffff' : 'transparent',
                       textShadow: itemTextShadow,
                       letterSpacing: `${letterSpacing}px`,
                     }}
@@ -208,7 +197,11 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
               href={bl.pillButton.link || '#'}
               onClick={(e) => {
                 e.preventDefault();
-                setLocalPlateActive(prev => !prev);
+                setLocalPlateActive(prev => {
+                  const next = !prev;
+                  if (typeof window !== 'undefined') window.__webosTestPlateActive = next;
+                  return next;
+                });
               }}
               title="Kliknutím zapneš/vypneš testovací barevnou desku pod textem"
               target={linkNewTab && !bl.pillButton.link?.startsWith('#') ? '_blank' : '_self'}
