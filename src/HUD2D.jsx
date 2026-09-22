@@ -22,6 +22,7 @@ function hexToRgb(hex, defaultVal = '168, 85, 247') {
 export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
   const [hoveredId, setHoveredId] = useState(null);
   const [isPillHovered, setIsPillHovered] = useState(false);
+  const [localPlateActive, setLocalPlateActive] = useState(false);
 
   const ui2d = appConfig.ui2d || {};
   if (ui2d.enabled === false) return null;
@@ -29,12 +30,14 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
   const bl = ui2d.bottomLeft || {};
   if (bl.enabled === false) return null;
 
+  const isPlateVisible = Boolean(bl.testPlateEnabled || localPlateActive);
+
   const color = bl.color || '#9d6ef8';
   const hoverColor = bl.hoverColor || '#ffffff';
   const bloomColor = bl.bloomColor || '#a855f7';
   const bloomIntensity = bl.bloomIntensity ?? 1.4;
   const enableBloom = bl.enableBloom !== false;
-  const blendMode = bl.blendMode || 'screen';
+  const blendMode = bl.blendMode || 'luminosity';
   const fontSize = bl.fontSize ?? 14;
   const letterSpacing = bl.letterSpacing ?? 1.4;
   const lineSpacing = bl.lineSpacing ?? 12;
@@ -65,10 +68,32 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
   }
 
   return (
-    <div 
-      className="hud-2d-container"
-      style={{ mixBlendMode: blendMode }}
-    >
+    <>
+      {/* Barevná testovací deska přímo pod 2D HUD textem pro testování reakce skla na barvu */}
+      {isPlateVisible && (
+        <div
+          className="hud-test-plate"
+          style={{
+            position: 'absolute',
+            bottom: `${(bl.posY ?? 36) - 18}px`,
+            left: `${(bl.posX ?? 36) - 18}px`,
+            width: '330px',
+            height: '280px',
+            backgroundColor: bl.testPlateColor || '#0055ff',
+            borderRadius: '16px',
+            zIndex: 24, // Z-index 24 leží přesně pod hud-2d-container (z-index 25), takže na něj blendMode reaguje
+            pointerEvents: 'none',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.7), inset 0 0 20px rgba(255, 255, 255, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            transition: 'opacity 0.2s ease',
+          }}
+        />
+      )}
+
+      <div 
+        className="hud-2d-container"
+        style={{ mixBlendMode: blendMode }}
+      >
       <div
         className="hud-bottom-left"
         style={{
@@ -181,19 +206,25 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
           return (
             <a
               href={bl.pillButton.link || '#'}
+              onClick={(e) => {
+                e.preventDefault();
+                setLocalPlateActive(prev => !prev);
+              }}
+              title="Kliknutím zapneš/vypneš testovací barevnou desku pod textem"
               target={linkNewTab && !bl.pillButton.link?.startsWith('#') ? '_blank' : '_self'}
               rel="noopener noreferrer"
               className="hud-pill-button"
               onMouseEnter={() => setIsPillHovered(true)}
               onMouseLeave={() => setIsPillHovered(false)}
               style={{
-                borderColor: isPillHovered ? '#ffffff' : `rgba(${rgbBloom}, 0.45)`,
-                color: isPillHovered ? (blendMode !== 'normal' ? '#ffffff' : '#ffffff') : (blendMode !== 'normal' ? glassColorHex : color),
-                textShadow: isPillHovered ? `0 0 10px #ffffff, 0 0 20px rgba(${rgbBloom}, 0.8)` : 'none',
-                boxShadow: isPillHovered
+                borderColor: isPillHovered || isPlateVisible ? '#ffffff' : `rgba(${rgbBloom}, 0.45)`,
+                color: (isPillHovered || isPlateVisible) ? '#ffffff' : (blendMode !== 'normal' ? glassColorHex : color),
+                textShadow: (isPillHovered || isPlateVisible) ? `0 0 10px #ffffff, 0 0 20px rgba(${rgbBloom}, 0.8)` : 'none',
+                boxShadow: (isPillHovered || isPlateVisible)
                   ? `0 0 25px rgba(${rgbBloom}, 0.6), inset 0 0 12px rgba(255, 255, 255, 0.25)`
                   : `0 0 10px rgba(0, 0, 0, 0.5)`,
                 letterSpacing: `${letterSpacing}px`,
+                cursor: 'pointer',
               }}
             >
               {bl.pillButton.text || 'ASK ME ANYTHING...'}
@@ -202,5 +233,6 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
         })()}
       </div>
     </div>
+    </>
   );
 }

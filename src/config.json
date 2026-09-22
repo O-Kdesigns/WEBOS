@@ -181,6 +181,8 @@
       "bloomIntensity": 3,
       "blendMode": "luminosity",
       "glassBrightness": 0.85,
+      "testPlateEnabled": false,
+      "testPlateColor": "#0055ff",
       "fontSize": 13,
       "fontFamily": "nbarchitekt",
       "letterSpacing": 1.4,

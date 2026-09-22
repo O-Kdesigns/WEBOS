@@ -216,7 +216,43 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                         <div className="input-group">
                           <label>Úroveň bílé / Jas skla (Glass Brightness):</label>
                           <span className="input-desc">Pro skleněné režimy určuje sílu zesvětlení/násobení pozadí (0.1 = tmavé sklo, 1.0 = extrémní svítivost/zrcadlo).</span>
-                          <DragNumberInput step={0.01} min={0.1} max={1.0} value={appConfig.ui2d?.bottomLeft?.glassBrightness ?? 0.88} onChange={val => updateUi2dBottomLeft('glassBrightness', val)} />
+                          <DragNumberInput step={0.01} min={0.1} max={1.0} value={appConfig.ui2d?.bottomLeft?.glassBrightness ?? 0.85} onChange={val => updateUi2dBottomLeft('glassBrightness', val)} />
+                        </div>
+
+                        {/* TESTOVACÍ DESKA PRO ZKOUŠENÍ SKLA */}
+                        <div style={{
+                          padding: '0.6rem',
+                          background: 'rgba(59, 130, 246, 0.08)',
+                          borderRadius: '6px',
+                          border: '1px solid rgba(59, 130, 246, 0.25)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.5rem'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#60a5fa' }}>
+                              🧪 Testovací barevná deska pod text
+                            </span>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', cursor: 'pointer', color: '#93c5fd' }}>
+                              <input 
+                                type="checkbox"
+                                checked={appConfig.ui2d?.bottomLeft?.testPlateEnabled || false}
+                                onChange={e => updateUi2dBottomLeft('testPlateEnabled', e.target.checked)}
+                              />
+                              Aktivní
+                            </label>
+                          </div>
+                          <span className="input-desc" style={{ fontSize: '0.7rem' }}>
+                            Lze zapnout/vypnout také kliknutím na tlačítko "ASK ME ANYTHING..." v rohu obrazovky.
+                          </span>
+                          <div className="input-group" style={{ marginBottom: 0 }}>
+                            <label>Barva testovací desky:</label>
+                            <input 
+                              type="color" 
+                              value={appConfig.ui2d?.bottomLeft?.testPlateColor || '#0055ff'} 
+                              onChange={e => updateUi2dBottomLeft('testPlateColor', e.target.value)} 
+                            />
+                          </div>
                         </div>
 
                         <div className="input-group">
