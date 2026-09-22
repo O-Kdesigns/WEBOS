@@ -24,17 +24,26 @@ export function GlobalSettingsPanel({
   updateUi2dPillButton,
   openSections,
   toggleSection,
+  touchSection,
   assets
 }) {
-  return (
-    <>
-        <div className="editor-card" style={{ border: '1px solid #3b82f6' }}>
-          <div className="card-header">
-            <h3 style={{ color: '#3b82f6' }}>⚙️ Globální nastavení (config.json)</h3>
-          </div>
+  const DEFAULT_GLOBAL_SECTION_ORDER = [
+    'global-2d',
+    'global-power-saving',
+    'global-volumetric',
+    'inside-fog-section',
+    'global-background-dark',
+    'global-kamera',
+    'global-fyzika',
+    'global-hudba',
+    'global-castice',
+    'global-background-cylinder',
+    'global-volumetric-unified'
+  ];
 
-          {/* ÚSPORNÝ REŽIM (POWER SAVING) */}
-          <div className="editor-section">
+  const sections = {
+    'global-power-saving': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-power-saving')}>
             <h4 
               style={{ color: '#10b981', borderBottomColor: 'rgba(16, 185, 129, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-power-saving')}
@@ -89,9 +98,9 @@ export function GlobalSettingsPanel({
               </div>
             )}
           </div>
-
-          {/* 1. VOLUMETRIC LIGHT (GOD RAYS) */}
-          <div className="editor-section">
+    ),
+    'global-volumetric': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-volumetric')}>
             <h4 
               style={{ color: '#f59e0b', borderBottomColor: 'rgba(245, 158, 11, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-volumetric')}
@@ -261,9 +270,9 @@ export function GlobalSettingsPanel({
               </>
             )}
           </div>
-
-          {/* VOLUMETRICKÁ MLHA & STÍNY UVNITŘ (INSIDE FOG & SHADOWS) */}
-          <div className="editor-section">
+    ),
+    'inside-fog-section': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('inside-fog-section')}>
             <h4 
               style={{ color: '#06b6d4', borderBottomColor: 'rgba(6, 182, 212, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('inside-fog-section')}
@@ -716,9 +725,9 @@ export function GlobalSettingsPanel({
               </>
             )}
           </div>
-
-          {/* 2. POZADÍ A HDRI (DARK STUDIO) */}
-          <div className="editor-section">
+    ),
+    'global-background-dark': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-background-dark')}>
             <h4 
               style={{ color: '#8b5cf6', borderBottomColor: 'rgba(139, 92, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-background-dark')}
@@ -787,9 +796,9 @@ export function GlobalSettingsPanel({
               </>
             )}
           </div>
-
-          {/* 3. KAMERA A OSVĚTLENÍ */}
-          <div className="editor-section">
+    ),
+    'global-kamera': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-kamera')}>
             <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-kamera')}
@@ -918,9 +927,9 @@ export function GlobalSettingsPanel({
               </>
             )}
           </div>
-
-          {/* 4. FYZIKA ROTACE A GEST */}
-          <div className="editor-section">
+    ),
+    'global-fyzika': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-fyzika')}>
             <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-fyzika')}
@@ -991,9 +1000,9 @@ export function GlobalSettingsPanel({
               </>
             )}
           </div>
-
-          {/* 5. HUDEBNÍ PŘEHRÁVAČ */}
-          <div className="editor-section">
+    ),
+    'global-hudba': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-hudba')}>
             <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-hudba')}
@@ -1016,9 +1025,9 @@ export function GlobalSettingsPanel({
               </div>
             )}
           </div>
-
-          {/* 6. FYZIKA ČÁSTIC A INTERAKCE */}
-          <div className="editor-section">
+    ),
+    'global-castice': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-castice')}>
             <h4 
               style={{ color: '#3b82f6', borderBottomColor: 'rgba(59, 130, 246, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-castice')}
@@ -1089,9 +1098,9 @@ export function GlobalSettingsPanel({
               </>
             )}
           </div>
-
-          {/* 7. POZADÍ PROSTORU (VÁLEC) */}
-          <div className="editor-section">
+    ),
+    'global-background-cylinder': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-background-cylinder')}>
             <h4 
               style={{ color: '#10b981', borderBottomColor: 'rgba(16, 185, 129, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-background-cylinder')}
@@ -1126,9 +1135,9 @@ export function GlobalSettingsPanel({
               </div>
             )}
           </div>
-
-          {/* 8. VOLUMETRICKÉ VIDEO & PROSTOROVÝ PRŮHLED (ACTIVE THEORY) */}
-          <div className="editor-section">
+    ),
+    'global-volumetric-unified': (
+      <div className="editor-section" onFocusCapture={() => touchSection && touchSection('global-volumetric-unified')}>
             <h4 
               style={{ color: '#06b6d4', borderBottomColor: 'rgba(6, 182, 212, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-volumetric-unified')}
@@ -1310,9 +1319,10 @@ export function GlobalSettingsPanel({
               </>
             )}
           </div>
-
-          {/* 9. 2D ROZHRANÍ (HUD) */}
-          <UI2DSettingsPanel 
+    ),
+    'global-2d': (
+      <div onFocusCapture={() => touchSection && touchSection('global-2d')}>
+        <UI2DSettingsPanel 
             appConfig={appConfig}
             updateUi2d={updateUi2d}
             updateUi2dBottomLeft={updateUi2dBottomLeft}
@@ -1323,7 +1333,32 @@ export function GlobalSettingsPanel({
             openSections={openSections}
             toggleSection={toggleSection}
           />
-        </div>
-    </>
+      </div>
+    )
+  };
+
+  const currentOrder = (appConfig.editorSectionOrder && Array.isArray(appConfig.editorSectionOrder))
+    ? appConfig.editorSectionOrder
+    : DEFAULT_GLOBAL_SECTION_ORDER;
+
+  const fullOrder = [
+    ...currentOrder.filter(id => sections[id]),
+    ...DEFAULT_GLOBAL_SECTION_ORDER.filter(id => !currentOrder.includes(id))
+  ];
+
+  return (
+    <div className="editor-card" style={{ border: '1px solid #3b82f6' }}>
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ color: '#3b82f6' }}>⚙️ Globální nastavení (config.json)</h3>
+        <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>
+          Řazeno podle naposledy navštívené kolonky
+        </span>
+      </div>
+      {fullOrder.map(sectionId => (
+        <React.Fragment key={sectionId}>
+          {sections[sectionId]}
+        </React.Fragment>
+      ))}
+    </div>
   );
 }

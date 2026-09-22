@@ -179,8 +179,8 @@
       "bloomColor": "#cc0000",
       "enableBloom": false,
       "bloomIntensity": 3,
-      "blendMode": "luminosity",
-      "glassBrightness": 0.85,
+      "blendMode": "color-dodge",
+      "glassBrightness": 0.58,
       "testPlateEnabled": false,
       "testPlateColor": "#0055ff",
       "fontSize": 13,
@@ -196,5 +196,18 @@
         "link": "#ask"
       }
     }
-  }
+  },
+  "editorSectionOrder": [
+    "global-2d",
+    "global-power-saving",
+    "global-volumetric",
+    "inside-fog-section",
+    "global-background-dark",
+    "global-kamera",
+    "global-fyzika",
+    "global-hudba",
+    "global-castice",
+    "global-background-cylinder",
+    "global-volumetric-unified"
+  ]
 }

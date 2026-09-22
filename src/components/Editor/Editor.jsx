@@ -24,11 +24,50 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
   const [isTransparent, setIsTransparent] = useState(false);
   const [blenderNodes, setBlenderNodes] = useState([]);
 
+  const touchSection = (sectionId) => {
+    if (!sectionId) return;
+    const topLevelKeys = [
+      'global-2d',
+      'global-power-saving',
+      'global-volumetric',
+      'inside-fog-section',
+      'global-background-dark',
+      'global-kamera',
+      'global-fyzika',
+      'global-hudba',
+      'global-castice',
+      'global-background-cylinder',
+      'global-volumetric-unified'
+    ];
+
+    let targetKey = sectionId;
+    if (sectionId.startsWith('sub-2d') || sectionId === 'global-2d') targetKey = 'global-2d';
+    else if (sectionId.startsWith('vl-') || sectionId === 'global-volumetric') targetKey = 'global-volumetric';
+    else if (sectionId.startsWith('fog-') || sectionId === 'inside-fog-section') targetKey = 'inside-fog-section';
+    else if (sectionId.startsWith('bg-') || sectionId === 'global-background-dark') targetKey = 'global-background-dark';
+    else if (sectionId.startsWith('cam-') || sectionId === 'global-kamera') targetKey = 'global-kamera';
+    else if (sectionId.startsWith('phys-') || sectionId === 'global-fyzika') targetKey = 'global-fyzika';
+    else if (sectionId.startsWith('part-') || sectionId === 'global-castice') targetKey = 'global-castice';
+    else if (sectionId.startsWith('sub-volumetric') || sectionId === 'global-volumetric-unified') targetKey = 'global-volumetric-unified';
+
+    if (!topLevelKeys.includes(targetKey)) return;
+
+    const currentOrder = (appConfig.editorSectionOrder && Array.isArray(appConfig.editorSectionOrder))
+      ? appConfig.editorSectionOrder
+      : topLevelKeys;
+
+    if (currentOrder[0] === targetKey) return;
+
+    const newOrder = [targetKey, ...currentOrder.filter(k => k !== targetKey)];
+    setAppConfig(prev => ({ ...prev, editorSectionOrder: newOrder }));
+  };
+
   const toggleSection = (sectionId) => {
     setOpenSections(prev => ({
       ...prev,
       [sectionId]: !prev[sectionId]
     }));
+    touchSection(sectionId);
   };
 
   useEffect(() => {
@@ -138,6 +177,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
           updateUi2dPillButton={updateUi2dPillButton}
           openSections={openSections}
           toggleSection={toggleSection}
+          touchSection={touchSection}
           assets={assets}
         />
 
