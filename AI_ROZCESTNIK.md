@@ -13,8 +13,8 @@ Tento soubor slouží jako index důležitých minulých chatů a milníků, aby
   * *Popis:* Aplikace Bloom efektů, řešení shadingu a refrakce pro pozadí (Válec / Kužel). Přidání hloubky a svícení (VolumetricLightPass).
   
 ### 💡 Experimenty a Design
-* **[Generování vizuálů: DNA šroubovice a Tornádo](conversation://b2f3f7d8-87c0-4afe-8e0a-64131077af32)**
-  * *Popis:* Diskuze a AI generování konceptů uživatelského rozhraní. Testování tvarů: Dvojitá šroubovice, Plovoucí karty na spirále.
+* **[Přechod na DNA šroubovici a nová větev](conversation://b2f3f7d8-87c0-4afe-8e0a-64131077af32)**
+  * *Popis:* Přechod z horizontálního válce na vertikální DNA Double Helix (vlákna, příčky nesoucí projekty, sekvenovací rozepínací mechanika). Větev `backup/cylinder-version` uchovává předchozí stav, vývoj DNA probíhá na `main`.
 
 ---
 *Tip pro AI:* Pokud uživatel zmíní, že chce navázat na starší koncept nebo nastavení z těchto vláken, klikni na odkaz, načti si kontext dané session a implementuj poznatky do současného kódu.

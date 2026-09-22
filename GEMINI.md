@@ -90,3 +90,9 @@ Tento soubor definuje kritická pravidla a osvědčené postupy pro zachování 
 * **Princip:** Žádný React soubor nesmí být gigantickým monolitem (nad 500 řádků). UI a 3D logika se musí důsledně dělit do přehledných složek a komponent (např. src/components/...).
 * **Důvod:** Obří soubory (jako starý 2500-řádkový Editor.jsx) absolutně ničí rychlost AI agenta a paralyzují kontextovou paměť. Drobná úprava se pak zbytečně protáhne na minuty.
 * **Pravidlo:** Jakmile soubor začne bobtnat a sdružovat příliš mnoho různých funkcí, MUSÍ se okamžitě refaktorovat na menší, úzce specializované soubory s čistými importy.
+
+---
+
+## 13. Architektura scény: DNA šroubovice a správa větví
+* **Aktuální hlavní architektura (`main`):** Hlavním vizuálním a navigačním konceptem je vertikální **DNA šroubovice (Double Helix)** namísto horizontálního válce. Vývoj na `main` je zaměřen na plynulý vertikální scroll se synchronní rotací, příčky nesoucí projekty a rozepínací sekvenovací mechaniku.
+* **Záloha válce (`backup/cylinder-version`):** Původní funkční verze s horizontálním válcem je trvale uložena na větvi `backup/cylinder-version`. Kdykoliv si uživatel přeje návrat ke staré verzi, stačí se přepnout na tuto větev (`git checkout backup/cylinder-version`).
