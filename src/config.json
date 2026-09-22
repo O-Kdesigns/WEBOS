@@ -103,8 +103,8 @@
     "refractionDistortion": 0.1,
     "mouseForceMultiplier": 1,
     "sizeRandomness": 0,
-    "baseSize": 0.25,
-    "shape": "cylinder",
+    "baseSize": 0.02,
+    "shape": "cube",
     "hasParticles": true,
     "transitionMaxLight": 1.19,
     "transitionMinDark": 0
@@ -204,16 +204,16 @@
     }
   },
   "editorSectionOrder": [
+    "global-castice",
+    "global-background-cylinder",
+    "global-fyzika",
+    "global-volumetric",
     "global-2d",
     "global-power-saving",
-    "global-volumetric",
     "inside-fog-section",
     "global-background-dark",
     "global-kamera",
-    "global-fyzika",
     "global-hudba",
-    "global-castice",
-    "global-background-cylinder",
     "global-volumetric-unified"
   ]
 }

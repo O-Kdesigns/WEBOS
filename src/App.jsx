@@ -451,36 +451,34 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   
   return (
     <group ref={groupRef}>
-      <a.group rotation-y={rotationY}>
-        <group position={dnaPos} quaternion={dnaRot}>
-          <ParticleObject 
-            settings={{ 
-              count: 10000, 
-              hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
-              baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
-              colorMode: appConfig.cylinderSettings?.colorMode || 'video',
-              refractionDistortion: appConfig.cylinderSettings?.refractionDistortion ?? 0.15,
-              transitionMaxLight: appConfig.cylinderSettings?.transitionMaxLight ?? 0.8,
-              transitionMinDark: appConfig.cylinderSettings?.transitionMinDark ?? 0.05,
-              ...appConfig.cylinderSettings,
-              shape: 'geometry', 
-              customGeometry: nodes.dna.geometry,
-              transform: {
-                position: new THREE.Vector3(0,0,0),
-                quaternion: new THREE.Quaternion(),
-                scale: dnaScale
-              },
-              scatterSpring: scatter,
-              isCylinder: true
-            }}
-            appConfig={appConfig} 
-            videoTexture={videoTexture} 
-            opacity={1}
-            rotationY={rotationY}
-            pageDistance={pageDistance}
-          />
-        </group>
-      </a.group>
+      <group position={dnaPos} quaternion={dnaRot}>
+        <ParticleObject 
+          settings={{ 
+            count: 10000, 
+            hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
+            baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
+            colorMode: appConfig.cylinderSettings?.colorMode || 'video',
+            refractionDistortion: appConfig.cylinderSettings?.refractionDistortion ?? 0.15,
+            transitionMaxLight: appConfig.cylinderSettings?.transitionMaxLight ?? 0.8,
+            transitionMinDark: appConfig.cylinderSettings?.transitionMinDark ?? 0.05,
+            ...appConfig.cylinderSettings,
+            shape: 'geometry', 
+            customGeometry: nodes.dna.geometry,
+            transform: {
+              position: new THREE.Vector3(0,0,0),
+              quaternion: new THREE.Quaternion(),
+              scale: dnaScale
+            },
+            scatterSpring: scatter,
+            isCylinder: true
+          }}
+          appConfig={appConfig} 
+          videoTexture={videoTexture} 
+          opacity={1}
+          rotationY={rotationY}
+          pageDistance={pageDistance}
+        />
+      </group>
     </group>
   );
 }
