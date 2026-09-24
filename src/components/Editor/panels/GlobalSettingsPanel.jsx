@@ -1114,9 +1114,9 @@ export function GlobalSettingsPanel({
               <div style={{ paddingTop: '0.5rem' }}>
                 
                 <div className="input-group" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
-                  <label style={{ color: '#10b981', fontWeight: 'bold' }}>Počet projektů na 360° (Hustota rozestupu)</label>
+                  <label style={{ color: '#10b981', fontWeight: 'bold' }}>Vzdálenost mezi projekty (Rozestup po DNA)</label>
                   <span className="input-desc">
-                    Určuje, jak daleko od sebe leží projekty po dráze DNA (např. hodnota 3 znamená, že po jedné plné 360° otočce DNA potkáš přesně 3 projekty). 
+                    Určuje prostorovou vzdálenost mezi projekty po dráze vlákna DNA. 
                     Automaticky synchronizuje Y-pozici i rotaci tak, aby projekty nevypadly ze šroubovice.
                   </span>
                   
@@ -1126,14 +1126,14 @@ export function GlobalSettingsPanel({
                         step={0.1} 
                         min={1} 
                         max={30} 
-                        value={appConfig.projectsPer360 || 3} 
+                        value={appConfig.verticalStep || 10} 
                         onChange={val => {
                            let newVal = val;
                            const nearest = Math.round(val);
                            if (Math.abs(val - nearest) < 0.25) {
                              newVal = nearest;
                            }
-                           updateConfig('projectsPer360', newVal);
+                           updateConfig('verticalStep', newVal);
                         }} 
                       />
                     </div>

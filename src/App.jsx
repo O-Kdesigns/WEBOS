@@ -484,7 +484,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   );
 }
 
-function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep }) {
+function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep, pageDistance }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   const { fade } = useSpring({
@@ -493,7 +493,6 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
   });
 
   const totalPages = Math.max(pagesData.length, 1);
-  const pageDistance = (Math.PI * 2) / totalPages;
 
   let baseDeskNode = nodes.GlassDesk || nodes['GlassDesk-Xelith'];
   if (!baseDeskNode) {
@@ -746,13 +745,13 @@ function App() {
   const [dnaHeight360, setDnaHeight360] = useState(30);
 
   const totalPages = Math.max(pagesData.length, 1);
-  const projectsPer360 = appConfig.projectsPer360 || 3;
+  
+  // Uživatelem nastavená výšková vzdálenost mezi projekty
+  const yStep = appConfig.verticalStep || 10; 
+  // Kolikrát se tato vzdálenost vejde do jedné 360° otočky DNA (která má výšku dnaHeight360)
+  const projectsPer360 = dnaHeight360 > 0 ? (dnaHeight360 / yStep) : 3;
+  // Úhlová vzdálenost (rotace), která přesně odpovídá posunu po vlákně o yStep
   const pageDistance = (Math.PI * 2) / projectsPer360;
-  
-  // yStep je výška, o kterou se kamera a projekty posunou dolů při přechodu na další projekt.
-  // Aby projekty přesně kopírovaly šroubovici DNA, musí yStep matematicky odpovídat úhlu (pageDistance).
-  const yStep = dnaHeight360 > 0 ? (dnaHeight360 / projectsPer360) : 10;
-  
   const [isEditorOpen, setIsEditorOpen] = useState(() => {
     return window.location.search.includes('editor=true');
   });
@@ -985,6 +984,7 @@ function App() {
                   visible={viewMode === 'ORBIT'} 
                   textures={textures}
                   yStep={yStep}
+                  pageDistance={pageDistance}
                   onSelect={(idx) => {
                     const val = currentRotRef.current;
                     const exactIdx = val / -pageDistance;
