@@ -1389,23 +1389,23 @@ export function GlobalSettingsPanel({
           {sections[sectionId]}
         </div>
       ))}
-      <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'center', gap: '15px', padding: '20px 0', marginTop: '10px' }}>
+      <div style={{ position: 'fixed', bottom: '60px', right: '12px', zIndex: 10000, display: 'flex', gap: '8px', background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(10px)', padding: '6px 12px', borderRadius: '8px', border: '1px solid #10b981', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)' }}>
         <button 
           className="btn-page"
           onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
           disabled={currentPage === 0}
-          style={{ width: '44px', height: '44px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', borderRadius: '50%' }}
+          style={{ width: '28px', height: '28px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', borderRadius: '6px' }}
         >
           ←
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', color: '#10b981', fontWeight: 'bold', padding: '0 10px', fontSize: '1.2rem' }}>
-          {currentPage + 1} / {totalPages}
+        <div style={{ display: 'flex', alignItems: 'center', color: '#f8fafc', fontWeight: 'bold', padding: '0 8px', fontSize: '12px', fontFamily: 'monospace' }}>
+          {currentPage + 1}/{totalPages}
         </div>
         <button 
           className="btn-page"
           onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
           disabled={currentPage === totalPages - 1}
-          style={{ width: '44px', height: '44px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', borderRadius: '50%' }}
+          style={{ width: '28px', height: '28px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', borderRadius: '6px' }}
         >
           →
         </button>
