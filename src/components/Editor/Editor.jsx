@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import '../../Editor.css';
 import { useEditorState } from './useEditorState';
-import { GlobalSettingsPanel } from './panels/GlobalSettingsPanel';
+import { OrbitSettingsPanel } from './panels/OrbitSettingsPanel';
+import { InsideSettingsPanel } from './panels/InsideSettingsPanel';
 import { PageSettingsPanel } from './panels/PageSettingsPanel';
 
 export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaHeight360 }) {
@@ -22,7 +23,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
     'sub-2d-bottom-left': true
   });
   const [isTransparent, setIsTransparent] = useState(false);
-  const [editorMode, setEditorMode] = useState('global');
+  const [editorMode, setEditorMode] = useState('orbit');
   const [blenderNodes, setBlenderNodes] = useState([]);
 
   const touchSection = (sectionId) => {
@@ -145,10 +146,16 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
           <div style={{ display: 'flex', gap: '5px', background: 'rgba(255,255,255,0.05)', padding: '5px', borderRadius: '8px' }}>
             <button 
-              onClick={() => setEditorMode('global')}
-              style={{ background: editorMode === 'global' ? '#10b981' : 'transparent', color: editorMode === 'global' ? '#fff' : '#aaa', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+              onClick={() => setEditorMode('orbit')}
+              style={{ background: editorMode === 'orbit' ? '#10b981' : 'transparent', color: editorMode === 'orbit' ? '#fff' : '#aaa', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
             >
-              Globální nastavení
+              Globální (DNA / Orbit)
+            </button>
+            <button 
+              onClick={() => setEditorMode('inside')}
+              style={{ background: editorMode === 'inside' ? '#f59e0b' : 'transparent', color: editorMode === 'inside' ? '#fff' : '#aaa', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              Uvnitř (Detail / UI)
             </button>
             <button 
               onClick={() => setEditorMode('pages')}
@@ -171,51 +178,56 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
         </div>
       </div>
       
-      <div className={`editor-content ${editorMode === 'global' ? 'editor-content-global' : ''}`}>
-        {editorMode === 'global' ? (
-          <GlobalSettingsPanel 
-          appConfig={appConfig}
-          updateConfig={updateConfig}
-          dnaHeight360={dnaHeight360}
-          updatePowerSaving={updatePowerSaving}
-          updateVolumetric={updateVolumetric}
-          updateInsideFog={updateInsideFog}
-          updateCameraSpotLight={updateCameraSpotLight}
-          updateBackground={updateBackground}
-          updatePhysics={updatePhysics}
-          updateParticlePhysics={updateParticlePhysics}
-          updateDnaSettings={updateDnaSettings}
-          updateVolumetricVideo={updateVolumetricVideo}
-          updateVolumetricDepth={updateVolumetricDepth}
-          updateUi2d={updateUi2d}
-          updateUi2dBottomLeft={updateUi2dBottomLeft}
-          updateUi2dBottomLeftItem={updateUi2dBottomLeftItem}
-          addUi2dBottomLeftItem={addUi2dBottomLeftItem}
-          removeUi2dBottomLeftItem={removeUi2dBottomLeftItem}
-          updateUi2dPillButton={updateUi2dPillButton}
-          openSections={openSections}
-          toggleSection={toggleSection}
-          touchSection={touchSection}
-          assets={assets}
-        />
-
-        ) : (
-          pages.map((page, index) => (
-            <PageSettingsPanel 
-              key={page.id} 
-              page={page} 
-              index={index} 
-              updatePage={updatePage} 
-              deletePage={deletePage} 
-              assets={assets} 
-              getFilteredAssets={getFilteredAssets} 
-              openSections={openSections} 
-              toggleSection={toggleSection} 
-              updateParticlesSettings={updateParticlesSettings} 
-              blenderNodes={blenderNodes} 
-            />
-          ))
+      <div className={`editor-content ${editorMode !== 'pages' ? 'editor-content-fullscreen' : ''}`}>
+        {editorMode === 'orbit' && (
+          <OrbitSettingsPanel 
+            appConfig={appConfig}
+            updateConfig={updateConfig}
+            updatePowerSaving={updatePowerSaving}
+            updateBackground={updateBackground}
+            updateCameraSpotLight={updateCameraSpotLight}
+            updateDnaSettings={updateDnaSettings}
+            openSections={openSections}
+            toggleSection={toggleSection}
+            touchSection={touchSection}
+          />
         )}
+        {editorMode === 'inside' && (
+          <InsideSettingsPanel 
+            appConfig={appConfig}
+            updateConfig={updateConfig}
+            updateVolumetric={updateVolumetric}
+            updateInsideFog={updateInsideFog}
+            updatePhysics={updatePhysics}
+            updateParticlePhysics={updateParticlePhysics}
+            updateVolumetricVideo={updateVolumetricVideo}
+            updateVolumetricDepth={updateVolumetricDepth}
+            updateUi2d={updateUi2d}
+            updateUi2dBottomLeft={updateUi2dBottomLeft}
+            updateUi2dBottomLeftItem={updateUi2dBottomLeftItem}
+            addUi2dBottomLeftItem={addUi2dBottomLeftItem}
+            removeUi2dBottomLeftItem={removeUi2dBottomLeftItem}
+            updateUi2dPillButton={updateUi2dPillButton}
+            openSections={openSections}
+            toggleSection={toggleSection}
+            touchSection={touchSection}
+          />
+        )}
+        {editorMode === 'pages' && pages.map((page, index) => (
+          <PageSettingsPanel 
+            key={page.id} 
+            page={page} 
+            index={index} 
+            updatePage={updatePage} 
+            deletePage={deletePage} 
+            assets={assets} 
+            getFilteredAssets={getFilteredAssets} 
+            openSections={openSections} 
+            toggleSection={toggleSection} 
+            updateParticlesSettings={updateParticlesSettings} 
+            blenderNodes={blenderNodes} 
+          />
+        ))}
       </div>
     </div>
   );
