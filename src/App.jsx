@@ -713,6 +713,21 @@ function RenderRestorationHandler({ isSuspended }) {
 }
 
 
+function DnaHeightDetector({ setDnaHeight360 }) {
+  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  useEffect(() => {
+    const deskKeys = Object.keys(nodes).filter(k => k.startsWith('GlassDesk'));
+    if (deskKeys.length >= 2) {
+      const pos1 = nodes[deskKeys[0]].getWorldPosition(new THREE.Vector3());
+      const pos2 = nodes[deskKeys[1]].getWorldPosition(new THREE.Vector3());
+      const h = Math.abs(pos1.y - pos2.y);
+      if (h > 0.1) {
+        setDnaHeight360(h * 2);
+      }
+    }
+  }, [nodes, setDnaHeight360]);
+  return null;
+}
 
 function App() {
   const [pagesData, setPagesData] = useState(settings.pages || []);
@@ -730,7 +745,8 @@ function App() {
   const currentRotRef = useRef(0);
   const [viewMode, setViewMode] = useState('ORBIT'); 
 
-  const dnaHeight360 = appConfig.dnaHeight360 || 30;
+  const [detectedDnaHeight360, setDetectedDnaHeight360] = useState(30);
+  const dnaHeight360 = appConfig.dnaHeight360 || detectedDnaHeight360;
 
   const totalPages = Math.max(pagesData.length, 1);
   
@@ -935,7 +951,7 @@ function App() {
           gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
         >
           <RenderRestorationHandler isSuspended={isSuspended} />
-          
+          <DnaHeightDetector setDnaHeight360={setDetectedDnaHeight360} />
           <CanvasDebugTracker />
           <DarkStudioBackground appConfig={appConfig} />
           <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
