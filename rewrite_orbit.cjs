@@ -1,6 +1,8 @@
-﻿import React from 'react';
+﻿const fs = require('fs');
 
-export const CompactSlider = ({ label, min, max, step, value, onChange, desc, unit = '' }) => (
+const orbitCode = \import React from 'react';
+
+const CompactSlider = ({ label, min, max, step, value, onChange, desc, unit = '' }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '14px' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', fontWeight: '500' }}>
       <span>{label}</span>
@@ -15,19 +17,19 @@ export const CompactSlider = ({ label, min, max, step, value, onChange, desc, un
   </div>
 );
 
-export const CompactToggle = ({ label, checked, onChange, desc, color = '#10b981' }) => (
+const CompactToggle = ({ label, checked, onChange, desc }) => (
   <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '14px', cursor: 'pointer' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: checked ? color : '#e2e8f0', fontWeight: '600' }}>
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ accentColor: color, width: '16px', height: '16px' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: checked ? '#10b981' : '#e2e8f0', fontWeight: '600' }}>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ accentColor: '#10b981', width: '16px', height: '16px' }} />
       {label}
     </div>
     {desc && <div style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: '24px', lineHeight: '1.2' }}>{desc}</div>}
   </label>
 );
 
-export const Card = ({ title, icon, color, children }) => (
-  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid ' + color + '40', borderRadius: '12px', overflow: 'hidden' }}>
-    <div style={{ background: color + '15', padding: '12px 16px', borderBottom: '1px solid ' + color + '40', display: 'flex', alignItems: 'center', gap: '8px', color: color, fontWeight: 'bold', fontSize: '0.9rem' }}>
+const Card = ({ title, icon, color, children }) => (
+  <div style={{ background: 'rgba(255,255,255,0.02)', border: \1px solid \40\, borderRadius: '12px', overflow: 'hidden' }}>
+    <div style={{ background: \\15\, padding: '12px 16px', borderBottom: \1px solid \40\, display: 'flex', alignItems: 'center', gap: '8px', color: color, fontWeight: 'bold', fontSize: '0.9rem' }}>
       {icon} {title}
     </div>
     <div style={{ padding: '16px' }}>
@@ -104,7 +106,7 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
       <Card title="Bodové světlo kamery" icon="🔦" color="#eab308">
         <CompactToggle 
           label="Přisvícení objektů z kamery" 
-          checked={appConfig.cameraSpotLight?.enabled ?? false} color="#eab308"
+          checked={appConfig.cameraSpotLight?.enabled ?? false} 
           onChange={v => updateCameraSpotLight('enabled', v)}
         />
         <CompactSlider 
@@ -112,7 +114,7 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
           value={appConfig.cameraSpotLight?.intensity ?? 2.0} onChange={v => updateCameraSpotLight('intensity', v)}
         />
         <CompactSlider 
-          label="Úhel kužele" min={0.1} max={1.5} step={0.1} 
+          label="Úhel kužele" min={0.1} max={Math.PI/2} step={0.1} 
           value={appConfig.cameraSpotLight?.angle ?? 0.6} onChange={v => updateCameraSpotLight('angle', v)}
         />
       </Card>
@@ -120,3 +122,6 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
     </div>
   );
 }
+\
+
+fs.writeFileSync('src/components/Editor/panels/OrbitSettingsPanel.jsx', orbitCode, 'utf8');
