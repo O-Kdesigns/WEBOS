@@ -23,6 +23,15 @@ export const DenseColor = ({ label, desc, value, onChange }) => (
   </div>
 );
 
+export const DenseSelect = ({ label, desc, value, options, onChange, color = '#10b981' }) => (
+  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
+    <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: desc ? 'help' : 'default' }} title={desc || label}>{label}</div>
+    <select value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: '2px 6px', fontSize: '0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid ' + color + '40', color: '#f8fafc', borderRadius: '4px', cursor: 'pointer', outline: 'none' }}>
+      {options.map(o => <option key={o.value} value={o.value} style={{background: '#0f172a'}}>{o.label}</option>)}
+    </select>
+  </div>
+);
+
 export const DashboardCard = ({ title, icon, color, span = 1, children }) => (
   <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid ' + color + '30', borderRadius: '10px', gridColumn: span > 1 ? '1 / -1' : 'span 1', display: 'flex', flexDirection: 'column' }}>
     <div style={{ background: color + '15', padding: '8px 12px', borderBottom: '1px solid ' + color + '30', display: 'flex', alignItems: 'center', gap: '8px', color: color, fontWeight: 'bold', fontSize: '0.8rem', borderTopLeftRadius: '10px', borderTopRightRadius: '10px' }}>
@@ -35,6 +44,8 @@ export const DashboardCard = ({ title, icon, color, span = 1, children }) => (
 );
 
 export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving, updateBackground, updateCameraSpotLight, updateDnaSettings, updatePhysics, assets, openSections, toggleSection, touchSection }) {
+  const p = appConfig.dnaSettings || {};
+  
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
       
@@ -42,8 +53,8 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
         <DenseSlider desc="Výška, na které DNA udělá plnou otočku. Kalibruje rotaci projektů." label="Výška 360° otočky" min={5} max={100} step={0.5} value={appConfig.dnaHeight360 || 30} onChange={v => updateConfig('dnaHeight360', v)} />
         <DenseSlider desc="Prostorová vzdálenost (krokování) mezi jednotlivými projekty v ose Y." label="Rozestup projektů" min={1} max={30} step={0.1} value={appConfig.verticalStep || 10} onChange={v => updateConfig('verticalStep', v)} />
         <div style={{ height: '10px' }} />
-        <DenseToggle desc="Zobrazí vnější dekorativní sloupec částic simulující DNA." label="Zobrazit částice DNA" checked={appConfig.dnaSettings?.hasParticles ?? true} onChange={v => updateDnaSettings('hasParticles', v)} />
-        <DenseSlider desc="Šířka oblouku (rádius) obíhajících částic." label="Poloměr DNA" min={5} max={50} step={1} value={appConfig.dnaSettings?.radius ?? 20} onChange={v => updateDnaSettings('radius', v)} />
+        <DenseToggle desc="Zobrazí vnější dekorativní sloupec částic simulující DNA." label="Zobrazit částice DNA" checked={p.hasParticles ?? true} onChange={v => updateDnaSettings('hasParticles', v)} />
+        <DenseSlider desc="Šířka oblouku (rádius) obíhajících částic." label="Poloměr oblaku" min={5} max={50} step={1} value={p.radius ?? 20} onChange={v => updateDnaSettings('radius', v)} />
       </DashboardCard>
 
       <DashboardCard title="Pohyb a Kamera" icon="🚀" color="#f43f5e">
@@ -81,20 +92,17 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
         <DenseSlider desc="Celková hlasitost hudebního podkresu v UI." label="Hlasitost hudby" min={0} max={1} step={0.05} color="#8b5cf6" value={appConfig.musicVolume ?? 0.4} onChange={v => updateConfig('musicVolume', v)} />
       </DashboardCard>
 
-      {appConfig.dnaSettings?.hasParticles !== false && (
-        <DashboardCard title="Detailní nastavení vnějšího oblaku (Orbit částice)" icon="✨" color="#14b8a6" span={4}>
-          <div style={{ zoom: 0.9, marginTop: '-10px', marginBottom: '-10px' }}>
-            <ParticleSettingsPanel 
-              settings={{ shape: 'geometry', count: 10000, colorMode: 'video', baseColor: '#3b82f6', ...appConfig.dnaSettings }}
-              onUpdate={updateDnaSettings}
-              id="global-dna"
-              assets={assets}
-              openSections={openSections}
-              toggleSection={toggleSection}
-            />
-          </div>
+      {p.hasParticles !== false && (
+        <DashboardCard title="Geometrie Částic (Orbit)" icon="✨" color="#14b8a6">
+          <ParticleSettingsPanel 
+            settings={{ shape: 'sphere', count: 10000, colorMode: 'video', baseColor: '#3b82f6', ...appConfig.dnaSettings }}
+            onUpdate={updateDnaSettings}
+            id="global-dna"
+            blenderNodes={[]}
+          />
         </DashboardCard>
       )}
+
     </div>
   );
 }

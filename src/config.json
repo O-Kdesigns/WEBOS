@@ -1,8 +1,8 @@
 {
   "globalSurfaceModel": "trava/modely_ctvrtky/objekty1.glb",
   "islandScaleHorizontal": 2,
-  "cameraFov": 5450,
-  "cameraHeight": 5,
+  "cameraFov": 38,
+  "cameraHeight": 0,
   "scrollStepsPerPortfolio": 5,
   "scrollSpeed": 1,
   "physics": {
@@ -12,7 +12,7 @@
     "swipeVelocityThreshold": 0.5,
     "swipeDistanceThreshold": 0.3
   },
-  "hdriIntensity": 1,
+  "hdriIntensity": 5,
   "environmentIntensity": 0.8,
   "cameraSpotLight": {
     "enabled": true,
@@ -77,7 +77,8 @@
   "backgroundSettings": {
     "centerColor": "#060608",
     "edgeColor": "#232630",
-    "rimPower": 2.2
+    "rimPower": 2.2,
+    "color": "#ffffff"
   },
   "particlePhysics": {
     "mouseRadius": 0.1,
