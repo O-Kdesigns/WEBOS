@@ -187,6 +187,8 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
             updateBackground={updateBackground}
             updateCameraSpotLight={updateCameraSpotLight}
             updateDnaSettings={updateDnaSettings}
+            updatePhysics={updatePhysics}
+            assets={assets}
             openSections={openSections}
             toggleSection={toggleSection}
             touchSection={touchSection}
