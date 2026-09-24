@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import '../../Editor.css';
 import { useEditorState } from './useEditorState';
@@ -22,6 +22,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
     'sub-2d-bottom-left': true
   });
   const [isTransparent, setIsTransparent] = useState(false);
+  const [editorMode, setEditorMode] = useState('global');
   const [blenderNodes, setBlenderNodes] = useState([]);
 
   const touchSection = (sectionId) => {
@@ -142,22 +143,37 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
     >
       <div className={`editor-header ${isTransparent ? 'transparent-mode' : ''}`}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-          <h2>🛠 CMS: Správa Portfolia</h2>
+          <div style={{ display: 'flex', gap: '5px', background: 'rgba(255,255,255,0.05)', padding: '5px', borderRadius: '8px' }}>
+            <button 
+              onClick={() => setEditorMode('global')}
+              style={{ background: editorMode === 'global' ? '#10b981' : 'transparent', color: editorMode === 'global' ? '#fff' : '#aaa', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              Globální nastavení
+            </button>
+            <button 
+              onClick={() => setEditorMode('pages')}
+              style={{ background: editorMode === 'pages' ? '#3b82f6' : 'transparent', color: editorMode === 'pages' ? '#fff' : '#aaa', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              Stránky Portfolia
+            </button>
+          </div>
           <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#ccc' }}>
             <input type="checkbox" checked={isTransparent} onChange={e => setIsTransparent(e.target.checked)} />
             Průhledný režim (vidět scénu)
           </label>
         </div>
         <div className="editor-actions">
-          <button onClick={addPage} className="btn-add">+ Přidat stránku</button>
+          {editorMode === 'pages' && (
+            <button onClick={addPage} className="btn-add">+ Přidat stránku</button>
+          )}
           <button onClick={saveSettings} className="btn-save">{saving ? 'Ukládám...' : 'Uložit trvale'}</button>
           <button onClick={onClose} className="btn-close">Zavřít</button>
         </div>
       </div>
       
-      <div className="editor-content">
-        {/* GLOBÁLNÍ NASTAVENÍ */}
-        <GlobalSettingsPanel 
+      <div className={`editor-content ${editorMode === 'global' ? 'editor-content-global' : ''}`}>
+        {editorMode === 'global' ? (
+          <GlobalSettingsPanel 
           appConfig={appConfig}
           updateConfig={updateConfig}
           dnaHeight360={dnaHeight360}
@@ -183,22 +199,23 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
           assets={assets}
         />
 
-        {/* STRÁNKY PORTFOLIA */}
-        {pages.map((page, index) => (
-          <PageSettingsPanel 
-            key={page.id} 
-            page={page} 
-            index={index} 
-            updatePage={updatePage} 
-            deletePage={deletePage} 
-            assets={assets} 
-            getFilteredAssets={getFilteredAssets} 
-            openSections={openSections} 
-            toggleSection={toggleSection} 
-            updateParticlesSettings={updateParticlesSettings} 
-            blenderNodes={blenderNodes} 
-          />
-        ))}
+        ) : (
+          pages.map((page, index) => (
+            <PageSettingsPanel 
+              key={page.id} 
+              page={page} 
+              index={index} 
+              updatePage={updatePage} 
+              deletePage={deletePage} 
+              assets={assets} 
+              getFilteredAssets={getFilteredAssets} 
+              openSections={openSections} 
+              toggleSection={toggleSection} 
+              updateParticlesSettings={updateParticlesSettings} 
+              blenderNodes={blenderNodes} 
+            />
+          ))
+        )}
       </div>
     </div>
   );

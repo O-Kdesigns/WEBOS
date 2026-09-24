@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { DragNumberInput } from '../controls/DragNumberInput';
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
 import { UI2DSettingsPanel } from './UI2DSettingsPanel';
@@ -1366,28 +1366,48 @@ export function GlobalSettingsPanel({
     )
   };
 
-  const currentOrder = (appConfig.editorSectionOrder && Array.isArray(appConfig.editorSectionOrder))
-    ? appConfig.editorSectionOrder
-    : DEFAULT_GLOBAL_SECTION_ORDER;
+  const [fullOrder] = React.useState(() => {
+    const currentOrder = (appConfig.editorSectionOrder && Array.isArray(appConfig.editorSectionOrder))
+      ? appConfig.editorSectionOrder
+      : DEFAULT_GLOBAL_SECTION_ORDER;
 
-  const fullOrder = [
-    ...currentOrder.filter(id => sections[id]),
-    ...DEFAULT_GLOBAL_SECTION_ORDER.filter(id => !currentOrder.includes(id))
-  ];
+    return [
+      ...currentOrder.filter(id => sections[id]),
+      ...DEFAULT_GLOBAL_SECTION_ORDER.filter(id => !currentOrder.includes(id))
+    ];
+  });
+
+  const [currentPage, setCurrentPage] = React.useState(0);
+  const itemsPerPage = 5;
+  const totalPages = Math.ceil(fullOrder.length / itemsPerPage);
+  const paginatedOrder = fullOrder.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
 
   return (
-    <div className="editor-card" style={{ border: '1px solid #3b82f6' }}>
-      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ color: '#3b82f6' }}>⚙️ Globální nastavení (config.json)</h3>
-        <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic' }}>
-          Řazeno podle naposledy navštívené kolonky
-        </span>
-      </div>
-      {fullOrder.map(sectionId => (
-        <React.Fragment key={sectionId}>
+    <>
+      {paginatedOrder.map(sectionId => (
+        <div key={sectionId} className="editor-card global-settings-card" style={{ border: '1px solid #10b981', height: 'fit-content' }}>
           {sections[sectionId]}
-        </React.Fragment>
+        </div>
       ))}
-    </div>
+      <div style={{ position: 'fixed', bottom: '30px', right: '30px', zIndex: 1000, display: 'flex', gap: '10px', background: 'rgba(0,0,0,0.8)', padding: '10px', borderRadius: '12px', border: '1px solid #10b981', boxShadow: '0 4px 15px rgba(0,0,0,0.5)' }}>
+        <button 
+          className="btn-page"
+          onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+          disabled={currentPage === 0}
+        >
+          ← Předchozí
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', color: '#10b981', fontWeight: 'bold', padding: '0 10px', fontSize: '1.1rem' }}>
+          {currentPage + 1} / {totalPages}
+        </div>
+        <button 
+          className="btn-page"
+          onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+          disabled={currentPage === totalPages - 1}
+        >
+          Další →
+        </button>
+      </div>
+    </>
   );
 }
