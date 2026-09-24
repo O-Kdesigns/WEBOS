@@ -1,24 +1,24 @@
 ﻿import React from 'react';
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
 
-export const DenseSlider = ({ label, min, max, step, value, onChange, unit = '', color = '#10b981' }) => (
+export const DenseSlider = ({ label, desc, min, max, step, value, onChange, unit = '', color = '#10b981' }) => (
   <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 45px', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
-    <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={label}>{label}</div>
+    <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: desc ? 'help' : 'default' }} title={desc || label}>{label}</div>
     <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} style={{ width: '100%', height: '3px', accentColor: color, cursor: 'pointer', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', margin: 0 }} />
     <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: color, textAlign: 'right' }}>{Number(value).toFixed(step < 0.1 ? 2 : (step < 1 ? 1 : 0))}{unit}</div>
   </div>
 );
 
-export const DenseToggle = ({ label, checked, onChange, color = '#10b981' }) => (
-  <label style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '10px', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}>
-    <div style={{ fontSize: '0.75rem', color: checked ? '#f8fafc' : '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
-    <div style={{ display: 'flex' }}><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ accentColor: color, width: '14px', height: '14px', margin: 0 }} /></div>
+export const DenseToggle = ({ label, desc, checked, onChange, color = '#10b981' }) => (
+  <label style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '10px', alignItems: 'center', marginBottom: '6px', cursor: desc ? 'help' : 'pointer' }} title={desc || label}>
+    <div style={{ fontSize: '0.75rem', color: checked ? '#f8fafc' : '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: desc ? 'help' : 'pointer' }}>{label}</div>
+    <div style={{ display: 'flex' }}><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ accentColor: color, width: '14px', height: '14px', margin: 0, cursor: 'pointer' }} /></div>
   </label>
 );
 
-export const DenseColor = ({ label, value, onChange }) => (
+export const DenseColor = ({ label, desc, value, onChange }) => (
   <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
-    <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+    <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: desc ? 'help' : 'default' }} title={desc || label}>{label}</div>
     <input type="color" value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', height: '20px', border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', cursor: 'pointer', padding: 0, borderRadius: '4px' }} />
   </div>
 );
@@ -39,46 +39,46 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
       
       <DashboardCard title="Architektura (DNA)" icon="🧬" color="#10b981">
-        <DenseSlider label="Výška 360° otočky" min={5} max={100} step={0.5} value={appConfig.dnaHeight360 || 30} onChange={v => updateConfig('dnaHeight360', v)} />
-        <DenseSlider label="Rozestup projektů" min={1} max={30} step={0.1} value={appConfig.verticalStep || 10} onChange={v => updateConfig('verticalStep', v)} />
+        <DenseSlider desc="Výška, na které DNA udělá plnou otočku. Kalibruje rotaci projektů." label="Výška 360° otočky" min={5} max={100} step={0.5} value={appConfig.dnaHeight360 || 30} onChange={v => updateConfig('dnaHeight360', v)} />
+        <DenseSlider desc="Prostorová vzdálenost (krokování) mezi jednotlivými projekty v ose Y." label="Rozestup projektů" min={1} max={30} step={0.1} value={appConfig.verticalStep || 10} onChange={v => updateConfig('verticalStep', v)} />
         <div style={{ height: '10px' }} />
-        <DenseToggle label="Zobrazit částice DNA" checked={appConfig.dnaSettings?.hasParticles ?? true} onChange={v => updateDnaSettings('hasParticles', v)} />
-        <DenseSlider label="Poloměr DNA" min={5} max={50} step={1} value={appConfig.dnaSettings?.radius ?? 20} onChange={v => updateDnaSettings('radius', v)} />
+        <DenseToggle desc="Zobrazí vnější dekorativní sloupec částic simulující DNA." label="Zobrazit částice DNA" checked={appConfig.dnaSettings?.hasParticles ?? true} onChange={v => updateDnaSettings('hasParticles', v)} />
+        <DenseSlider desc="Šířka oblouku (rádius) obíhajících částic." label="Poloměr DNA" min={5} max={50} step={1} value={appConfig.dnaSettings?.radius ?? 20} onChange={v => updateDnaSettings('radius', v)} />
       </DashboardCard>
 
       <DashboardCard title="Pohyb a Kamera" icon="🚀" color="#f43f5e">
-        <DenseSlider label="Zorné pole (FOV)" min={30} max={120} step={1} color="#f43f5e" value={appConfig.cameraFov || 60} onChange={v => updateConfig('cameraFov', v)} />
-        <DenseSlider label="Výška kamery (Y)" min={0} max={5} step={0.1} color="#f43f5e" value={appConfig.cameraHeight ?? 1.5} onChange={v => updateConfig('cameraHeight', v)} />
+        <DenseSlider desc="Šířka zorného úhlu kamery." label="Zorné pole (FOV)" min={30} max={120} step={1} color="#f43f5e" value={appConfig.cameraFov || 60} onChange={v => updateConfig('cameraFov', v)} />
+        <DenseSlider desc="Vertikální výška kamery nad středem scény." label="Výška kamery (Y)" min={0} max={5} step={0.1} color="#f43f5e" value={appConfig.cameraHeight ?? 1.5} onChange={v => updateConfig('cameraHeight', v)} />
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#f43f5e', marginBottom: '8px' }}>Fyzika rotace a posunu</div>
-        <DenseSlider label="Hmotnost (Mass)" min={0.5} max={10} step={0.1} color="#f43f5e" value={appConfig.physics?.mass || 2.5} onChange={v => updatePhysics('mass', v)} />
-        <DenseSlider label="Pružnost (Tension)" min={50} max={1000} step={10} color="#f43f5e" value={appConfig.physics?.tension || 500} onChange={v => updatePhysics('tension', v)} />
-        <DenseSlider label="Tření (Friction)" min={10} max={300} step={1} color="#f43f5e" value={appConfig.physics?.friction || 100} onChange={v => updatePhysics('friction', v)} />
+        <DenseSlider desc="Tíha a setrvačnost scény při roztáčení." label="Hmotnost (Mass)" min={0.5} max={10} step={0.1} color="#f43f5e" value={appConfig.physics?.mass || 2.5} onChange={v => updatePhysics('mass', v)} />
+        <DenseSlider desc="Síla pružiny, která po puštění přitáhne pohled na nejbližší projekt." label="Pružnost (Tension)" min={50} max={1000} step={10} color="#f43f5e" value={appConfig.physics?.tension || 500} onChange={v => updatePhysics('tension', v)} />
+        <DenseSlider desc="Tlumení roztáčení. Vyšší hodnota = rychleji zabrzdí." label="Tření (Friction)" min={10} max={300} step={1} color="#f43f5e" value={appConfig.physics?.friction || 100} onChange={v => updatePhysics('friction', v)} />
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#f43f5e', marginBottom: '8px' }}>Gesta a Kolečka myši</div>
-        <DenseSlider label="Kroků na projekt" min={1} max={20} step={1} color="#f43f5e" value={appConfig.scrollStepsPerPortfolio ?? 5} onChange={v => updateConfig('scrollStepsPerPortfolio', v)} />
-        <DenseSlider label="Rychlost scrollu" min={0.1} max={3.0} step={0.1} color="#f43f5e" value={appConfig.scrollSpeed ?? 1.0} onChange={v => updateConfig('scrollSpeed', v)} />
-        <DenseSlider label="Citlivost tahu (Swipe)" min={0.1} max={3.0} step={0.1} color="#f43f5e" value={appConfig.physics?.swipeVelocityThreshold || 0.5} onChange={v => updatePhysics('swipeVelocityThreshold', v)} />
+        <DenseSlider desc="Počet záseků kolečka myši potřebných pro posun o 1 projekt." label="Kroků na projekt" min={1} max={20} step={1} color="#f43f5e" value={appConfig.scrollStepsPerPortfolio ?? 5} onChange={v => updateConfig('scrollStepsPerPortfolio', v)} />
+        <DenseSlider desc="Násobič rychlosti scrollování myší." label="Rychlost scrollu" min={0.1} max={3.0} step={0.1} color="#f43f5e" value={appConfig.scrollSpeed ?? 1.0} onChange={v => updateConfig('scrollSpeed', v)} />
+        <DenseSlider desc="Práh rychlosti tažením (swipe) pro přeskok na další projekt." label="Citlivost tahu (Swipe)" min={0.1} max={3.0} step={0.1} color="#f43f5e" value={appConfig.physics?.swipeVelocityThreshold || 0.5} onChange={v => updatePhysics('swipeVelocityThreshold', v)} />
       </DashboardCard>
 
       <DashboardCard title="Světlo a Prostředí" icon="🌍" color="#3b82f6">
-        <DenseSlider label="HDRI Obloha" min={0} max={5} step={0.1} color="#3b82f6" value={appConfig.hdriIntensity ?? 1.0} onChange={v => updateConfig('hdriIntensity', v)} />
-        <DenseSlider label="Okolní odrazy" min={0} max={2} step={0.1} color="#3b82f6" value={appConfig.environmentIntensity ?? 0.8} onChange={v => updateConfig('environmentIntensity', v)} />
-        <DenseColor label="Barva pozadí" value={appConfig.darkStudioBg?.color ?? '#0a0a0f'} onChange={v => updateBackground('color', v)} />
+        <DenseSlider desc="Intenzita textury oblohy odrážející se ve skle." label="HDRI Obloha" min={0} max={5} step={0.1} color="#3b82f6" value={appConfig.hdriIntensity ?? 1.0} onChange={v => updateConfig('hdriIntensity', v)} />
+        <DenseSlider desc="Síla ambientního nasvícení (nepřímé světlo)." label="Okolní odrazy" min={0} max={2} step={0.1} color="#3b82f6" value={appConfig.environmentIntensity ?? 0.8} onChange={v => updateConfig('environmentIntensity', v)} />
+        <DenseColor desc="Základní barva nekonečného prostoru za scénou." label="Barva pozadí" value={appConfig.darkStudioBg?.color ?? '#0a0a0f'} onChange={v => updateBackground('color', v)} />
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#3b82f6', marginBottom: '8px' }}>Bodové osvětlení z kamery</div>
-        <DenseToggle label="Přisvícení objektů" checked={appConfig.cameraSpotLight?.enabled ?? false} color="#3b82f6" onChange={v => updateCameraSpotLight('enabled', v)} />
-        <DenseSlider label="Intenzita světla" min={0} max={10} step={0.1} color="#3b82f6" value={appConfig.cameraSpotLight?.intensity ?? 2.0} onChange={v => updateCameraSpotLight('intensity', v)} />
-        <DenseSlider label="Úhel kužele" min={0.1} max={1.5} step={0.1} color="#3b82f6" value={appConfig.cameraSpotLight?.angle ?? 0.6} onChange={v => updateCameraSpotLight('angle', v)} />
+        <DenseToggle desc="Spustí kuželové světlo svítící z pohledu kamery." label="Přisvícení objektů" checked={appConfig.cameraSpotLight?.enabled ?? false} color="#3b82f6" onChange={v => updateCameraSpotLight('enabled', v)} />
+        <DenseSlider desc="Jak moc kužel kamery září." label="Intenzita světla" min={0} max={10} step={0.1} color="#3b82f6" value={appConfig.cameraSpotLight?.intensity ?? 2.0} onChange={v => updateCameraSpotLight('intensity', v)} />
+        <DenseSlider desc="Jak široký je světelný kužel kamery." label="Úhel kužele" min={0.1} max={1.5} step={0.1} color="#3b82f6" value={appConfig.cameraSpotLight?.angle ?? 0.6} onChange={v => updateCameraSpotLight('angle', v)} />
       </DashboardCard>
       
       <DashboardCard title="Systém & Výkon" icon="⚙️" color="#8b5cf6">
-        <DenseToggle label="Pause on Blur (0% GPU)" checked={appConfig.powerSaving?.pauseOnBlur ?? true} color="#8b5cf6" onChange={v => updatePowerSaving('pauseOnBlur', v)} />
-        <DenseToggle label="Zobrazit HUD odznak" checked={appConfig.powerSaving?.showBadge ?? true} color="#8b5cf6" onChange={v => updatePowerSaving('showBadge', v)} />
+        <DenseToggle desc="Zastaví render (0% GPU), když klikneš vedle prohlížeče." label="Pause on Blur" checked={appConfig.powerSaving?.pauseOnBlur ?? true} color="#8b5cf6" onChange={v => updatePowerSaving('pauseOnBlur', v)} />
+        <DenseToggle desc="Ukáže malou oranžovou ikonu PAUZA, pokud scéna neběží." label="Zobrazit HUD odznak" checked={appConfig.powerSaving?.showBadge ?? true} color="#8b5cf6" onChange={v => updatePowerSaving('showBadge', v)} />
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#8b5cf6', marginBottom: '8px' }}>Hudební přehrávač</div>
-        <DenseToggle label="Ztlumit v pozadí" checked={appConfig.powerSaving?.pauseAudioOnBlur ?? false} color="#8b5cf6" onChange={v => updatePowerSaving('pauseAudioOnBlur', v)} />
-        <DenseSlider label="Hlasitost hudby" min={0} max={1} step={0.05} color="#8b5cf6" value={appConfig.musicVolume ?? 0.4} onChange={v => updateConfig('musicVolume', v)} />
+        <DenseToggle desc="Automaticky ztlumí (Mute) zvuk při kliknutí do jiné záložky." label="Ztlumit v pozadí" checked={appConfig.powerSaving?.pauseAudioOnBlur ?? false} color="#8b5cf6" onChange={v => updatePowerSaving('pauseAudioOnBlur', v)} />
+        <DenseSlider desc="Celková hlasitost hudebního podkresu v UI." label="Hlasitost hudby" min={0} max={1} step={0.05} color="#8b5cf6" value={appConfig.musicVolume ?? 0.4} onChange={v => updateConfig('musicVolume', v)} />
       </DashboardCard>
 
       {appConfig.dnaSettings?.hasParticles !== false && (

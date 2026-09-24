@@ -2,7 +2,7 @@
   "globalSurfaceModel": "trava/modely_ctvrtky/objekty1.glb",
   "islandScaleHorizontal": 2,
   "cameraFov": 5450,
-  "cameraHeight": 0,
+  "cameraHeight": 5,
   "scrollStepsPerPortfolio": 5,
   "scrollSpeed": 1,
   "physics": {
