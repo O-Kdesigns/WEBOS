@@ -152,7 +152,7 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
       {pagesData.map((page, i) => {
         const angle = i * -pageDistance;
         return (
-          <group key={page.id} rotation-y={angle}>
+          <group key={page.id} rotation-y={i * pageDistance}>
             <group position-z={radius}>
               {/* Zástupná černá deska */}
               <mesh 
@@ -334,7 +334,7 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
 
   if (currentIndex !== undefined && pageDistance !== undefined && insideRotationY) {
     return (
-      <group rotation-y={currentIndex * -pageDistance}>
+      <group rotation-y={currentIndex * pageDistance}>
         <a.group rotation-y={insideRotationY}>
           {innerContent}
         </a.group>
@@ -400,7 +400,7 @@ function InsideProjectPivot({
 
   return (
     <group ref={pivotRef}>
-      <group rotation-y={currentIndex * -pageDistance} position-y={currentIndex * -yStep}>
+      <group rotation-y={currentIndex * pageDistance} position-y={currentIndex * -yStep}>
         <a.group rotation-y={insideRotationY}>
           {children}
         </a.group>
@@ -531,7 +531,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
         return (
           <group 
             key={page.id}
-            rotation-y={idx * -pageDistance}
+            rotation-y={idx * pageDistance}
             position-y={idx * -yStep}
           >
             <group
@@ -688,7 +688,7 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
 function RotationController({ rotationY, pageDistance, totalPages, setClosestIndex }) {
   useFrame(() => {
     const val = rotationY.get();
-    let idx = Math.round(val / -pageDistance) % totalPages;
+    let idx = Math.round(val / pageDistance) % totalPages;
     if (idx < 0) idx += totalPages;
     setClosestIndex(prev => prev !== idx ? idx : prev);
   });
@@ -846,7 +846,7 @@ function App() {
     }
   }));
 
-  const springScrollY = rotationY.to(r => (r / -pageDistance) * -yStep);
+  const springScrollY = rotationY.to(r => (r / pageDistance) * -yStep);
 
   const insideRotRef = useRef(0);
   const [{ insideRotationY }, insideApi] = useSpring(() => ({
@@ -880,16 +880,16 @@ function App() {
 
     if (totalPages <= 1) return;
     const sensitivity = pageDistance / (window.innerWidth / 1.5);
-    const maxRot = -(totalPages - 1) * pageDistance;
+    const maxRot = (totalPages - 1) * pageDistance;
     
     if (active) {
-      let nextRot = currentRotRef.current + dx * sensitivity;
-      nextRot = Math.min(Math.max(nextRot, maxRot - pageDistance * 0.5), pageDistance * 0.5); // Allow slight overscroll when active
+      let nextRot = currentRotRef.current - dx * sensitivity;
+      nextRot = Math.max(Math.min(nextRot, maxRot + pageDistance * 0.5), -pageDistance * 0.5); // Allow slight overscroll when active
       currentRotRef.current = nextRot;
       api.start({ rotationY: currentRotRef.current, immediate: true });
     } else {
-      let nextRot = currentRotRef.current + (dx * sensitivity) + (vx * 20 * Math.sign(dx));
-      nextRot = Math.min(Math.max(nextRot, maxRot), 0);
+      let nextRot = currentRotRef.current - (dx * sensitivity) - (vx * 20 * Math.sign(dx));
+      nextRot = Math.max(Math.min(nextRot, maxRot), 0);
       currentRotRef.current = nextRot;
       api.start({ rotationY: currentRotRef.current, immediate: false });
     }
@@ -921,7 +921,7 @@ function App() {
       const direction = Math.sign(wheelAccumulatorRef.current);
       wheelAccumulatorRef.current -= direction * stepCount * threshold;
 
-      const currentStep = currentRotRef.current / -stepAngle;
+      const currentStep = currentRotRef.current / stepAngle;
       let targetStep;
       if (direction > 0) {
         targetStep = Math.floor(currentStep + 1e-4) + stepCount;
@@ -929,9 +929,9 @@ function App() {
         targetStep = Math.ceil(currentStep - 1e-4) - stepCount;
       }
 
-      let nextRot = targetStep * -stepAngle;
-      const maxRot = -(totalPages - 1) * pageDistance;
-      nextRot = Math.min(Math.max(nextRot, maxRot), 0);
+      let nextRot = targetStep * stepAngle;
+      const maxRot = (totalPages - 1) * pageDistance;
+      nextRot = Math.max(Math.min(nextRot, maxRot), 0);
 
       currentRotRef.current = nextRot;
       api.start({ rotationY: currentRotRef.current, immediate: false });
@@ -987,12 +987,12 @@ function App() {
                   pageDistance={pageDistance}
                   onSelect={(idx) => {
                     const val = currentRotRef.current;
-                    const exactIdx = val / -pageDistance;
+                    const exactIdx = val / pageDistance;
                     let diff = idx - (exactIdx % totalPages);
                     if (diff > totalPages / 2) diff -= totalPages;
                     if (diff < -totalPages / 2) diff += totalPages;
                     const targetIndex = exactIdx + diff;
-                    currentRotRef.current = targetIndex * -pageDistance;
+                    currentRotRef.current = targetIndex * pageDistance;
                     api.start({ 
                       rotationY: currentRotRef.current, 
                       immediate: false 
