@@ -351,7 +351,8 @@ function InsideProjectPivot({
   viewMode, 
   currentIndex, 
   pageDistance, 
-  insideRotationY 
+  insideRotationY,
+  yStep 
 }) {
   const pivotRef = useRef();
   const smoothMouse = useRef(new THREE.Vector2(0, 0));
@@ -399,7 +400,7 @@ function InsideProjectPivot({
 
   return (
     <group ref={pivotRef}>
-      <group rotation-y={currentIndex * -pageDistance}>
+      <group rotation-y={currentIndex * -pageDistance} position-y={currentIndex * -yStep}>
         <a.group rotation-y={insideRotationY}>
           {children}
         </a.group>
@@ -483,7 +484,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   );
 }
 
-function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
+function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   const { fade } = useSpring({
@@ -532,6 +533,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
           <group 
             key={page.id}
             rotation-y={idx * -pageDistance}
+            position-y={idx * -yStep}
           >
             <group
               onClick={() => onSelect(idx)}
@@ -577,7 +579,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures }) {
 const AnimatedCamera = a(PerspectiveCamera);
 
 // --- Kamerový Rig ---
-function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
+function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
   const cameraRef = useRef();
   
@@ -667,14 +669,16 @@ function CameraRig({ viewMode, rotationY, currentIndex, appConfig }) {
   });
 
   return (
-    <a.group rotation-y={rotationY}>
-      <a.group rotation-y={springBaseAngle}>
-        <a.group position-z={springZ} position-y={springY}>
-          <AnimatedCamera 
-            ref={cameraRef}
-            makeDefault 
-            position={[0, 0, 0]} 
-          />
+    <a.group position-y={springScrollY}>
+      <a.group rotation-y={rotationY}>
+        <a.group rotation-y={springBaseAngle}>
+          <a.group position-z={springZ} position-y={springY}>
+            <AnimatedCamera 
+              ref={cameraRef}
+              makeDefault 
+              position={[0, 0, 0]} 
+            />
+          </a.group>
         </a.group>
       </a.group>
     </a.group>
@@ -727,6 +731,7 @@ function App() {
 
   const totalPages = Math.max(pagesData.length, 1);
   const pageDistance = (Math.PI * 2) / totalPages;
+  const yStep = appConfig.verticalStep || 10;
   
   const [isEditorOpen, setIsEditorOpen] = useState(() => {
     return window.location.search.includes('editor=true');
@@ -821,6 +826,8 @@ function App() {
       friction: appConfig.physics?.friction ?? 26 
     }
   }));
+
+  const springScrollY = rotationY.to(r => (r / -pageDistance) * -yStep);
 
   const insideRotRef = useRef(0);
   const [{ insideRotationY }, insideApi] = useSpring(() => ({
@@ -947,6 +954,7 @@ function App() {
                   pagesData={pagesData}
                   visible={viewMode === 'ORBIT'} 
                   textures={textures}
+                  yStep={yStep}
                   onSelect={(idx) => {
                     const val = currentRotRef.current;
                     const exactIdx = val / -pageDistance;
@@ -968,12 +976,14 @@ function App() {
                   visible={viewMode === 'INSIDE'}
                   currentIndex={closestIndex}
                   pageDistance={pageDistance}
+                  yStep={yStep}
                 />
                 <InsideProjectPivot
                   viewMode={viewMode}
                   currentIndex={closestIndex}
                   pageDistance={pageDistance}
                   insideRotationY={insideRotationY}
+                  yStep={yStep}
                 >
                   {viewMode === 'INSIDE' && (
                     <ProjectContent 
@@ -997,6 +1007,7 @@ function App() {
           <CameraRig 
             appConfig={appConfig} 
             rotationY={rotationY} 
+            springScrollY={springScrollY}
             viewMode={viewMode} 
             currentIndex={closestIndex} 
           />

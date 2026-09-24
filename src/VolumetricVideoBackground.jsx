@@ -86,7 +86,8 @@ export function VolumetricVideoBackground({
   visible,
   appConfig,
   currentIndex = 0,
-  pageDistance = 0
+  pageDistance = 0,
+  yStep = 10
 }) {
   const cfg = appConfig.volumetricVideo || {};
   const isEnabled = cfg.enabled ?? true;
@@ -164,7 +165,7 @@ export function VolumetricVideoBackground({
   const posY = (cfg.posY ?? 0.0) + inY;
 
   return (
-    <group rotation-y={currentIndex * -pageDistance}>
+    <group rotation-y={currentIndex * -pageDistance} position-y={currentIndex * -yStep}>
       <group rotation-y={inAngle}>
         <group 
           ref={groupRef}
