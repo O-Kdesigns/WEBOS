@@ -1114,6 +1114,21 @@ export function GlobalSettingsPanel({
               <div style={{ paddingTop: '0.5rem' }}>
                 
                 <div className="input-group" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+                  <label style={{ color: '#10b981', fontWeight: 'bold' }}>Výška jedné 360° otočky DNA</label>
+                  <span className="input-desc">
+                    Jakou výšku zabere DNA model v Blenderu, než udělá přesně jednu plnou otočku. Tohle číslo je základ pro všechny matematické výpočty rotace!
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+                    <DragNumberInput 
+                      step={0.5} 
+                      min={5} 
+                      max={100} 
+                      value={appConfig.dnaHeight360 || 30} 
+                      onChange={val => updateConfig('dnaHeight360', val)} 
+                    />
+                  </div>
+                </div>
+                <div className="input-group" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
                   <label style={{ color: '#10b981', fontWeight: 'bold' }}>Vzdálenost mezi projekty (Rozestup po DNA)</label>
                   <span className="input-desc">
                     Určuje prostorovou vzdálenost mezi projekty po dráze vlákna DNA. 
