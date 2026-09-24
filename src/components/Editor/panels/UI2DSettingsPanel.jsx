@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { DragNumberInput } from '../controls/DragNumberInput';
 
 export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft, updateUi2dBottomLeftItem, addUi2dBottomLeftItem, removeUi2dBottomLeftItem, updateUi2dPillButton, openSections, toggleSection }) {
@@ -110,10 +110,7 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                           <div
                             key={item.id || idx}
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              background: 'rgba(255, 255, 255, 0.03)',
+                              display: 'grid', gridTemplateColumns: '32px 1fr 1fr auto auto', alignItems: 'center', gap: '6px', background: 'rgba(255, 255, 255, 0.03)',
                               padding: '5px 8px',
                               borderRadius: '6px',
                               border: '1px solid rgba(255, 255, 255, 0.08)'
@@ -125,7 +122,7 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                               value={item.bullet ?? '->'}
                               onChange={e => updateUi2dBottomLeftItem(idx, 'bullet', e.target.value)}
                               title="Odrážka / symbol řádku (např. -> nebo -)"
-                              style={{ width: '38px', textAlign: 'center', padding: '3px 2px', fontSize: '0.78rem' }}
+                              style={{ width: '100%', minWidth: 0, textAlign: 'center', padding: '3px 2px', fontSize: '0.78rem' }}
                             />
 
                             {/* Text položky */}
@@ -134,7 +131,7 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                               value={item.text ?? ''}
                               onChange={e => updateUi2dBottomLeftItem(idx, 'text', e.target.value)}
                               placeholder="Text řádku"
-                              style={{ flex: 1, minWidth: '60px', padding: '3px 6px', fontSize: '0.78rem' }}
+                              style={{ width: '100%', minWidth: 0, padding: '3px 6px', fontSize: '0.78rem' }}
                             />
 
                             {/* Odkaz / URL */}
@@ -143,13 +140,13 @@ export function UI2DSettingsPanel({ appConfig, updateUi2d, updateUi2dBottomLeft,
                               value={item.link ?? ''}
                               onChange={e => updateUi2dBottomLeftItem(idx, 'link', e.target.value)}
                               placeholder="URL odkaz (např. #websites)"
-                              style={{ flex: 1, minWidth: '60px', padding: '3px 6px', fontSize: '0.78rem', color: '#67e8f9' }}
+                              style={{ width: '100%', minWidth: 0, padding: '3px 6px', fontSize: '0.78rem', color: '#67e8f9' }}
                             />
 
                             {/* Tlumený stav (dimmed) */}
                             <label
                               title="Tlumený řádek (nižší průhlednost jako u MULTIPLAYER)"
-                              style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: '#94a3b8', cursor: 'pointer', flexShrink: 0 }}
+                              style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem', color: '#94a3b8', cursor: 'pointer', whiteSpace: 'nowrap' }}
                             >
                               <input
                                 type="checkbox"
