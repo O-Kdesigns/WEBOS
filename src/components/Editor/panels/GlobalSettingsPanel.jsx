@@ -1389,23 +1389,25 @@ export function GlobalSettingsPanel({
           {sections[sectionId]}
         </div>
       ))}
-      <div style={{ position: 'fixed', bottom: '30px', right: '30px', zIndex: 1000, display: 'flex', gap: '10px', background: 'rgba(0,0,0,0.8)', padding: '10px', borderRadius: '12px', border: '1px solid #10b981', boxShadow: '0 4px 15px rgba(0,0,0,0.5)' }}>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'center', gap: '15px', padding: '20px 0', marginTop: '10px' }}>
         <button 
           className="btn-page"
           onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
           disabled={currentPage === 0}
+          style={{ width: '44px', height: '44px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', borderRadius: '50%' }}
         >
-          ← Předchozí
+          ←
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', color: '#10b981', fontWeight: 'bold', padding: '0 10px', fontSize: '1.1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', color: '#10b981', fontWeight: 'bold', padding: '0 10px', fontSize: '1.2rem' }}>
           {currentPage + 1} / {totalPages}
         </div>
         <button 
           className="btn-page"
           onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
           disabled={currentPage === totalPages - 1}
+          style={{ width: '44px', height: '44px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', borderRadius: '50%' }}
         >
-          Další →
+          →
         </button>
       </div>
     </>
