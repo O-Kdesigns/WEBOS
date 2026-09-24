@@ -321,3 +321,6 @@
   max-width: 1400px;
   margin: 0 auto;
 }
+
+.editor-content-fullscreen { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; grid-template-columns: none !important; }
+
