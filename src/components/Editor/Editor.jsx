@@ -5,7 +5,7 @@ import { useEditorState } from './useEditorState';
 import { GlobalSettingsPanel } from './panels/GlobalSettingsPanel';
 import { PageSettingsPanel } from './panels/PageSettingsPanel';
 
-export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
+export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaHeight360 }) {
   const [assets, setAssets] = useState({ models: [], images: [], videos: [] });
   const [saving, setSaving] = useState(false);
   const [openSections, setOpenSections] = useState({
@@ -160,6 +160,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig }) {
         <GlobalSettingsPanel 
           appConfig={appConfig}
           updateConfig={updateConfig}
+          dnaHeight360={dnaHeight360}
           updatePowerSaving={updatePowerSaving}
           updateVolumetric={updateVolumetric}
           updateInsideFog={updateInsideFog}

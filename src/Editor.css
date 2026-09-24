@@ -226,21 +226,21 @@
 
 /* Transparent Mode */
 .editor-overlay.transparent-mode {
-  background: rgba(15, 15, 20, 0.15);
+  background: rgba(15, 15, 20, 0.02);
   backdrop-filter: none;
 }
 .editor-overlay.transparent-mode .editor-header {
-  background: rgba(15, 15, 20, 0.15);
+  background: rgba(15, 15, 20, 0.05);
   backdrop-filter: none;
-  border-bottom-color: rgba(255,255,255,0.05);
+  border-bottom-color: rgba(255,255,255,0.02);
 }
 .editor-overlay.transparent-mode .editor-card {
-  background: rgba(0, 0, 0, 0.15);
-  border-color: rgba(255,255,255,0.05);
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(255,255,255,0.02);
   box-shadow: none;
 }
 .editor-overlay.transparent-mode .editor-section {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .input-desc {

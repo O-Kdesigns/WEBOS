@@ -25,7 +25,8 @@ export function GlobalSettingsPanel({
   openSections,
   toggleSection,
   touchSection,
-  assets
+  assets,
+  dnaHeight360
 }) {
   const DEFAULT_GLOBAL_SECTION_ORDER = [
     'global-2d',
@@ -1110,6 +1111,48 @@ export function GlobalSettingsPanel({
             </h4>
             {openSections['global-background-cylinder'] && (
               <div style={{ paddingTop: '0.5rem' }}>
+                
+                <div className="input-group" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+                  <label style={{ color: '#10b981', fontWeight: 'bold' }}>Vzdálenost projektů (Rozestup)</label>
+                  <span className="input-desc">Jak daleko od sebe jsou televize na ose Y. 
+                    Aktuální 360° smyčka DNA má výšku <strong>{Math.round((dnaHeight360 || 0) * 100) / 100}</strong>.</span>
+                  
+                  <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <DragNumberInput 
+                        step={0.1} 
+                        min={1} 
+                        max={100} 
+                        value={appConfig.verticalStep || (dnaHeight360 > 0 ? dnaHeight360 / 3 : 10)} 
+                        onChange={val => {
+                           let newVal = val;
+                           const h = dnaHeight360 || 30;
+                           const count = h / val;
+                           const nearestCount = Math.round(count);
+                           // Snapping k celým číslům projektů na 360 stupňů
+                           if (Math.abs(count - nearestCount) < 0.2 && nearestCount > 0) {
+                             newVal = h / nearestCount;
+                           }
+                           updateConfig('verticalStep', newVal);
+                        }} 
+                      />
+                    </div>
+                    <div style={{ 
+                      background: 'rgba(16, 185, 129, 0.1)', 
+                      padding: '8px 12px', 
+                      borderRadius: '6px', 
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      textAlign: 'center',
+                      minWidth: '80px'
+                    }}>
+                      <div style={{ fontSize: '0.7rem', color: '#10b981', textTransform: 'uppercase' }}>Projektů na 360°</div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' }}>
+                         {Math.round(((dnaHeight360 || 30) / (appConfig.verticalStep || (dnaHeight360 > 0 ? dnaHeight360 / 3 : 10))) * 10) / 10}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="input-group checkbox-group">
                   <label style={{ fontSize: '1rem', color: '#10b981', fontWeight: 'bold' }}>
                     <input 

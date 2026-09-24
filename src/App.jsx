@@ -713,6 +713,20 @@ function RenderRestorationHandler({ isSuspended }) {
   return null;
 }
 
+function DnaHeightDetector({ setDnaHeight360 }) {
+  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  useEffect(() => {
+    const deskKeys = Object.keys(nodes).filter(k => k.startsWith('GlassDesk'));
+    if (deskKeys.length >= 2) {
+      const pos1 = nodes[deskKeys[0]].getWorldPosition(new THREE.Vector3());
+      const pos2 = nodes[deskKeys[1]].getWorldPosition(new THREE.Vector3());
+      const h = Math.abs(pos1.y - pos2.y);
+      if (h > 0.1) setDnaHeight360(h);
+    }
+  }, [nodes, setDnaHeight360]);
+  return null;
+}
+
 function App() {
   const [pagesData, setPagesData] = useState(settings.pages || []);
   const [appConfig, setAppConfig] = useState(config || {});
@@ -729,9 +743,12 @@ function App() {
   const currentRotRef = useRef(0);
   const [viewMode, setViewMode] = useState('ORBIT'); 
 
+  const [dnaHeight360, setDnaHeight360] = useState(30);
+
   const totalPages = Math.max(pagesData.length, 1);
   const pageDistance = (Math.PI * 2) / totalPages;
-  const yStep = appConfig.verticalStep || 10;
+  const defaultYStep = dnaHeight360 > 0 ? (dnaHeight360 / 3) : 10;
+  const yStep = appConfig.verticalStep || defaultYStep;
   
   const [isEditorOpen, setIsEditorOpen] = useState(() => {
     return window.location.search.includes('editor=true');
@@ -919,6 +936,7 @@ function App() {
           gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
         >
           <RenderRestorationHandler isSuspended={isSuspended} />
+          <DnaHeightDetector setDnaHeight360={setDnaHeight360} />
           <CanvasDebugTracker />
           <DarkStudioBackground appConfig={appConfig} />
           <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
@@ -1050,6 +1068,7 @@ function App() {
         setPages={setPagesData} 
         appConfig={appConfig} 
         setAppConfig={setAppConfig} 
+        dnaHeight360={dnaHeight360}
         onClose={() => {
           setIsEditorOpen(false);
           window.history.pushState({}, '', window.location.pathname);
