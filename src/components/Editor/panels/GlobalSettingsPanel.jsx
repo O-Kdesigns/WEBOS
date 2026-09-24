@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { DragNumberInput } from '../controls/DragNumberInput';
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
 import { UI2DSettingsPanel } from './UI2DSettingsPanel';
@@ -13,7 +13,7 @@ export function GlobalSettingsPanel({
   updateBackground,
   updatePhysics,
   updateParticlePhysics,
-  updateCylinderSettings,
+  updateDnaSettings,
   updateVolumetricVideo,
   updateVolumetricDepth,
   updateUi2d,
@@ -1106,49 +1106,35 @@ export function GlobalSettingsPanel({
               style={{ color: '#10b981', borderBottomColor: 'rgba(16, 185, 129, 0.2)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
               onClick={() => toggleSection('global-background-cylinder')}
             >
-              <span>🏛️ Pozadí prostoru (Abstraktní Válec)</span>
+              <span>🏛️ Architektura (Abstraktní DNA)</span>
               <span>{openSections['global-background-cylinder'] ? '▲' : '▼'}</span>
             </h4>
             {openSections['global-background-cylinder'] && (
               <div style={{ paddingTop: '0.5rem' }}>
                 
                 <div className="input-group" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
-                  <label style={{ color: '#10b981', fontWeight: 'bold' }}>Vzdálenost projektů (Rozestup)</label>
-                  <span className="input-desc">Jak daleko od sebe jsou televize na ose Y. 
-                    Aktuální 360° smyčka DNA má výšku <strong>{Math.round((dnaHeight360 || 0) * 100) / 100}</strong>.</span>
+                  <label style={{ color: '#10b981', fontWeight: 'bold' }}>Počet projektů na 360° (Hustota rozestupu)</label>
+                  <span className="input-desc">
+                    Určuje, jak daleko od sebe leží projekty po dráze DNA (např. hodnota 3 znamená, že po jedné plné 360° otočce DNA potkáš přesně 3 projekty). 
+                    Automaticky synchronizuje Y-pozici i rotaci tak, aby projekty nevypadly ze šroubovice.
+                  </span>
                   
                   <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '10px' }}>
                     <div style={{ flex: 1 }}>
                       <DragNumberInput 
                         step={0.1} 
                         min={1} 
-                        max={100} 
-                        value={appConfig.verticalStep || (dnaHeight360 > 0 ? dnaHeight360 / 3 : 10)} 
+                        max={30} 
+                        value={appConfig.projectsPer360 || 3} 
                         onChange={val => {
                            let newVal = val;
-                           const h = dnaHeight360 || 30;
-                           const count = h / val;
-                           const nearestCount = Math.round(count);
-                           // Snapping k celým číslům projektů na 360 stupňů
-                           if (Math.abs(count - nearestCount) < 0.2 && nearestCount > 0) {
-                             newVal = h / nearestCount;
+                           const nearest = Math.round(val);
+                           if (Math.abs(val - nearest) < 0.25) {
+                             newVal = nearest;
                            }
-                           updateConfig('verticalStep', newVal);
+                           updateConfig('projectsPer360', newVal);
                         }} 
                       />
-                    </div>
-                    <div style={{ 
-                      background: 'rgba(16, 185, 129, 0.1)', 
-                      padding: '8px 12px', 
-                      borderRadius: '6px', 
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
-                      textAlign: 'center',
-                      minWidth: '80px'
-                    }}>
-                      <div style={{ fontSize: '0.7rem', color: '#10b981', textTransform: 'uppercase' }}>Projektů na 360°</div>
-                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' }}>
-                         {Math.round(((dnaHeight360 || 30) / (appConfig.verticalStep || (dnaHeight360 > 0 ? dnaHeight360 / 3 : 10))) * 10) / 10}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1157,19 +1143,19 @@ export function GlobalSettingsPanel({
                   <label style={{ fontSize: '1rem', color: '#10b981', fontWeight: 'bold' }}>
                     <input 
                       type="checkbox" 
-                      checked={appConfig.cylinderSettings?.hasParticles ?? true} 
-                      onChange={e => updateCylinderSettings('hasParticles', e.target.checked)} 
+                      checked={appConfig.dnaSettings?.hasParticles ?? true} 
+                      onChange={e => updateDnaSettings('hasParticles', e.target.checked)} 
                     />
-                    Zobrazit částicový sloup v pozadí
+                    Zobrazit částicový sloup v pozadí (DNA)
                   </label>
-                  <span className="input-desc" style={{ width: '100%' }}>Aktivuje vnější částicový válec v pozadí</span>
+                  <span className="input-desc" style={{ width: '100%' }}>Aktivuje vnější částicovou šroubovici v pozadí</span>
                 </div>
 
-                {appConfig.cylinderSettings?.hasParticles !== false && (
+                {appConfig.dnaSettings?.hasParticles !== false && (
                   <ParticleSettingsPanel 
-                    settings={{ shape: 'cylinder', count: 10000, radius: 8.0, height: 40.0, objectY: 0, objectZ: 0, colorMode: 'video', baseColor: '#3b82f6', ...appConfig.cylinderSettings }}
-                    onUpdate={updateCylinderSettings}
-                    id="global-cylinder"
+                    settings={{ shape: 'geometry', count: 10000, colorMode: 'video', baseColor: '#3b82f6', ...appConfig.dnaSettings }}
+                    onUpdate={updateDnaSettings}
+                    id="global-dna"
                     assets={assets}
                     openSections={openSections}
                     toggleSection={toggleSection}
@@ -1194,7 +1180,7 @@ export function GlobalSettingsPanel({
                 {/* 1. Obrazovka & Zakřivení videa */}
                 <div className="editor-subsection">
                   <h5 className="editor-subsection-header" onClick={() => toggleSection('sub-volumetric-screen')}>
-                    <span>📹 1. Obrazovka & Zakřivení videa (Screen & Cylinder Curve)</span>
+                    <span>📹 1. Obrazovka & Zakřivení videa (Screen Curve)</span>
                     <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.7rem', color: (appConfig.volumetricVideo?.enabled ?? true) ? '#10b981' : '#6b7280' }}>
                         {(appConfig.volumetricVideo?.enabled ?? true) ? '● ON' : '○ OFF'}
@@ -1219,8 +1205,8 @@ export function GlobalSettingsPanel({
                       </div>
 
                       <div className="input-group">
-                        <label>Zakřivení do válce (Cylinder Curvature):</label>
-                        <span className="input-desc">Prohnutí obrazovky do oblouku válce kolem kamery (0 = ploché, 0.35 = přirozený oblouk, 1.0 = výrazné zakřivení)</span>
+                        <label>Zakřivení plátna (Screen Curvature):</label>
+                        <span className="input-desc">Prohnutí obrazovky do oblouku kolem kamery (0 = ploché, 0.35 = přirozený oblouk, 1.0 = výrazné zakřivení)</span>
                         <DragNumberInput step={0.05} min={-0.5} max={1.5} value={appConfig.volumetricVideo?.curvature ?? 0.35} onChange={val => updateVolumetricVideo('curvature', val)} />
                       </div>
 

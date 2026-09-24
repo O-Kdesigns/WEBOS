@@ -453,16 +453,16 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   return (
     <group ref={groupRef}>
       <group position={dnaPos} quaternion={dnaRot}>
-        <ParticleObject 
+          <ParticleObject 
           settings={{ 
             count: 10000, 
-            hasParticles: appConfig.cylinderSettings?.hasParticles ?? true,
-            baseColor: appConfig.cylinderSettings?.baseColor || '#3b82f6',
-            colorMode: appConfig.cylinderSettings?.colorMode || 'video',
-            refractionDistortion: appConfig.cylinderSettings?.refractionDistortion ?? 0.15,
-            transitionMaxLight: appConfig.cylinderSettings?.transitionMaxLight ?? 0.8,
-            transitionMinDark: appConfig.cylinderSettings?.transitionMinDark ?? 0.05,
-            ...appConfig.cylinderSettings,
+            hasParticles: appConfig.dnaSettings?.hasParticles ?? true,
+            baseColor: appConfig.dnaSettings?.baseColor || '#3b82f6',
+            colorMode: appConfig.dnaSettings?.colorMode || 'video',
+            refractionDistortion: appConfig.dnaSettings?.refractionDistortion ?? 0.15,
+            transitionMaxLight: appConfig.dnaSettings?.transitionMaxLight ?? 0.8,
+            transitionMinDark: appConfig.dnaSettings?.transitionMinDark ?? 0.05,
+            ...appConfig.dnaSettings,
             shape: 'geometry', 
             customGeometry: nodes.dna.geometry,
             transform: {
@@ -471,7 +471,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
               scale: dnaScale
             },
             scatterSpring: scatter,
-            isCylinder: true
+            isDNA: true
           }}
           appConfig={appConfig} 
           videoTexture={videoTexture} 
@@ -746,9 +746,12 @@ function App() {
   const [dnaHeight360, setDnaHeight360] = useState(30);
 
   const totalPages = Math.max(pagesData.length, 1);
-  const pageDistance = (Math.PI * 2) / totalPages;
-  const defaultYStep = dnaHeight360 > 0 ? (dnaHeight360 / 3) : 10;
-  const yStep = appConfig.verticalStep || defaultYStep;
+  const projectsPer360 = appConfig.projectsPer360 || 3;
+  const pageDistance = (Math.PI * 2) / projectsPer360;
+  
+  // yStep je výška, o kterou se kamera a projekty posunou dolů při přechodu na další projekt.
+  // Aby projekty přesně kopírovaly šroubovici DNA, musí yStep matematicky odpovídat úhlu (pageDistance).
+  const yStep = dnaHeight360 > 0 ? (dnaHeight360 / projectsPer360) : 10;
   
   const [isEditorOpen, setIsEditorOpen] = useState(() => {
     return window.location.search.includes('editor=true');
@@ -878,12 +881,17 @@ function App() {
 
     if (totalPages <= 1) return;
     const sensitivity = pageDistance / (window.innerWidth / 1.5);
+    const maxRot = -(totalPages - 1) * pageDistance;
     
     if (active) {
-      currentRotRef.current += dx * sensitivity;
+      let nextRot = currentRotRef.current + dx * sensitivity;
+      nextRot = Math.min(Math.max(nextRot, maxRot - pageDistance * 0.5), pageDistance * 0.5); // Allow slight overscroll when active
+      currentRotRef.current = nextRot;
       api.start({ rotationY: currentRotRef.current, immediate: true });
     } else {
-      currentRotRef.current += (dx * sensitivity) + (vx * 20 * Math.sign(dx));
+      let nextRot = currentRotRef.current + (dx * sensitivity) + (vx * 20 * Math.sign(dx));
+      nextRot = Math.min(Math.max(nextRot, maxRot), 0);
+      currentRotRef.current = nextRot;
       api.start({ rotationY: currentRotRef.current, immediate: false });
     }
   }, { axis: 'x' });
@@ -922,7 +930,11 @@ function App() {
         targetStep = Math.ceil(currentStep - 1e-4) - stepCount;
       }
 
-      currentRotRef.current = targetStep * -stepAngle;
+      let nextRot = targetStep * -stepAngle;
+      const maxRot = -(totalPages - 1) * pageDistance;
+      nextRot = Math.min(Math.max(nextRot, maxRot), 0);
+
+      currentRotRef.current = nextRot;
       api.start({ rotationY: currentRotRef.current, immediate: false });
     }
   });

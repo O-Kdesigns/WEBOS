@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export function useEditorState(pages, setPages, appConfig, setAppConfig) {
@@ -86,11 +86,11 @@ export function useEditorState(pages, setPages, appConfig, setAppConfig) {
     });
   };
 
-  const updateCylinderSettings = (field, value) => {
+  const updateDnaSettings = (field, value) => {
     setAppConfig({
       ...appConfig,
-      cylinderSettings: {
-        ...(appConfig.cylinderSettings || {}),
+      dnaSettings: {
+        ...(appConfig.dnaSettings || {}),
         [field]: value
       }
     });
@@ -224,7 +224,7 @@ export function useEditorState(pages, setPages, appConfig, setAppConfig) {
     updateBackground,
     updatePhysics,
     updateParticlePhysics,
-    updateCylinderSettings,
+    updateDnaSettings,
     updatePowerSaving,
     updateVolumetricVideo,
     updateVolumetricDepth,

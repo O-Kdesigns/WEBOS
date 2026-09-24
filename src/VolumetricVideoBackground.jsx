@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+﻿import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useSpring } from '@react-spring/three';
 import { useGLTF } from '@react-three/drei';
@@ -29,9 +29,9 @@ const BackgroundVideoShader = {
       vUv = uv;
       vec3 pos = position;
 
-      // Zakřivení do oblouku válce podél osy X (prohnuté plátno kolem kamery)
+      // Zakřivení do oblouku prostoru podél osy X (prohnuté plátno kolem kamery)
       if (abs(uCurvature) > 0.001) {
-        // Okraje se stáčejí mírně dopředu (blíže ke kameře) jako prohnutá stěna válce
+        // Okraje se stáčejí mírně dopředu (blíže ke kameře) jako prohnutá stěna prostoru
         pos.z += (pos.x * pos.x) * (uCurvature * 0.35);
       }
 
@@ -172,7 +172,7 @@ export function VolumetricVideoBackground({
           position={[posX, posY, -zDist]}
           scale={[screenScale, screenScale, screenScale]}
         >
-          {/* Čisté video na pozadí s měkkým okrajem do ztracena a prohnutím do válce */}
+          {/* Čisté video na pozadí s měkkým okrajem do ztracena a prohnutím do prostoru */}
           <mesh position={[0, 0, 0]} renderOrder={1}>
             <planeGeometry args={[2.5, 1.406, 48, 16]} />
             <primitive object={screenMaterial} ref={screenMatRef} attach="material" />

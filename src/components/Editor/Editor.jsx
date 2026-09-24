@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import '../../Editor.css';
 import { useEditorState } from './useEditorState';
@@ -120,7 +120,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
     updateBackground,
     updatePhysics,
     updateParticlePhysics,
-    updateCylinderSettings,
+    updateDnaSettings,
     updatePowerSaving,
     updateVolumetricVideo,
     updateVolumetricDepth,
@@ -168,7 +168,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
           updateBackground={updateBackground}
           updatePhysics={updatePhysics}
           updateParticlePhysics={updateParticlePhysics}
-          updateCylinderSettings={updateCylinderSettings}
+          updateDnaSettings={updateDnaSettings}
           updateVolumetricVideo={updateVolumetricVideo}
           updateVolumetricDepth={updateVolumetricDepth}
           updateUi2d={updateUi2d}
