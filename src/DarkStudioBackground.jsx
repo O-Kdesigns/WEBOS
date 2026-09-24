@@ -4,9 +4,9 @@ import * as THREE from 'three';
 
 export function DarkStudioBackground({ appConfig }) {
   const meshRef = useRef();
-  const bgSettings = appConfig?.backgroundSettings || {};
+  const bgSettings = appConfig?.darkStudioBg || appConfig?.backgroundSettings || {};
 
-  const centerColor = bgSettings.centerColor || '#060608';
+  const centerColor = bgSettings.color || bgSettings.centerColor || '#060608';
   const edgeColor = bgSettings.edgeColor || '#232630';
   const rimPower = bgSettings.rimPower ?? 2.2;
 
@@ -19,7 +19,7 @@ export function DarkStudioBackground({ appConfig }) {
   useFrame(() => {
     if (meshRef.current?.material?.uniforms) {
       const u = meshRef.current.material.uniforms;
-      if (bgSettings.centerColor) u.uCenterColor.value.set(bgSettings.centerColor);
+      if (bgSettings.color || bgSettings.centerColor) u.uCenterColor.value.set(bgSettings.color || bgSettings.centerColor);
       if (bgSettings.edgeColor) u.uEdgeColor.value.set(bgSettings.edgeColor);
       u.uRimPower.value = bgSettings.rimPower ?? 2.2;
     }

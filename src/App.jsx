@@ -594,8 +594,8 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
   if (camChoose) {
      const worldPos = camChoose.getWorldPosition(new THREE.Vector3());
      orbitZ = Math.sqrt(worldPos.x**2 + worldPos.z**2) || orbitZ;
-     orbitY = worldPos.y !== undefined ? worldPos.y : orbitY;
-     orbitFov = camChoose.fov || orbitFov;
+     orbitY = appConfig.cameraHeight ?? (worldPos.y !== undefined ? worldPos.y : 1.5);
+     orbitFov = appConfig.cameraFov || camChoose.fov || 60;
      orbitAngle = Math.atan2(worldPos.x, worldPos.z);
   }
 
@@ -877,7 +877,7 @@ function App() {
         insideApi.start({ insideRotationY: insideRotRef.current, immediate: true });
       } else {
         insideRotRef.current += (dx * sensitivity) + (vx * 20 * Math.sign(dx) * (appConfig.scrollSpeed || 1.0));
-        insideApi.start({ insideRotationY: insideRotRef.current, immediate: false });
+        insideApi.start({ insideRotationY: insideRotRef.current, immediate: false, config: { mass: appConfig.physics?.mass ?? 1, tension: appConfig.physics?.tension ?? 170, friction: appConfig.physics?.friction ?? 26 } });
       }
       return;
     }
@@ -895,7 +895,7 @@ function App() {
       let nextRot = currentRotRef.current - (dx * sensitivity) - (vx * 20 * Math.sign(dx));
       nextRot = Math.max(Math.min(nextRot, maxRot), 0);
       currentRotRef.current = nextRot;
-      api.start({ rotationY: currentRotRef.current, immediate: false });
+      api.start({ rotationY: currentRotRef.current, immediate: false, config: { mass: appConfig.physics?.mass ?? 1, tension: appConfig.physics?.tension ?? 170, friction: appConfig.physics?.friction ?? 26 } });
     }
   }, { axis: 'x' });
 
@@ -903,7 +903,7 @@ function App() {
     if (viewMode === 'INSIDE') {
       // Rotace objektu uvnitř portfolia při scrollu
       insideRotRef.current -= dy * 0.005 * (appConfig.scrollSpeed || 1.0);
-      insideApi.start({ insideRotationY: insideRotRef.current, immediate: false });
+      insideApi.start({ insideRotationY: insideRotRef.current, immediate: false, config: { mass: appConfig.physics?.mass ?? 1, tension: appConfig.physics?.tension ?? 170, friction: appConfig.physics?.friction ?? 26 } });
       return;
     }
 
@@ -938,7 +938,7 @@ function App() {
       nextRot = Math.max(Math.min(nextRot, maxRot), 0);
 
       currentRotRef.current = nextRot;
-      api.start({ rotationY: currentRotRef.current, immediate: false });
+      api.start({ rotationY: currentRotRef.current, immediate: false, config: { mass: appConfig.physics?.mass ?? 1, tension: appConfig.physics?.tension ?? 170, friction: appConfig.physics?.friction ?? 26 } });
     }
   });
 
