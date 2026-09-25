@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+﻿import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { a } from '@react-spring/three';
@@ -16,6 +16,9 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
     if (matRef.current.uniforms) {
       if (matRef.current.uniforms.uTime) {
         matRef.current.uniforms.uTime.value = time;
+      }
+      if (matRef.current.uniforms.uOpacity && opacity !== undefined) {
+        matRef.current.uniforms.uOpacity.value = opacity.get ? opacity.get() : opacity;
       }
       if (matRef.current.uniforms.tVideo && videoTexture) {
         matRef.current.uniforms.tVideo.value = videoTexture;
@@ -54,7 +57,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       ${shader.vertexShader}
     `;
     
-    // Změníme i barvu vertexů (morph z DNA barvy do původní barvy projektu)
+    // ZmÄ›nĂ­me i barvu vertexĹŻ (morph z DNA barvy do pĹŻvodnĂ­ barvy projektu)
     shader.vertexShader = shader.vertexShader.replace(
       '#include <color_vertex>',
       `
@@ -79,7 +82,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
     matRef.current = shader;
   }, []);
 
-  // Pro válec na pozadí (GlobalBackground / Kužel) - NESAHAT NA KUŽEL, PLNÉ ZACHOVÁNÍ
+  // Pro vĂˇlec na pozadĂ­ (GlobalBackground / KuĹľel) - NESAHAT NA KUĹ˝EL, PLNĂ‰ ZACHOVĂNĂŤ
   if (isCylinder) {
     if (videoTexture) {
       return (
@@ -110,7 +113,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
     }
   }
 
-  // Pro projektové částice v módu video použijeme nový bohatý Jelly materiál s plným zapojením nastavení
+  // Pro projektovĂ© ÄŤĂˇstice v mĂłdu video pouĹľijeme novĂ˝ bohatĂ˝ Jelly materiĂˇl s plnĂ˝m zapojenĂ­m nastavenĂ­
   if (settings.colorMode === 'video' && videoTexture) {
     return (
       <jellyVideoMaterialImpl 

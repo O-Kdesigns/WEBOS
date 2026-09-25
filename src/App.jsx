@@ -1,4 +1,4 @@
-import React, { useState, useRef, Suspense, useMemo, useEffect } from 'react';
+﻿import React, { useState, useRef, Suspense, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Box, Text, Environment, useGLTF, PerspectiveCamera } from '@react-three/drei';
 import { a, useSpring, useTransition } from '@react-spring/three';
@@ -45,7 +45,7 @@ function ensureVideoEntry(url, gl) {
   
   const maxAniso = gl.capabilities?.getMaxAnisotropy ? Math.min(gl.capabilities.getMaxAnisotropy(), 16) : 1;
 
-  // Jediná společná VideoTexture pro dané video (pro válec, desku i vnitřek)
+  // JedinĂˇ spoleÄŤnĂˇ VideoTexture pro danĂ© video (pro vĂˇlec, desku i vnitĹ™ek)
   const texture = new THREE.VideoTexture(video);
   texture.colorSpace = gl.outputColorSpace;
   texture.generateMipmaps = false;
@@ -56,7 +56,7 @@ function ensureVideoEntry(url, gl) {
   const entry = { video, texture, isActive: false };
   videoTextureCache.set(url, entry);
 
-  // Připravíme první snímek jako poster pro neaktivní desky
+  // PĹ™ipravĂ­me prvnĂ­ snĂ­mek jako poster pro neaktivnĂ­ desky
   video.addEventListener('loadeddata', () => {
     if (!entry.isActive && video.currentTime < 0.05) {
       video.currentTime = 0.05;
@@ -79,7 +79,7 @@ function VideoManager({ allUrls, activeUrl, viewMode, isPreloaded = true, childr
     });
   }, [urlsKey, gl]);
 
-  // Posluchače pro aktualizaci textur, když se video načte nebo rozeběhne
+  // PosluchaÄŤe pro aktualizaci textur, kdyĹľ se video naÄŤte nebo rozebÄ›hne
   useEffect(() => {
     const triggerUpdate = () => setTick(t => t + 1);
 
@@ -98,10 +98,10 @@ function VideoManager({ allUrls, activeUrl, viewMode, isPreloaded = true, childr
     };
   }, [urlsKey]);
 
-  // Řízení přehrávání podle aktivního videa:
-  // V ORBIT i INSIDE režimu hraje POUZE video aktivního projektu.
-  // Neaktivní videa se pozastaví na svém snímku a nezatěžují hardware dekodér ani sběrnici GPU.
-  // Přehrávání se spustí až po dokončení preloaderu (isPreloaded = true).
+  // ĹĂ­zenĂ­ pĹ™ehrĂˇvĂˇnĂ­ podle aktivnĂ­ho videa:
+  // V ORBIT i INSIDE reĹľimu hraje POUZE video aktivnĂ­ho projektu.
+  // NeaktivnĂ­ videa se pozastavĂ­ na svĂ©m snĂ­mku a nezatÄ›ĹľujĂ­ hardware dekodĂ©r ani sbÄ›rnici GPU.
+  // PĹ™ehrĂˇvĂˇnĂ­ se spustĂ­ aĹľ po dokonÄŤenĂ­ preloaderu (isPreloaded = true).
   useEffect(() => {
     if (!isPreloaded) return;
 
@@ -154,7 +154,7 @@ function OrbitalBoards({ pagesData, onSelect, visible }) {
         return (
           <group key={page.id} rotation-y={i * pageDistance}>
             <group position-z={radius}>
-              {/* Zástupná černá deska */}
+              {/* ZĂˇstupnĂˇ ÄŤernĂˇ deska */}
               <mesh 
                 onClick={() => onSelect(i)}
                 onPointerOver={(e) => document.body.style.cursor = 'pointer'}
@@ -248,7 +248,7 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
       const levels = [[4, 3], [5, 4], [6, 5], [8, 8]];
       return levels[q] || levels[1];
     }
-    // Výchozí optimalizace: pozadí úsporněji
+    // VĂ˝chozĂ­ optimalizace: pozadĂ­ ĂşspornÄ›ji
     if (nodeName.toLowerCase().includes('backround') || nodeName.toLowerCase().includes('background')) {
       return [4, 3];
     }
@@ -354,7 +354,7 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
   return innerContent;
 }
 
-// Společný pivot pro objekty, částice i televizi rotující kolem bodu 0 v reakci na myš VŽDY RELEVANTNĚ K AKTUÁLNÍ KAMERĚ
+// SpoleÄŤnĂ˝ pivot pro objekty, ÄŤĂˇstice i televizi rotujĂ­cĂ­ kolem bodu 0 v reakci na myĹˇ VĹ˝DY RELEVANTNÄš K AKTUĂLNĂŤ KAMERÄš
 function InsideProjectPivot({ 
   children, 
   viewMode, 
@@ -366,7 +366,7 @@ function InsideProjectPivot({
   const pivotRef = useRef();
   const smoothMouse = useRef(new THREE.Vector2(0, 0));
 
-  // Reusable pomocné objekty (žádný garbage collection za běhu)
+  // Reusable pomocnĂ© objekty (ĹľĂˇdnĂ˝ garbage collection za bÄ›hu)
   const camQuat = useRef(new THREE.Quaternion());
   const camRight = useRef(new THREE.Vector3());
   const camUp = useRef(new THREE.Vector3());
@@ -379,30 +379,30 @@ function InsideProjectPivot({
     const safeDelta = Math.min(Math.max(delta, 0), 0.1);
     const isInside = viewMode === 'INSIDE';
 
-    // Plynulé sledování myši
+    // PlynulĂ© sledovĂˇnĂ­ myĹˇi
     const targetX = isInside ? state.pointer.x : 0;
     const targetY = isInside ? state.pointer.y : 0;
     smoothMouse.current.x = THREE.MathUtils.damp(smoothMouse.current.x, targetX, 5.0, safeDelta);
     smoothMouse.current.y = THREE.MathUtils.damp(smoothMouse.current.y, targetY, 5.0, safeDelta);
 
-    // Získání aktuální orientace a os kamery ve světovém prostoru
+    // ZĂ­skĂˇnĂ­ aktuĂˇlnĂ­ orientace a os kamery ve svÄ›tovĂ©m prostoru
     state.camera.getWorldQuaternion(camQuat.current);
-    // Vektor doprava ve výhledu kamery (horizontální osa obrazovky ve světě)
+    // Vektor doprava ve vĂ˝hledu kamery (horizontĂˇlnĂ­ osa obrazovky ve svÄ›tÄ›)
     camRight.current.set(1, 0, 0).applyQuaternion(camQuat.current).normalize();
-    // Vektor nahoru ve výhledu kamery (vertikální osa obrazovky ve světě)
+    // Vektor nahoru ve vĂ˝hledu kamery (vertikĂˇlnĂ­ osa obrazovky ve svÄ›tÄ›)
     camUp.current.set(0, 1, 0).applyQuaternion(camQuat.current).normalize();
 
-    // Úhly rotace relevantní k aktuální kameře
+    // Ăšhly rotace relevantnĂ­ k aktuĂˇlnĂ­ kameĹ™e
     const mouseRotY = smoothMouse.current.x * 0.14;
     const mouseRotX = -smoothMouse.current.y * 0.09;
 
-    // Rotace striktně podél os pohledu aktuální kamery:
-    // Pohyb myši doprava/doleva otáčí scénu kolem svislé osy kamery (camUp)
+    // Rotace striktnÄ› podĂ©l os pohledu aktuĂˇlnĂ­ kamery:
+    // Pohyb myĹˇi doprava/doleva otĂˇÄŤĂ­ scĂ©nu kolem svislĂ© osy kamery (camUp)
     qH.current.setFromAxisAngle(camUp.current, mouseRotY);
-    // Pohyb myši nahoru/dolů naklápí scénu kolem vodorovné osy kamery (camRight)
+    // Pohyb myĹˇi nahoru/dolĹŻ naklĂˇpĂ­ scĂ©nu kolem vodorovnĂ© osy kamery (camRight)
     qV.current.setFromAxisAngle(camRight.current, mouseRotX);
 
-    // Výsledná světová rotace pivotu relevantní k aktuální kameře
+    // VĂ˝slednĂˇ svÄ›tovĂˇ rotace pivotu relevantnĂ­ k aktuĂˇlnĂ­ kameĹ™e
     qGyro.current.copy(qV.current).multiply(qH.current);
     pivotRef.current.quaternion.copy(qGyro.current);
   });
@@ -425,8 +425,9 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   const smoothTilt = useRef(0);
   const cylMouse = useRef(new THREE.Vector2(0, 0));
   
-  const { scatter } = useSpring({
+  const { scatter, dnaOpacity } = useSpring({
     scatter: visible ? 0 : 1,
+      dnaOpacity: visible ? 1 : 0,
     config: visible 
       ? { mass: 1, tension: 120, friction: 30 } 
       : { mass: 15, tension: 10, friction: 60 } 
@@ -436,7 +437,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
     if (!groupRef.current) return;
     const safeDelta = Math.min(Math.max(delta, 0), 0.1);
 
-    // 1. Výpočet rychlosti rotace karuselu pro jemné naklopení (banking)
+    // 1. VĂ˝poÄŤet rychlosti rotace karuselu pro jemnĂ© naklopenĂ­ (banking)
     const currentRot = rotationY.get();
     const rotDelta = (currentRot - prevRot.current);
     prevRot.current = currentRot;
@@ -445,7 +446,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
     const targetTilt = THREE.MathUtils.clamp(rotVel * 0.02, -0.05, 0.05);
     smoothTilt.current = THREE.MathUtils.damp(smoothTilt.current, targetTilt, 4, safeDelta);
 
-    // 2. Velmi jemná reakce na myš (snížená, diskrétní)
+    // 2. Velmi jemnĂˇ reakce na myĹˇ (snĂ­ĹľenĂˇ, diskrĂ©tnĂ­)
     cylMouse.current.x = THREE.MathUtils.damp(cylMouse.current.x, state.pointer.x, 2.5, safeDelta);
     cylMouse.current.y = THREE.MathUtils.damp(cylMouse.current.y, state.pointer.y, 2.5, safeDelta);
 
@@ -483,7 +484,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
           }}
           appConfig={appConfig} 
           videoTexture={videoTexture} 
-          opacity={1}
+          opacity={dnaOpacity}
           rotationY={rotationY}
           pageDistance={pageDistance}
         />
@@ -508,7 +509,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
     if (glassKey) baseDeskNode = nodes[glassKey];
   }
 
-  // Rotace UV o 180° přímo na geometrii - eliminuje potřebu duplicitní VideoTexture pro desky
+  // Rotace UV o 180Â° pĹ™Ă­mo na geometrii - eliminuje potĹ™ebu duplicitnĂ­ VideoTexture pro desky
   const deskGeometry = useMemo(() => {
     if (!baseDeskNode?.geometry) return null;
     const geom = baseDeskNode.geometry.clone();
@@ -524,7 +525,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
 
   return (
     <a.group visible={fade.to(v => v > 0)}>
-      {/* Skleněné desky pro projekty */}
+      {/* SklenÄ›nĂ© desky pro projekty */}
       {pagesData.map((page, idx) => {
         if (!baseDeskNode) return null;
         const deskPos = baseDeskNode.getWorldPosition(new THREE.Vector3());
@@ -533,7 +534,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
         
         const rawUrl = page.videoUrl || page.particlesSettings?.videoUrl;
         const resolvedUrl = rawUrl ? resolveAssetUrl(rawUrl) : null;
-        // Společný zdroj textury pro vnitřní i vnější režim
+        // SpoleÄŤnĂ˝ zdroj textury pro vnitĹ™nĂ­ i vnÄ›jĹˇĂ­ reĹľim
         const currentDeskTex = resolvedUrl ? (videoTextureCache.get(resolvedUrl)?.texture || textures[resolvedUrl]) : null;
 
         return (
@@ -585,7 +586,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
 
 const AnimatedCamera = a(PerspectiveCamera);
 
-// --- Kamerový Rig ---
+// --- KamerovĂ˝ Rig ---
 function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
   const cameraRef = useRef();
@@ -593,7 +594,7 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
   const camChoose = nodes.Camera_CHoose || nodes.Camera_Choose || nodes.Camera || nodes['Camera.001'];
   const camIn = nodes.Camera_In || nodes.Camera_IN;
 
-  // Nastavení pro ORBIT (rotování kolem válce)
+  // NastavenĂ­ pro ORBIT (rotovĂˇnĂ­ kolem vĂˇlce)
   let orbitZ = appConfig.cameraRadius || 18;
   let orbitY = appConfig.cameraHeight ?? 1.5;
   let orbitFov = appConfig.cameraFov || 60;
@@ -607,7 +608,7 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
      orbitAngle = Math.atan2(worldPos.x, worldPos.z);
   }
 
-  // Nastavení pro INSIDE (pohled na detail projektu)
+  // NastavenĂ­ pro INSIDE (pohled na detail projektu)
   let inZ = 3.0;
   let inY = orbitY;
   let inFov = orbitFov;
@@ -621,16 +622,16 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
       inAngle = Math.atan2(worldPos.x, worldPos.z);
   }
 
-  // Zajistíme nejkratší cestu pro rotaci kamery
+  // ZajistĂ­me nejkratĹˇĂ­ cestu pro rotaci kamery
   let angleDiff = inAngle - orbitAngle;
   while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
   while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
   inAngle = orbitAngle + angleDiff;
 
-  // Animujeme pouze přechod (0 až 1) mezi ORBIT a INSIDE pohledem
+  // Animujeme pouze pĹ™echod (0 aĹľ 1) mezi ORBIT a INSIDE pohledem
   const { springZ, springY, baseFovProgress, springBaseAngle } = useSpring({
-    springZ: viewMode === 'ORBIT' ? orbitZ : orbitZ, // Zůstává venku (požadavek uživatele)
-    springY: viewMode === 'ORBIT' ? orbitY : orbitY, // Zůstává venku
+    springZ: viewMode === 'ORBIT' ? orbitZ : orbitZ, // ZĹŻstĂˇvĂˇ venku (poĹľadavek uĹľivatele)
+    springY: viewMode === 'ORBIT' ? orbitY : orbitY, // ZĹŻstĂˇvĂˇ venku
     baseFovProgress: viewMode === 'ORBIT' ? 0 : 1,   
     springBaseAngle: viewMode === 'ORBIT' ? orbitAngle : inAngle,
     config: { duration: 1000 }
@@ -638,11 +639,11 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
 
   const gyroMouse = useRef(new THREE.Vector2(0, 0));
 
-  // Vypočítáme výsledné FOV a lehký gyroskop v každém snímku
+  // VypoÄŤĂ­tĂˇme vĂ˝slednĂ© FOV a lehkĂ˝ gyroskop v kaĹľdĂ©m snĂ­mku
   useFrame((state, delta) => {
     const safeDelta = Math.min(Math.max(delta, 0), 0.1);
 
-    // Jemný, plynule vyhlazený gyroskop kamery na myš (subtilní, nezasahuje do posunu částic)
+    // JemnĂ˝, plynule vyhlazenĂ˝ gyroskop kamery na myĹˇ (subtilnĂ­, nezasahuje do posunu ÄŤĂˇstic)
     gyroMouse.current.x = THREE.MathUtils.damp(gyroMouse.current.x, state.pointer.x, 6.0, safeDelta);
     gyroMouse.current.y = THREE.MathUtils.damp(gyroMouse.current.y, state.pointer.y, 6.0, safeDelta);
 
@@ -658,16 +659,16 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
 
       const currentAspect = state.size.width / state.size.height;
        
-      // Interpolace základního FOV (např. mezi 60 a 45) podle toho, kde se nacházíme v animaci
+      // Interpolace zĂˇkladnĂ­ho FOV (napĹ™. mezi 60 a 45) podle toho, kde se nachĂˇzĂ­me v animaci
       const currentBaseFov = THREE.MathUtils.lerp(orbitFov, inFov, baseFovProgress.get());
        
-      // Matematika pro zachování šířky zobrazení
+      // Matematika pro zachovĂˇnĂ­ ĹˇĂ­Ĺ™ky zobrazenĂ­
       const REFERENCE_ASPECT = 16 / 9; 
       const vFovRad = THREE.MathUtils.degToRad(currentBaseFov);
       const targetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (REFERENCE_ASPECT / currentAspect));
       const finalFov = THREE.MathUtils.radToDeg(targetVFovRad);
        
-      // Pokud se FOV liší, aplikujeme ho okamžitě
+      // Pokud se FOV liĹˇĂ­, aplikujeme ho okamĹľitÄ›
       if (Math.abs(cameraRef.current.fov - finalFov) > 0.01) {
           cameraRef.current.fov = finalFov;
           cameraRef.current.updateProjectionMatrix();
@@ -758,11 +759,11 @@ function App() {
 
   const totalPages = Math.max(pagesData.length, 1);
   
-  // Uživatelem nastavená výšková vzdálenost mezi projekty
+  // UĹľivatelem nastavenĂˇ vĂ˝ĹˇkovĂˇ vzdĂˇlenost mezi projekty
   const yStep = appConfig.verticalStep || 10; 
-  // Kolikrát se tato vzdálenost vejde do jedné 360° otočky DNA (která má výšku dnaHeight360)
+  // KolikrĂˇt se tato vzdĂˇlenost vejde do jednĂ© 360Â° otoÄŤky DNA (kterĂˇ mĂˇ vĂ˝Ĺˇku dnaHeight360)
   const projectsPer360 = dnaHeight360 > 0 ? (dnaHeight360 / yStep) : 3;
-  // Úhlová vzdálenost (rotace), která přesně odpovídá posunu po vlákně o yStep
+  // ĂšhlovĂˇ vzdĂˇlenost (rotace), kterĂˇ pĹ™esnÄ› odpovĂ­dĂˇ posunu po vlĂˇknÄ› o yStep
   const pageDistance = (Math.PI * 2) / projectsPer360;
   const [isEditorOpen, setIsEditorOpen] = useState(() => {
     return window.location.search.includes('editor=true');
@@ -771,7 +772,7 @@ function App() {
   const wheelAccumulatorRef = useRef(0);
   const wheelTimeoutRef = useRef(null);
 
-  // Sledování fokusu okna a úsporný režim
+  // SledovĂˇnĂ­ fokusu okna a ĂşspornĂ˝ reĹľim
   useEffect(() => {
     if (!pauseOnBlur) {
       setIsSuspended(false);
@@ -825,7 +826,7 @@ function App() {
     };
   }, [pauseOnBlur]);
 
-  // Pozastavení a probuzení dekódování videí pro nulovou zátěž GPU a video dekodéru
+  // PozastavenĂ­ a probuzenĂ­ dekĂłdovĂˇnĂ­ videĂ­ pro nulovou zĂˇtÄ›Ĺľ GPU a video dekodĂ©ru
   useEffect(() => {
     if (isSuspended) {
       videoTextureCache.forEach(entry => {
@@ -920,7 +921,7 @@ function App() {
 
   const bindWheel = useWheel(({ delta: [, dy] }) => {
     if (viewMode === 'INSIDE') {
-      // Rotace objektu uvnitř portfolia při scrollu
+      // Rotace objektu uvnitĹ™ portfolia pĹ™i scrollu
       insideRotRef.current -= dy * 0.005 * (appConfig.scrollSpeed || 1.0);
       insideApi.start({ insideRotationY: insideRotRef.current, immediate: false, config: { mass: appConfig.physics?.mass ?? 1, tension: appConfig.physics?.tension ?? 170, friction: appConfig.physics?.friction ?? 26 } });
       return;
@@ -1076,17 +1077,17 @@ function App() {
         style={{ position: 'absolute', top: 10, left: 10, zIndex: 1000, background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', pointerEvents: 'auto' }}
         onClick={() => setIsEditorOpen(true)}
       >
-        ⚙️ Editor
+        âš™ď¸Ź Editor
       </button>
 
       {isSuspended && (appConfig.powerSaving?.showBadge ?? true) && (
         <div 
           className="eco-mode-badge"
           onClick={() => setIsSuspended(false)}
-          title="Klikněte pro obnovení výpočtů"
+          title="KliknÄ›te pro obnovenĂ­ vĂ˝poÄŤtĹŻ"
         >
           <span className="eco-dot"></span>
-          <span>Úsporný režim (0 % GPU)</span>
+          <span>ĂšspornĂ˝ reĹľim (0 % GPU)</span>
         </div>
       )}
 
@@ -1118,7 +1119,7 @@ function App() {
       <div className="ui-overlay">
         {viewMode === 'ORBIT' ? (
           <div className="instructions" style={{ color: '#aaa', userSelect: 'none' }}>
-            Objevuj (Swipe nebo Scroll). Kliknutím na desku vstup do projektu.
+            Objevuj (Swipe nebo Scroll). KliknutĂ­m na desku vstup do projektu.
           </div>
         ) : (
           <div style={{ position: 'absolute', bottom: '40px', left: '50%', transform: 'translateX(-50%)' }}>
