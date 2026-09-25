@@ -440,8 +440,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
     cylMouse.current.x = THREE.MathUtils.damp(cylMouse.current.x, state.pointer.x, 2.5, safeDelta);
     cylMouse.current.y = THREE.MathUtils.damp(cylMouse.current.y, state.pointer.y, 2.5, safeDelta);
 
-    groupRef.current.rotation.z = smoothTilt.current - cylMouse.current.x * 0.012;
-    groupRef.current.rotation.x = cylMouse.current.y * 0.012;
+    // Rotace zrusena
   });
 
   if (!nodes.dna) return null;
