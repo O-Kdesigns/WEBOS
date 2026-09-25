@@ -6,13 +6,34 @@ import { a } from '@react-spring/three';
 import './shaders/VideoRefractionMaterial';
 import './shaders/JellyVideoMaterial';
 
-export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotationY, pageDistance, transitionProgress }) {
+export function ParticleMaterial({ appConfig, settings, videoTexture, opacity = 1, rotationY, pageDistance, transitionProgress }) {
   const isCylinder = settings.isCylinder || settings.scatterSpring !== undefined || (settings.shape === 'cylinder' && !settings.customGeometry);
   const matRef = useRef();
+
+
+  const dnaMetalness = appConfig?.cylinderSettings?.metalness ?? 0.12;
+  const dnaRoughness = appConfig?.cylinderSettings?.roughness ?? -0.57;
+  const dnaTransmission = appConfig?.cylinderSettings?.transmission ?? 3.1;
+  const dnaThickness = appConfig?.cylinderSettings?.thickness ?? -2.0;
+  const dnaMinDark = appConfig?.cylinderSettings?.transitionMinDark ?? 0.0;
+  const dnaMaxLight = appConfig?.cylinderSettings?.transitionMaxLight ?? 1.19;
+
+  const targetMetalness = settings.metalness ?? 0.1;
+  const targetRoughness = settings.roughness ?? 0.5;
+  const targetTransmission = settings.transmission !== undefined ? settings.transmission : 0.85;
+  const targetThickness = settings.thickness !== undefined ? settings.thickness : 1.2;
+  const targetMinDark = settings.transitionMinDark ?? 0.05;
+  const targetMaxLight = settings.transitionMaxLight ?? 0.8;
 
   useFrame((state) => {
     if (!matRef.current) return;
     const time = state.clock.getElapsedTime();
+    
+    let tProgress = 1.0;
+    if (transitionProgress) {
+        tProgress = transitionProgress.get ? transitionProgress.get() : transitionProgress;
+    }
+
     if (matRef.current.uniforms) {
       if (matRef.current.uniforms.uTime) {
         matRef.current.uniforms.uTime.value = time;
@@ -23,6 +44,22 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       if (matRef.current.uniforms.tVideo && videoTexture) {
         matRef.current.uniforms.tVideo.value = videoTexture;
       }
+      
+      // Interpolate material properties so at t=0 it exactly matches DNA
+      
+      const smoothT = THREE.MathUtils.smoothstep(tProgress, 0.0, 1.0);
+      if (matRef.current.uniforms.uMetalness) matRef.current.uniforms.uMetalness.value = THREE.MathUtils.lerp(dnaMetalness, targetMetalness, smoothT);
+      if (matRef.current.uniforms.uTransmission) matRef.current.uniforms.uTransmission.value = THREE.MathUtils.lerp(dnaTransmission, targetTransmission, smoothT);
+      if (matRef.current.uniforms.uThickness) matRef.current.uniforms.uThickness.value = THREE.MathUtils.lerp(dnaThickness, targetThickness, smoothT);
+      if (matRef.current.uniforms.uMinDark) matRef.current.uniforms.uMinDark.value = THREE.MathUtils.lerp(dnaMinDark, targetMinDark, smoothT);
+      if (matRef.current.uniforms.uMaxLight) matRef.current.uniforms.uMaxLight.value = THREE.MathUtils.lerp(dnaMaxLight, targetMaxLight, smoothT);
+
+      if (matRef.current.uniforms.uColor) {
+        const dnaCol = new THREE.Color(appConfig?.cylinderSettings?.baseColor || \'#3b82f6\');
+        const targetCol = new THREE.Color(settings.baseColor || \'#3b82f6\');
+        matRef.current.uniforms.uColor.value.copy(dnaCol).lerp(targetCol, smoothT);
+      }
+
       if (rotationY && pageDistance) {
         const val = rotationY.get();
         const exactIdx = val / -pageDistance;
