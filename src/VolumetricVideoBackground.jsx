@@ -108,7 +108,7 @@ export function VolumetricVideoBackground({
 
   // Plynulý pøechod zjevení a zmizení
   const { fade } = useSpring({
-    fade: 0, // PROZATIMNI ZMENA (skryta televize pro test castic)
+    fade: (visible && isEnabled) ? 1 : 0,
     config: { duration: 700 }
   });
 

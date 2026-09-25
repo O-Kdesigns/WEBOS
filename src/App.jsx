@@ -629,10 +629,10 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
 
   // Animujeme pouze přechod (0 až 1) mezi ORBIT a INSIDE pohledem
   const { springZ, springY, baseFovProgress, springBaseAngle } = useSpring({
-    springZ: viewMode === 'ORBIT' ? orbitZ : orbitZ, // PROZATIMNI ZMENA: Zůstává venku
-    springY: viewMode === 'ORBIT' ? orbitY : orbitY, // PROZATIMNI ZMENA
-    baseFovProgress: viewMode === 'ORBIT' ? 0 : 0,   // PROZATIMNI ZMENA
-    springBaseAngle: viewMode === 'ORBIT' ? orbitAngle : orbitAngle, // PROZATIMNI ZMENA
+    springZ: viewMode === 'ORBIT' ? orbitZ : orbitZ, // Zůstává venku (požadavek uživatele)
+    springY: viewMode === 'ORBIT' ? orbitY : orbitY, // Zůstává venku
+    baseFovProgress: viewMode === 'ORBIT' ? 0 : 1,   
+    springBaseAngle: viewMode === 'ORBIT' ? orbitAngle : inAngle,
     config: { duration: 1000 }
   });
 
