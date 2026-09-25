@@ -34,11 +34,13 @@ export function DarkStudioBackground({ appConfig }) {
         uniforms={uniforms}
         vertexShader={`
           varying vec3 vWorldPosition;
+          varying vec3 vLocalPosition;
           varying vec3 vNormal;
           void main() {
             vNormal = normalize(normalMatrix * normal);
             vec4 worldPos = modelMatrix * vec4(position, 1.0);
             vWorldPosition = worldPos.xyz;
+            vLocalPosition = position;
             gl_Position = projectionMatrix * viewMatrix * worldPos;
           }
         `}
@@ -57,7 +59,7 @@ export function DarkStudioBackground({ appConfig }) {
             float edgeFactor = pow(clamp(rim, 0.0, 1.0), uRimPower);
 
             // Subtle vertical horizon curve for studio gradient feel
-            float horizon = sin(clamp((normalize(vWorldPosition).y * 0.5 + 0.5), 0.0, 1.0) * 3.14159);
+            float horizon = sin(clamp((normalize(vLocalPosition).y * 0.5 + 0.5), 0.0, 1.0) * 3.14159);
             
             vec3 color = mix(uCenterColor, uEdgeColor, edgeFactor);
             color += uEdgeColor * (horizon * 0.15);

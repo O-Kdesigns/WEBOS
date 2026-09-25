@@ -953,17 +953,21 @@ function App() {
           <RenderRestorationHandler isSuspended={isSuspended} />
           <DnaHeightDetector setDnaHeight360={setDetectedDnaHeight360} />
           <CanvasDebugTracker />
-          <DarkStudioBackground appConfig={appConfig} />
           <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
-          <CenterLight appConfig={appConfig} />
-          <spotLight 
-            position={[0, 15, 0]} 
-            intensity={(appConfig.hdriIntensity ?? 1) * 3} 
-            penumbra={1} 
-            angle={0.8} 
-            color="#ffffff" 
-          />
-          <ambientLight intensity={0.2} />
+          
+          <a.group position-y={springScrollY}>
+            <DarkStudioBackground appConfig={appConfig} />
+            <CenterLight appConfig={appConfig} />
+            <spotLight 
+              position={[0, 15, 0]} 
+              intensity={(appConfig.hdriIntensity ?? 1) * 3} 
+              penumbra={1} 
+              angle={0.8} 
+              color="#ffffff" 
+            />
+            <ambientLight intensity={0.2} />
+          </a.group>
+
           <CameraSpotLight appConfig={appConfig} />
           
           <RotationController rotationY={rotationY} pageDistance={pageDistance} totalPages={totalPages} setClosestIndex={setClosestIndex} />
