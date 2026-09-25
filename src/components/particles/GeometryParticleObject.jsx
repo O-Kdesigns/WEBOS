@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
 import { ParticleMaterial } from './ParticleMaterial';
 
-export function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance, transitionProgress, dnaGeometry, currentIndex }) {
+export function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);
@@ -72,25 +72,29 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       // Actually, we can just pass the world inverse matrix directly, but doing it mathematically is fine.
       // A safer trick: If we just use world coordinates for target in GPGPU? No, GPGPU runs in local space.
       // Let's compute local DNA coords.
-      const transformPos = settings.transform?.position || [posX, 0, posZ];
-      const transformQuat = settings.transform?.quaternion || [0,0,0,1];
-      const transformScale = settings.transform?.scale || [1,1,1];
-      
-      const pQuat = Array.isArray(transformQuat) ? new THREE.Quaternion().fromArray(transformQuat) : transformQuat;
-      const pPos = Array.isArray(transformPos) ? new THREE.Vector3().fromArray(transformPos) : transformPos;
-      const pScale = Array.isArray(transformScale) ? new THREE.Vector3().fromArray(transformScale) : transformScale;
+              const cIdx = currentIndex || 0;
+        const pDist = pageDistance || (Math.PI * 2 / 8);
+        const cYStep = appConfig?.yStep ?? 30; // fallback
 
-      const nodeMat = new THREE.Matrix4().compose(pPos, pQuat, pScale);
-      
-      const cIdx = currentIndex || 0;
-      const pDist = pageDistance || (Math.PI * 2 / 8);
-      const cYStep = appConfig?.yStep ?? 30; // fallback
+        const carouselMat = new THREE.Matrix4()
+            .makeTranslation(0, cIdx * -cYStep, 0)
+            .multiply(new THREE.Matrix4().makeRotationY(cIdx * pDist));
 
-      const carouselMat = new THREE.Matrix4()
-          .makeTranslation(0, cIdx * -cYStep, 0)
-          .multiply(new THREE.Matrix4().makeRotationY(cIdx * pDist));
+        let nodeMat;
+        if (nodeMatrix) {
+            nodeMat = nodeMatrix;
+        } else {
+            const transformPos = settings.transform?.position || [posX, 0, posZ];
+            const transformQuat = settings.transform?.quaternion || [0,0,0,1];
+            const transformScale = settings.transform?.scale || [1,1,1];
+            const pQuat = Array.isArray(transformQuat) ? new THREE.Quaternion().fromArray(transformQuat) : transformQuat;
+            const pPos = Array.isArray(transformPos) ? new THREE.Vector3().fromArray(transformPos) : transformPos;
+            const pScale = Array.isArray(transformScale) ? new THREE.Vector3().fromArray(transformScale) : transformScale;
+            nodeMat = new THREE.Matrix4().compose(pPos, pQuat, pScale);
+        }
 
-      const finalMat = carouselMat.multiply(nodeMat);
+        const finalMat = carouselMat.multiply(nodeMat);
+
       const invFinalMat = finalMat.clone().invert();
       
       const invScale = new THREE.Vector3().setFromMatrixScale(invFinalMat);
@@ -129,33 +133,31 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         const offset = Math.random() * Math.PI * 2;
 
         // --- DNA Morphing Setup ---
-        let dnaX = 0, dnaY = 0, dnaZ = 0;
-        let dScale = dnaBaseScale * (1.0 + (Math.random() - 0.5) * 0.5);
         
-        if (dnaVertices.length > 0) {
-            // Find a corresponding DNA vertex
-            const dV = dnaVertices[i % dnaVertices.length].clone();
-            
-            // Logika: Pokud má projekt víc částic než DNA (přebytek),
-            // chceme, aby tyto přebytečné částice startovaly na struktuře DNA,
-            // ale mimo zorné pole kamery (vysoko nad nebo hluboko pod).
-            if (i >= dnaVertices.length) {
-                const isAbove = (i % 2 === 0);
-                // Posun o 40 až 80 jednotek nahoru nebo dolů ve světových souřadnicích DNA
-                dV.y += isAbove ? (40 + Math.random() * 40) : -(40 + Math.random() * 40);
-            }
+          let dnaX = 0, dnaY = 0, dnaZ = 0;
+          let dScale = dnaBaseScale * (1.0 + (Math.random() - 0.5) * 0.5);
+          
+          if (dnaVertices.length > 0) {
+              if (i < dnaVertices.length) {
+                  const dV = dnaVertices[i].clone();
+                  if (dnaMatrix) {
+                      dV.applyMatrix4(dnaMatrix);
+                  }
+                  dV.applyMatrix4(invFinalMat);
+                  dnaX = dV.x;
+                  dnaY = dV.y;
+                  dnaZ = dV.z;
+              } else {
+                  const isAbove = (i % 2 === 0);
+                  dnaX = (Math.random() - 0.5) * 4;
+                  dnaY = isAbove ? (12 + Math.random() * 4) : -(12 + Math.random() * 4);
+                  dnaZ = (Math.random() - 0.5) * 4;
+              }
+          } else {
+              dnaX = x; dnaY = y; dnaZ = z;
+              dScale = scale;
+          }
 
-            // DNA is at global [0,0,0], scale could be changed, but usually 1. 
-            // We apply inverse matrix to convert DNA world pos -> Project local pos
-            dV.applyMatrix4(invFinalMat);
-            dnaX = dV.x;
-            dnaY = dV.y;
-            dnaZ = dV.z;
-        } else {
-            // No DNA geometry provided, fallback to current position
-            dnaX = x; dnaY = y; dnaZ = z;
-            dScale = scale;
-        }
 
         data.push({ x, y, z, scale, color, speed, offset, dnaX, dnaY, dnaZ, dnaScale: dScale });
       }

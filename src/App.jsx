@@ -218,7 +218,7 @@ function SolidObject({ node }) {
   );
 }
 
-function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance, transitionProgress, dnaGeometry, currentIndex }) {
+function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex }) {
   const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
     ? Number(settings.nodeMultipliers[nodeName])
     : 1.0;
@@ -273,18 +273,19 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
 
   return (
     <group position={transforms.worldPos} quaternion={transforms.worldQuat}>
-      <ParticleObject 
-        settings={particleSettings}
-        appConfig={appConfig} 
-        videoTexture={videoTexture} 
-        opacity={1}
-        renderOrder={3}
-        rotationY={rotationY}
-        pageDistance={pageDistance}
-        transitionProgress={transitionProgress}
-        dnaGeometry={dnaGeometry}
-        currentIndex={currentIndex}
-      />
+            <ParticleObject 
+          settings={particleSettings}
+          appConfig={appConfig} 
+          videoTexture={videoTexture} 
+          opacity={1}
+          renderOrder={3}
+          rotationY={rotationY}
+          pageDistance={pageDistance}
+          transitionProgress={transitionProgress}
+          dnaGeometry={dnaGeometry}
+          dnaMatrix={dnaMatrix}
+          nodeMatrix={nodeMatrix}
+        />
     </group>
   );
 }
@@ -307,21 +308,22 @@ function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex,
           return <SolidObject key={nodeName} node={node} />;
         }
 
-        return (
-          <ProjectParticleNode
-            key={nodeName}
-            node={node}
-            nodeName={nodeName}
-            settings={settings}
-            appConfig={appConfig}
-            videoTexture={videoTexture}
-            rotationY={rotationY}
-            pageDistance={pageDistance}
-            transitionProgress={transitionProgress}
-            dnaGeometry={nodes.dna?.geometry}
-            currentIndex={currentIndex}
-          />
-        );
+                  return (
+            <ProjectParticleNode
+              key={nodeName}
+              node={node}
+              nodeName={nodeName}
+              settings={settings}
+              appConfig={appConfig}
+              videoTexture={videoTexture}
+              rotationY={rotationY}
+              pageDistance={pageDistance}
+              transitionProgress={transitionProgress}
+              dnaGeometry={nodes.dna?.geometry}
+              dnaMatrix={nodes.dna?.matrixWorld}
+              nodeMatrix={node.matrixWorld}
+            />
+          );
       }) : (
         <group>
           <ParticleObject 
@@ -334,7 +336,6 @@ function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex,
             pageDistance={pageDistance}
             transitionProgress={transitionProgress}
             dnaGeometry={nodes.dna?.geometry}
-            currentIndex={currentIndex}
           />
         </group>
       )}
