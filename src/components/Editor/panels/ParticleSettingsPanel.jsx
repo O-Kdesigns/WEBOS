@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { DenseSlider, DenseSelect, DenseColor } from './OrbitSettingsPanel';
 
 function isSolidNode(name) {
@@ -30,7 +30,7 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, pageTitle, 
       {availableNodes.length > 0 ? (
         <div style={{ marginBottom: '8px' }}>
           <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>
-            Nalezené 3D uzly pro částice ({matchedNodes.length > 0 ? \\ pro '\'\ : \\ celkem\}):
+            Nalezené 3D uzly pro částice ({matchedNodes.length > 0 ? `${matchedNodes.length} pro '${pageTitle}'` : `${availableNodes.length} celkem`}):
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
             {availableNodes.slice(0, 10).map(node => (
