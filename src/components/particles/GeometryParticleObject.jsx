@@ -141,20 +141,6 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
             dnaX = dV.x;
             dnaY = dV.y;
             dnaZ = dV.z;
-            
-            // If it's an excess particle, make it spawn from outside
-            if (i >= dnaVertices.length) {
-                // Fly in from outside
-                const randomDir = new THREE.Vector3(
-                    Math.random() - 0.5,
-                    Math.random() - 0.5,
-                    Math.random() - 0.5
-                ).normalize().multiplyScalar(50 + Math.random() * 50);
-                dnaX += randomDir.x;
-                dnaY += randomDir.y;
-                dnaZ += randomDir.z;
-                dScale = 0.001; // spawn from size 0
-            }
         } else {
             // No DNA geometry provided, fallback to current position
             dnaX = x; dnaY = y; dnaZ = z;
