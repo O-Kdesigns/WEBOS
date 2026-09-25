@@ -289,7 +289,7 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
   );
 }
 
-function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY, rotationY, transitionProgress }) {
+function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY, rotationY, transitionProgress }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   if (!page || !page.particlesSettings?.hasParticles) return null;
@@ -878,15 +878,11 @@ function App() {
     }
   }, [viewMode, insideApi]);
 
-  const projectTransition = useTransition(viewMode === 'INSIDE', {
-    from: { transitionProgress: 0 },
-    enter: { transitionProgress: 1 },
-    leave: { transitionProgress: 0 },
-    config: (item, index, phase) => {
-      return phase === 'leave' 
-        ? { mass: 1, tension: 120, friction: 30 } 
-        : { mass: 2, tension: 150, friction: 40 };
-    }
+  const { transitionProgress } = useSpring({
+    transitionProgress: viewMode === 'INSIDE' ? 1 : 0,
+    config: viewMode === 'ORBIT'
+      ? { mass: 1, tension: 120, friction: 30 }
+      : { mass: 2, tension: 150, friction: 40 }
   });
 
   const bindDrag = useDrag(({ active, movement: [mx], delta: [dx], velocity: [vx] }) => {
@@ -1005,7 +1001,7 @@ function App() {
               
               return (
               <>
-                <GlobalBackground appConfig={appConfig} videoTexture={activeVideoTex} visible={viewMode === 'ORBIT'} rotationY={rotationY} pageDistance={pageDistance} />
+                
                 <BlenderScene 
                   appConfig={appConfig} 
                   pagesData={pagesData}
@@ -1043,16 +1039,15 @@ function App() {
                   insideRotationY={insideRotationY}
                   yStep={yStep}
                 >
-                  {projectTransition((style, item) => item && (
-                    <ProjectContent 
-                      page={pagesData[closestIndex]} 
-                      appConfig={appConfig} 
-                      videoTexture={activeVideoTex} 
-                      rotationY={rotationY}
-                      pageDistance={pageDistance}
-                      transitionProgress={style.transitionProgress}
-                    />
-                  ))}
+                  <ProjectContent 
+                    viewMode={viewMode}
+                    page={pagesData[closestIndex]} 
+                    appConfig={appConfig} 
+                    videoTexture={activeVideoTex} 
+                    rotationY={rotationY}
+                    pageDistance={pageDistance}
+                    transitionProgress={transitionProgress}
+                  />
                 </InsideProjectPivot>
                 <VolumetricLightPass 
                   appConfig={appConfig} 
