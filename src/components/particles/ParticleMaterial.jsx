@@ -6,7 +6,7 @@ import { a } from '@react-spring/three';
 import './shaders/VideoRefractionMaterial';
 import './shaders/JellyVideoMaterial';
 
-export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotationY, pageDistance }) {
+export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotationY, pageDistance, transitionProgress }) {
   const isCylinder = settings.isCylinder || settings.scatterSpring !== undefined || (settings.shape === 'cylinder' && !settings.customGeometry);
   const matRef = useRef();
 
@@ -35,18 +35,36 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       if (matRef.current.uniforms.uMinDark && settings.transitionMinDark !== undefined) {
         matRef.current.uniforms.uMinDark.value = settings.transitionMinDark;
       }
+      if (matRef.current.uniforms.uTransitionProgress && transitionProgress) {
+        matRef.current.uniforms.uTransitionProgress.value = transitionProgress.get ? transitionProgress.get() : transitionProgress;
+      }
     }
   });
 
   const onBeforeCompile = React.useCallback((shader) => {
     shader.uniforms.tPositions = { value: null };
+    shader.uniforms.uTransitionProgress = { value: 1.0 };
+    shader.uniforms.uDnaColor = { value: new THREE.Color('#3b82f6') }; // DNA base color
     
     shader.vertexShader = `
       uniform sampler2D tPositions;
+      uniform float uTransitionProgress;
+      uniform vec3 uDnaColor;
       attribute vec2 aComputeUV;
       ${shader.vertexShader}
     `;
     
+    // Změníme i barvu vertexů (morph z DNA barvy do původní barvy projektu)
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <color_vertex>',
+      `
+      #include <color_vertex>
+      #if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )
+         vColor = mix(uDnaColor, vColor, smoothstep(0.0, 1.0, uTransitionProgress));
+      #endif
+      `
+    );
+
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
       `
@@ -58,6 +76,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       transformed += computedPos;
       `
     );
+    matRef.current = shader;
   }, []);
 
   // Pro válec na pozadí (GlobalBackground / Kužel) - NESAHAT NA KUŽEL, PLNÉ ZACHOVÁNÍ

@@ -1,14 +1,14 @@
-ï»¿import { useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useSpring } from '@react-spring/three';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
-// 1x1 ÄernÃ¡ fallback textura
+// 1x1 èerná fallback textura
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 dummyTexture.needsUpdate = true;
 
-// Shader pro video na pozadÃ­ s mÄ›kkou vinÄ›tou do ztracena (bez rÃ¡meÄku a bez pÅ™idanÃ½ch ÄÃ¡stic)
+// Shader pro video na pozadí s mìkkou vinìtou do ztracena (bez rámeèku a bez pøidanıch èástic)
 const BackgroundVideoShader = {
   uniforms: {
     uVideo: { value: dummyTexture },
@@ -29,13 +29,13 @@ const BackgroundVideoShader = {
       vUv = uv;
       vec3 pos = position;
 
-      // ZakÅ™ivenÃ­ do oblouku prostoru podÃ©l osy X (prohnutÃ© plÃ¡tno kolem kamery)
+      // Zakøivení do oblouku prostoru podél osy X (prohnuté plátno kolem kamery)
       if (abs(uCurvature) > 0.001) {
-        // Okraje se stÃ¡ÄejÃ­ mÃ­rnÄ› dopÅ™edu (blÃ­Å¾e ke kameÅ™e) jako prohnutÃ¡ stÄ›na prostoru
+        // Okraje se stáèejí mírnì dopøedu (blíe ke kameøe) jako prohnutá stìna prostoru
         pos.z += (pos.x * pos.x) * (uCurvature * 0.35);
       }
 
-      // JemnÃ½ doplÅˆkovÃ½ 3D parallax v prostoru pro sjednocenÃ­ s middle overlay
+      // Jemnı doplòkovı 3D parallax v prostoru pro sjednocení s middle overlay
       pos.x += uMouseParallax.x * 0.05;
       pos.y += uMouseParallax.y * 0.035;
 
@@ -56,21 +56,21 @@ const BackgroundVideoShader = {
       vec4 vid = texture2D(uVideo, vUv);
       vec3 col = vid.rgb;
       
-      // Ãšprava kontrastu a jasu
+      // Úprava kontrastu a jasu
       col = ((col - 0.5) * uContrast) + 0.5;
       col = max(vec3(0.0), col * uBrightness);
 
-      // MÄ›kkÃ½ okraj vinÄ›ty do ztracena (Å¾Ã¡dnÃ½ rÃ¡meÄek)
-      // d je od 0.0 (stÅ™ed) do 1.0 (okraj)
+      // Mìkkı okraj vinìty do ztracena (ádnı rámeèek)
+      // d je od 0.0 (støed) do 1.0 (okraj)
       vec2 d = abs(vUv - vec2(0.5)) * 2.0;
       
-      // HladkÃ½ pokles k nule na okrajÃ­ch
+      // Hladkı pokles k nule na okrajích
       float softness = clamp(uVignetteSoftness, 0.05, 0.9);
       float vx = 1.0 - smoothstep(1.0 - softness, 1.0, d.x);
       float vy = 1.0 - smoothstep(1.0 - softness, 1.0, d.y);
       float vignette = vx * vy;
 
-      // HladkÃ¡ nelineÃ¡rnÃ­ kÅ™ivka pro zcela pÅ™irozenÃ© rozplynutÃ­ do temnoty
+      // Hladká nelineární køivka pro zcela pøirozené rozplynutí do temnoty
       vignette = pow(vignette, 1.3);
 
       float finalAlpha = vignette * uOpacity * uFade;
@@ -106,9 +106,9 @@ export function VolumetricVideoBackground({
   const screenMatRef = useRef();
   const mouseLerp = useRef(new THREE.Vector2(0, 0));
 
-  // PlynulÃ½ pÅ™echod zjevenÃ­ a zmizenÃ­
+  // Plynulı pøechod zjevení a zmizení
   const { fade } = useSpring({
-    fade: (visible && isEnabled) ? 1 : 0,
+    fade: 0, // PROZATIMNI ZMENA (skryta televize pro test castic)
     config: { duration: 700 }
   });
 
@@ -136,7 +136,7 @@ export function VolumetricVideoBackground({
 
     const safeDelta = Math.min(Math.max(delta, 0), 0.1);
 
-    // PlynulÃ© a responzivnÃ­ sledovÃ¡nÃ­ myÅ¡i pro jemnÃ½ parallax
+    // Plynulé a responzivní sledování myši pro jemnı parallax
     const targetX = state.pointer.x;
     const targetY = state.pointer.y;
     mouseLerp.current.x = THREE.MathUtils.damp(mouseLerp.current.x, targetX, 6.0, safeDelta);
@@ -157,8 +157,8 @@ export function VolumetricVideoBackground({
     }
   });
 
-  // RozmÄ›ry a pozice obrazovky v pozadÃ­
-  // ZÃ¡kladnÃ­ formÃ¡t 16:9 (napÅ™. Å¡Ã­Å™ka 3.2, vÃ½Å¡ka 1.8)
+  // Rozmìry a pozice obrazovky v pozadí
+  // Základní formát 16:9 (napø. šíøka 3.2, vıška 1.8)
   const screenScale = cfg.scale ?? 1.0;
   const zDist = cfg.zDistance ?? 1.4;
   const posX = cfg.posX ?? 0.0;
@@ -172,7 +172,7 @@ export function VolumetricVideoBackground({
           position={[posX, posY, -zDist]}
           scale={[screenScale, screenScale, screenScale]}
         >
-          {/* ÄŒistÃ© video na pozadÃ­ s mÄ›kkÃ½m okrajem do ztracena a prohnutÃ­m do prostoru */}
+          {/* Èisté video na pozadí s mìkkım okrajem do ztracena a prohnutím do prostoru */}
           <mesh position={[0, 0, 0]} renderOrder={1}>
             <planeGeometry args={[2.5, 1.406, 48, 16]} />
             <primitive object={screenMaterial} ref={screenMatRef} attach="material" />

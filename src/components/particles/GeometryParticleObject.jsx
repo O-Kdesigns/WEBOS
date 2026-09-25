@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
 import { ParticleMaterial } from './ParticleMaterial';
 
-export function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance }) {
+export function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance, transitionProgress, dnaGeometry, currentIndex }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);
@@ -58,41 +58,113 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
     const data = [];
     const baseColorObj = new THREE.Color(settings.baseColor || '#3b82f6');
 
-    for (let i = 0; i < count; i++) {
-      let x = 0, y = 0, z = 0;
-      let color = baseColorObj;
-      
-      if (vertices.length > 0) {
-        const vIndex = i % vertices.length; 
-        const vertexObj = vertices[vIndex];
-        
-        x = vertexObj.v.x;
-        y = vertexObj.v.y;
-        z = vertexObj.v.z;
-
-        if (settings.colorMode === 'vertex') {
-          color = vertexObj.c;
+      // Extract DNA vertices if provided
+      let dnaVertices = [];
+      if (dnaGeometry) {
+        const dnaPosAttr = dnaGeometry.attributes.position;
+        for (let i = 0; i < dnaPosAttr.count; i += 3) { // take every 3rd vertex to save time
+          dnaVertices.push(new THREE.Vector3().fromBufferAttribute(dnaPosAttr, i));
         }
       }
 
-      const sizeMult = settings.sizeMultiplier ?? 1.0;
-      const baseSize = (settings.baseSize ?? 0.1) * sizeMult;
-      const sizeRandomness = settings.sizeRandomness ?? 0.5;
-
-      const isLarge = Math.random() > 0.95;
-      let scale = baseSize * (1.0 + (Math.random() - 0.5) * sizeRandomness);
-      if (isLarge) {
-        scale += baseSize * (2.0 + Math.random()) * sizeRandomness;
-      }
-      scale = Math.max(0.001, scale);
+      // Compute transform matrix
+      const yStep = 50; // default yStep from App.jsx, let's hardcode or approximate if not provided, or wait, it's in App.jsx. Let's just use 50. Wait, yStep is usually 30 or 50. Let's look at App.jsx to see yStep.
+      // Actually, we can just pass the world inverse matrix directly, but doing it mathematically is fine.
+      // A safer trick: If we just use world coordinates for target in GPGPU? No, GPGPU runs in local space.
+      // Let's compute local DNA coords.
+      const transformPos = settings.transform?.position || [posX, 0, posZ];
+      const transformQuat = settings.transform?.quaternion || [0,0,0,1];
+      const transformScale = settings.transform?.scale || [1,1,1];
       
-      const speed = Math.random() * 0.5 + 0.1;
-      const offset = Math.random() * Math.PI * 2;
+      const pQuat = Array.isArray(transformQuat) ? new THREE.Quaternion().fromArray(transformQuat) : transformQuat;
+      const pPos = Array.isArray(transformPos) ? new THREE.Vector3().fromArray(transformPos) : transformPos;
+      const pScale = Array.isArray(transformScale) ? new THREE.Vector3().fromArray(transformScale) : transformScale;
 
-      data.push({ x, y, z, scale, color, speed, offset });
-    }
-    return data;
-  }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier]);
+      const nodeMat = new THREE.Matrix4().compose(pPos, pQuat, pScale);
+      
+      const cIdx = currentIndex || 0;
+      const pDist = pageDistance || (Math.PI * 2 / 8);
+      const cYStep = appConfig?.yStep ?? 30; // fallback
+
+      const carouselMat = new THREE.Matrix4()
+          .makeTranslation(0, cIdx * -cYStep, 0)
+          .multiply(new THREE.Matrix4().makeRotationY(cIdx * pDist));
+
+      const finalMat = carouselMat.multiply(nodeMat);
+      const invFinalMat = finalMat.clone().invert();
+      
+      const invScale = new THREE.Vector3().setFromMatrixScale(invFinalMat);
+
+      const dnaBaseScale = (appConfig?.dnaSettings?.baseSize ?? 0.08) * invScale.x;
+
+      for (let i = 0; i < count; i++) {
+        let x = 0, y = 0, z = 0;
+        let color = baseColorObj;
+        
+        if (vertices.length > 0) {
+          const vIndex = i % vertices.length; 
+          const vertexObj = vertices[vIndex];
+          
+          x = vertexObj.v.x;
+          y = vertexObj.v.y;
+          z = vertexObj.v.z;
+
+          if (settings.colorMode === 'vertex') {
+            color = vertexObj.c;
+          }
+        }
+
+        const sizeMult = settings.sizeMultiplier ?? 1.0;
+        const baseSize = (settings.baseSize ?? 0.1) * sizeMult;
+        const sizeRandomness = settings.sizeRandomness ?? 0.5;
+
+        const isLarge = Math.random() > 0.95;
+        let scale = baseSize * (1.0 + (Math.random() - 0.5) * sizeRandomness);
+        if (isLarge) {
+          scale += baseSize * (2.0 + Math.random()) * sizeRandomness;
+        }
+        scale = Math.max(0.001, scale);
+        
+        const speed = Math.random() * 0.5 + 0.1;
+        const offset = Math.random() * Math.PI * 2;
+
+        // --- DNA Morphing Setup ---
+        let dnaX = 0, dnaY = 0, dnaZ = 0;
+        let dScale = dnaBaseScale * (1.0 + (Math.random() - 0.5) * 0.5);
+        
+        if (dnaVertices.length > 0) {
+            // Find a corresponding DNA vertex
+            const dV = dnaVertices[i % dnaVertices.length].clone();
+            // DNA is at global [0,0,0], scale could be changed, but usually 1. 
+            // We apply inverse matrix to convert DNA world pos -> Project local pos
+            dV.applyMatrix4(invFinalMat);
+            dnaX = dV.x;
+            dnaY = dV.y;
+            dnaZ = dV.z;
+            
+            // If it's an excess particle, make it spawn from outside
+            if (i > dnaVertices.length && Math.random() > 0.5) {
+                // Fly in from outside
+                const randomDir = new THREE.Vector3(
+                    Math.random() - 0.5,
+                    Math.random() - 0.5,
+                    Math.random() - 0.5
+                ).normalize().multiplyScalar(50 + Math.random() * 50);
+                dnaX += randomDir.x;
+                dnaY += randomDir.y;
+                dnaZ += randomDir.z;
+                dScale = 0.001; // spawn from size 0
+            }
+        } else {
+            // No DNA geometry provided, fallback to current position
+            dnaX = x; dnaY = y; dnaZ = z;
+            dScale = scale;
+        }
+
+        data.push({ x, y, z, scale, color, speed, offset, dnaX, dnaY, dnaZ, dnaScale: dScale });
+      }
+      return data;
+    }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier, dnaGeometry, currentIndex, pageDistance, appConfig]);
 
   const compute = useGPGPU(count, particlesData, gl);
 
@@ -132,13 +204,14 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   }, [count, particlesData, dummy, compute, computeUVs, segW, segH]);
 
   const transform = settings.transform || { position: [posX, 0, posZ] };
-  useParticleLogic(meshRef, settings, appConfig, 0, compute);
+  const logicSettings = useMemo(() => ({ ...settings, transitionProgress }), [settings, transitionProgress]);
+  useParticleLogic(meshRef, logicSettings, appConfig, 0, compute);
 
   return (
     <group {...transform}>
       <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
         <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} />
       </instancedMesh>
     </group>
   );

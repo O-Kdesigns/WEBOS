@@ -61,37 +61,48 @@ uniform float uFloatSpeed;
 uniform float uFloatAmplitude;
 uniform float uReturnSpeed;
 uniform float uScatter;
+uniform float uTransitionProgress;
 uniform sampler2D tBasePosition;
+uniform sampler2D tDnaPosition;
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
     vec4 pos = texture2D(texturePosition, uv);
     vec4 vel = texture2D(textureVelocity, uv);
     vec4 base = texture2D(tBasePosition, uv);
+    vec4 dna = texture2D(tDnaPosition, uv);
     
     // 1. Aplikace fyzikální rychlosti (momentum od myši)
     pos.xyz += vel.xyz;
     
     // 2. Výpočet cílové pozice s levitací (nastavitelná amplituda a rychlost)
-    vec3 targetPos = base.xyz; 
+    vec3 projTarget = base.xyz; 
     float offset = base.w;
-    targetPos.y += sin(uTime * uFloatSpeed + offset) * uFloatAmplitude;
+    projTarget.y += sin(uTime * uFloatSpeed + offset) * uFloatAmplitude;
     
-    // --- SCATTER EFFECT ---
-    // Roztrháme částice do stran
+    // --- ORGANIC MORPH EFFECT ---
+    // Smoothstep pro hezký náběh (ease-in-out)
+    float tProgress = smoothstep(0.0, 1.0, uTransitionProgress);
+    
+    // Pozice: z DNA (při t=0) do tvaru projektu (při t=1)
+    vec3 targetPos = mix(dna.xyz, projTarget, tProgress);
+    
+    // --- SCATTER EFFECT (Pro GlobalBackground) ---
     vec3 radial = normalize(base.xyz + vec3(0.001));
     vec3 randomDir = normalize(vec3(
         sin(offset * 132.34) * cos(offset * 342.12),
         cos(offset * 112.54),
         sin(offset * 211.11) * sin(offset * 313.22)
     ));
-    // Vytvoříme chaos pozici hodně daleko od středu
     vec3 scatterTarget = targetPos + (radial + randomDir) * 300.0; 
-    
     targetPos = mix(targetPos, scatterTarget, uScatter);
     
-    // 3. Hladký návrat s nastavitelnou rychlostí
+    // 3. Hladký návrat k cíli
     pos.xyz += (targetPos - pos.xyz) * uReturnSpeed;
+    
+    // Uložíme interpolovanou velikost (scale) do w komponenty (vertex shader ji načte)
+    // projektový scale je uložen ve vel.w
+    pos.w = mix(dna.w, vel.w, tProgress);
     
     gl_FragColor = pos;
 }
@@ -113,6 +124,7 @@ export function useGPGPU(count, particlesData, gl) {
     const pos0 = gpuCompute.createTexture();
     const vel0 = gpuCompute.createTexture();
     const basePos = gpuCompute.createTexture();
+    const dnaPos = gpuCompute.createTexture();
     
     let i = 0;
     for(let y = 0; y < size; y++) {
@@ -120,17 +132,29 @@ export function useGPGPU(count, particlesData, gl) {
             const idx = i * 4;
             const p = particlesData[i];
             if (p) {
-                // Výchozí pozice pro rendering
-                pos0.image.data[idx] = p.x;
-                pos0.image.data[idx+1] = p.y;
-                pos0.image.data[idx+2] = p.z;
-                pos0.image.data[idx+3] = p.scale; 
+                // Výchozí pozice pro rendering (pokud je DNA morph, startuje rovnou tam)
+                pos0.image.data[idx] = p.dnaX !== undefined ? p.dnaX : p.x;
+                pos0.image.data[idx+1] = p.dnaY !== undefined ? p.dnaY : p.y;
+                pos0.image.data[idx+2] = p.dnaZ !== undefined ? p.dnaZ : p.z;
+                pos0.image.data[idx+3] = p.dnaScale !== undefined ? p.dnaScale : p.scale; 
                 
-                // Paměť pro původní stav a levitaci
+                // Paměť pro původní stav a levitaci (Projekt)
                 basePos.image.data[idx] = p.x;
                 basePos.image.data[idx+1] = p.y;
                 basePos.image.data[idx+2] = p.z;
-                basePos.image.data[idx+3] = p.offset;
+                basePos.image.data[idx+3] = p.offset; // offset for levitation
+
+                // DNA state and scales
+                dnaPos.image.data[idx] = p.dnaX !== undefined ? p.dnaX : p.x;
+                dnaPos.image.data[idx+1] = p.dnaY !== undefined ? p.dnaY : p.y;
+                dnaPos.image.data[idx+2] = p.dnaZ !== undefined ? p.dnaZ : p.z;
+                dnaPos.image.data[idx+3] = p.dnaScale !== undefined ? p.dnaScale : p.scale; 
+
+                // We can use vel0.w to store the project scale permanently since velocity only needs xyz!
+                vel0.image.data[idx] = 0;
+                vel0.image.data[idx+1] = 0;
+                vel0.image.data[idx+2] = 0;
+                vel0.image.data[idx+3] = p.scale; // store project scale here
             }
             i++;
         }
@@ -153,7 +177,9 @@ export function useGPGPU(count, particlesData, gl) {
     posVar.material.uniforms.uFloatAmplitude = { value: 0.1 };
     posVar.material.uniforms.uReturnSpeed = { value: 0.05 };
     posVar.material.uniforms.uScatter = { value: 0.0 };
+    posVar.material.uniforms.uTransitionProgress = { value: 1.0 }; // Default k 1.0 pro safety
     posVar.material.uniforms.tBasePosition = { value: basePos };
+    posVar.material.uniforms.tDnaPosition = { value: dnaPos };
     
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);
@@ -165,6 +191,7 @@ export function useGPGPU(count, particlesData, gl) {
       if (pos0?.dispose) pos0.dispose();
       if (vel0?.dispose) vel0.dispose();
       if (basePos?.dispose) basePos.dispose();
+      if (dnaPos?.dispose) dnaPos.dispose();
 
       if (gpuCompute.variables) {
         gpuCompute.variables.forEach(v => {
@@ -237,6 +264,10 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     // Nové nastavení rychlosti návratu částic
     posUniforms.uReturnSpeed.value = phys.returnSpeed ?? 0.05;
     
+    if (settings.transitionProgress) {
+      posUniforms.uTransitionProgress.value = settings.transitionProgress.get ? settings.transitionProgress.get() : settings.transitionProgress;
+    }
+
     if (settings.scatterSpring) {
       // Umocněním na třetí získáme extrémně pomalý rozjezd (0.1^3 = 0.001) a rychlý konec
       posUniforms.uScatter.value = Math.pow(settings.scatterSpring.get(), 3.0);

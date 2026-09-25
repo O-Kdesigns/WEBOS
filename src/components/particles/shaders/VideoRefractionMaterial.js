@@ -12,7 +12,9 @@ export const VideoRefractionMaterialImpl = shaderMaterial(
     uNoiseAmount: 0.0,
     uTime: 0.0,
     uMaxLight: 0.8,
-    uMinDark: 0.05
+    uMinDark: 0.05,
+    uTransitionProgress: 1.0,
+    uDnaColor: new THREE.Color('#3b82f6')
   },
   `
   uniform sampler2D tPositions;
@@ -55,6 +57,8 @@ export const VideoRefractionMaterialImpl = shaderMaterial(
   uniform float uTime;
   uniform float uMaxLight;
   uniform float uMinDark;
+  uniform float uTransitionProgress;
+  uniform vec3 uDnaColor;
   
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -92,6 +96,7 @@ export const VideoRefractionMaterialImpl = shaderMaterial(
   }
 
   void main() {
+    vec3 uColorMod = mix(uDnaColor, uColor, smoothstep(0.0, 1.0, uTransitionProgress));
     vec2 screenUv = (vScreenPos.xy / vScreenPos.w) * 0.5 + 0.5;
     vec2 distortedUv = screenUv + (vNormal.xy * uDistortion);
     
@@ -127,7 +132,7 @@ export const VideoRefractionMaterialImpl = shaderMaterial(
     float fresnel = clamp(1.0 - max(dot(normal, viewDir), 0.0), 0.0, 1.0);
     fresnel = pow(fresnel, 3.0);
     
-    vec3 baseVideoColor = texColor.rgb * uColor;
+    vec3 baseVideoColor = texColor.rgb * uColorMod;
     vec3 mixedColor = baseVideoColor;
     float fresnelAmount = 0.5;
     
@@ -137,8 +142,8 @@ export const VideoRefractionMaterialImpl = shaderMaterial(
       float swirl = snoise(p.xy + vec2(uTime * 0.5 + waterNoise * 0.5, p.z * 0.3));
       float swirlMix = clamp(swirl * 0.5 + 0.5, 0.0, 1.0);
       
-      vec3 darkTarget = mix(vec3(0.0), uColor * 0.3, clamp(uMinDark, 0.0, 1.0));
-      vec3 lightTarget = uColor * clamp(uMaxLight, 0.0, 3.0);
+      vec3 darkTarget = mix(vec3(0.0), uColorMod * 0.3, clamp(uMinDark, 0.0, 1.0));
+      vec3 lightTarget = uColorMod * clamp(uMaxLight, 0.0, 3.0);
       vec3 swirledTone = mix(darkTarget, lightTarget, smoothstep(0.2, 0.8, swirlMix));
       
       float mixProgress = clamp(pow(uNoiseAmount, 1.2) * 1.15 + (waterNoise * 0.25 * uNoiseAmount), 0.0, 1.0);

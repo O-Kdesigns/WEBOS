@@ -1,7 +1,7 @@
 import React, { useState, useRef, Suspense, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Box, Text, Environment, useGLTF, PerspectiveCamera } from '@react-three/drei';
-import { a, useSpring } from '@react-spring/three';
+import { a, useSpring, useTransition } from '@react-spring/three';
 import { motion as motionDom, AnimatePresence } from 'framer-motion';
 import { useDrag, useWheel } from '@use-gesture/react';
 import * as THREE from 'three';
@@ -218,7 +218,7 @@ function SolidObject({ node }) {
   );
 }
 
-function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance }) {
+function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance, transitionProgress, dnaGeometry, currentIndex }) {
   const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
     ? Number(settings.nodeMultipliers[nodeName])
     : 1.0;
@@ -281,12 +281,15 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
         renderOrder={3}
         rotationY={rotationY}
         pageDistance={pageDistance}
+        transitionProgress={transitionProgress}
+        dnaGeometry={dnaGeometry}
+        currentIndex={currentIndex}
       />
     </group>
   );
 }
 
-function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY, rotationY }) {
+function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY, rotationY, transitionProgress }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   if (!page || !page.particlesSettings?.hasParticles) return null;
@@ -314,6 +317,9 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
             videoTexture={videoTexture}
             rotationY={rotationY}
             pageDistance={pageDistance}
+            transitionProgress={transitionProgress}
+            dnaGeometry={nodes.dna?.geometry}
+            currentIndex={currentIndex}
           />
         );
       }) : (
@@ -326,6 +332,9 @@ function ProjectContent({ page, appConfig, videoTexture, currentIndex, pageDista
             renderOrder={3}
             rotationY={rotationY}
             pageDistance={pageDistance}
+            transitionProgress={transitionProgress}
+            dnaGeometry={nodes.dna?.geometry}
+            currentIndex={currentIndex}
           />
         </group>
       )}
@@ -620,10 +629,10 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
 
   // Animujeme pouze přechod (0 až 1) mezi ORBIT a INSIDE pohledem
   const { springZ, springY, baseFovProgress, springBaseAngle } = useSpring({
-    springZ: viewMode === 'ORBIT' ? orbitZ : inZ,
-    springY: viewMode === 'ORBIT' ? orbitY : inY,
-    baseFovProgress: viewMode === 'ORBIT' ? 0 : 1,
-    springBaseAngle: viewMode === 'ORBIT' ? orbitAngle : inAngle,
+    springZ: viewMode === 'ORBIT' ? orbitZ : orbitZ, // PROZATIMNI ZMENA: Zůstává venku
+    springY: viewMode === 'ORBIT' ? orbitY : orbitY, // PROZATIMNI ZMENA
+    baseFovProgress: viewMode === 'ORBIT' ? 0 : 0,   // PROZATIMNI ZMENA
+    springBaseAngle: viewMode === 'ORBIT' ? orbitAngle : orbitAngle, // PROZATIMNI ZMENA
     config: { duration: 1000 }
   });
 
@@ -868,6 +877,13 @@ function App() {
     }
   }, [viewMode, insideApi]);
 
+  const projectTransition = useTransition(viewMode === 'INSIDE', {
+    from: { transitionProgress: 0 },
+    enter: { transitionProgress: 1 },
+    leave: { transitionProgress: 0 },
+    config: { mass: 2, tension: 150, friction: 40 }
+  });
+
   const bindDrag = useDrag(({ active, movement: [mx], delta: [dx], velocity: [vx] }) => {
     if (viewMode === 'INSIDE') {
       const sensitivity = ((Math.PI * 2) / (window.innerWidth / 1.5)) * (appConfig.scrollSpeed || 1.0);
@@ -1022,15 +1038,16 @@ function App() {
                   insideRotationY={insideRotationY}
                   yStep={yStep}
                 >
-                  {viewMode === 'INSIDE' && (
+                  {projectTransition((style, item) => item && (
                     <ProjectContent 
                       page={pagesData[closestIndex]} 
                       appConfig={appConfig} 
                       videoTexture={activeVideoTex} 
                       rotationY={rotationY}
                       pageDistance={pageDistance}
+                      transitionProgress={style.transitionProgress}
                     />
-                  )}
+                  ))}
                 </InsideProjectPivot>
                 <VolumetricLightPass 
                   appConfig={appConfig} 
