@@ -1,4 +1,4 @@
-﻿import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
@@ -95,7 +95,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       
       const invScale = new THREE.Vector3().setFromMatrixScale(invFinalMat);
 
-      const dnaBaseScale = (appConfig?.cylinderSettings?.baseSize ?? 0.08) * invScale.x;
+      const dnaBaseScale = (appConfig?.dnaSettings?.baseSize ?? 0.08) * invScale.x;
 
       for (let i = 0; i < count; i++) {
         let x = 0, y = 0, z = 0;
@@ -136,12 +136,12 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
             // Find a corresponding DNA vertex
             const dV = dnaVertices[i % dnaVertices.length].clone();
             
-            // Logika: Pokud mĂˇ projekt vĂ­c ÄŤĂˇstic neĹľ DNA (pĹ™ebytek),
-            // chceme, aby tyto pĹ™ebyteÄŤnĂ© ÄŤĂˇstice startovaly na struktuĹ™e DNA,
-            // ale mimo zornĂ© pole kamery (vysoko nad nebo hluboko pod).
+            // Logika: Pokud má projekt víc částic než DNA (přebytek),
+            // chceme, aby tyto přebytečné částice startovaly na struktuře DNA,
+            // ale mimo zorné pole kamery (vysoko nad nebo hluboko pod).
             if (i >= dnaVertices.length) {
                 const isAbove = (i % 2 === 0);
-                // Posun o 40 aĹľ 80 jednotek nahoru nebo dolĹŻ ve svÄ›tovĂ˝ch souĹ™adnicĂ­ch DNA
+                // Posun o 40 až 80 jednotek nahoru nebo dolů ve světových souřadnicích DNA
                 dV.y += isAbove ? (40 + Math.random() * 40) : -(40 + Math.random() * 40);
             }
 
@@ -207,7 +207,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
     <group {...transform}>
       <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
         <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
-        <ParticleMaterial appConfig={appConfig} settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} />
+        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} />
       </instancedMesh>
     </group>
   );
