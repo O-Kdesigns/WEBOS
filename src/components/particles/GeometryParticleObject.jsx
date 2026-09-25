@@ -62,7 +62,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       let dnaVertices = [];
       if (dnaGeometry) {
         const dnaPosAttr = dnaGeometry.attributes.position;
-        for (let i = 0; i < dnaPosAttr.count; i += 3) { // take every 3rd vertex to save time
+        for (let i = 0; i < dnaPosAttr.count; i++) { 
           dnaVertices.push(new THREE.Vector3().fromBufferAttribute(dnaPosAttr, i));
         }
       }
@@ -143,7 +143,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
             dnaZ = dV.z;
             
             // If it's an excess particle, make it spawn from outside
-            if (i > dnaVertices.length && Math.random() > 0.5) {
+            if (i >= dnaVertices.length) {
                 // Fly in from outside
                 const randomDir = new THREE.Vector3(
                     Math.random() - 0.5,
