@@ -871,6 +871,14 @@ function App() {
 
   const bindDrag = useDrag(({ active, movement: [mx], delta: [dx], velocity: [vx] }) => {
     if (viewMode === 'INSIDE') {
+      const sensitivity = ((Math.PI * 2) / (window.innerWidth / 1.5)) * (appConfig.scrollSpeed || 1.0);
+      if (active) {
+        insideRotRef.current += dx * sensitivity;
+        insideApi.start({ insideRotationY: insideRotRef.current, immediate: true });
+      } else {
+        insideRotRef.current += (dx * sensitivity) + (vx * 20 * Math.sign(dx) * (appConfig.scrollSpeed || 1.0));
+        insideApi.start({ insideRotationY: insideRotRef.current, immediate: false, config: { mass: appConfig.physics?.mass ?? 1, tension: appConfig.physics?.tension ?? 170, friction: appConfig.physics?.friction ?? 26 } });
+      }
       return;
     }
 
@@ -893,6 +901,9 @@ function App() {
 
   const bindWheel = useWheel(({ delta: [, dy] }) => {
     if (viewMode === 'INSIDE') {
+      // Rotace objektu uvnitř portfolia při scrollu
+      insideRotRef.current -= dy * 0.005 * (appConfig.scrollSpeed || 1.0);
+      insideApi.start({ insideRotationY: insideRotRef.current, immediate: false, config: { mass: appConfig.physics?.mass ?? 1, tension: appConfig.physics?.tension ?? 170, friction: appConfig.physics?.friction ?? 26 } });
       return;
     }
 
