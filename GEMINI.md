@@ -96,3 +96,16 @@ Tento soubor definuje kritická pravidla a osvědčené postupy pro zachování 
 ## 13. Architektura scény: DNA šroubovice a správa větví
 * **Aktuální hlavní architektura (`main`):** Hlavním vizuálním a navigačním konceptem je vertikální **DNA šroubovice (Double Helix)** namísto horizontálního válce. Vývoj na `main` je zaměřen na plynulý vertikální scroll se synchronní rotací, příčky nesoucí projekty a rozepínací sekvenovací mechaniku.
 * **Záloha válce (`backup/cylinder-version`):** Původní funkční verze s horizontálním válcem je trvale uložena na větvi `backup/cylinder-version`. Kdykoliv si uživatel přeje návrat ke staré verzi, stačí se přepnout na tuto větev (`git checkout backup/cylinder-version`).
+
+---
+
+## 14. Globální scrollování a fixace světel/pozadí (Camera Sync)
+* **Princip:** V architektuře DNA se kamera pohybuje vertikálně (position-y={springScrollY}) podle výšky projektu. Všechna globální světla (např. spotLight, CenterLight) a 3D studiová pozadí (DarkStudioBackground) **MUSÍ** být zabalena v kontejneru sledujícím kameru (např. <a.group position-y={springScrollY}>).
+* **Důvod:** Pokud světla nebo sférické pozadí zůstanou na absolutní pozici [0,0,0], kamera se od nich při scrollování dolů vzdálí. Projekty pak pohasínají, propadají se do tmy a gradient pozadí se nelogicky deformuje nebo ořízne.
+* **Výjimky:** Nekonečná prostředí (Drei <Environment>) nebo světla, která si svou absolutní pozici dynamicky aktualizují v useFrame podle camera.getWorldPosition() (např. CameraSpotLight), se do této skupiny nedávají.
+
+---
+
+## 15. Zákaz umělých "valivých" rotací pro DNA
+* **Princip:** Pro vizuální režim DNA (kdy je scéna orientována vertikálně) nesmí komponenta GlobalBackground aplikovat žádné naklápění scény na základě rychlosti (banking) ani paralaxní kývání pomocí myši v osách X/Z.
+* **Důvod:** Efekty rotace fungovaly dobře pro iluzi "obřího válce", ale u rigidní dvojšroubovice (DNA) způsobují nepřirozené vlnění, které ruší imerzi a rozbíjí vertikální strukturu celé scény. DNA musí zůstat striktně rovná.
