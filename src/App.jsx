@@ -881,7 +881,11 @@ function App() {
     from: { transitionProgress: 0 },
     enter: { transitionProgress: 1 },
     leave: { transitionProgress: 0 },
-    config: { mass: 2, tension: 150, friction: 40 }
+    config: (item, index, phase) => {
+      return phase === 'leave' 
+        ? { mass: 1, tension: 120, friction: 30 } 
+        : { mass: 2, tension: 150, friction: 40 };
+    }
   });
 
   const bindDrag = useDrag(({ active, movement: [mx], delta: [dx], velocity: [vx] }) => {

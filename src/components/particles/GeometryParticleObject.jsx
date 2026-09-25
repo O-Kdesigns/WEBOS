@@ -135,6 +135,16 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         if (dnaVertices.length > 0) {
             // Find a corresponding DNA vertex
             const dV = dnaVertices[i % dnaVertices.length].clone();
+            
+            // Logika: Pokud má projekt víc částic než DNA (přebytek),
+            // chceme, aby tyto přebytečné částice startovaly na struktuře DNA,
+            // ale mimo zorné pole kamery (vysoko nad nebo hluboko pod).
+            if (i >= dnaVertices.length) {
+                const isAbove = (i % 2 === 0);
+                // Posun o 40 až 80 jednotek nahoru nebo dolů ve světových souřadnicích DNA
+                dV.y += isAbove ? (40 + Math.random() * 40) : -(40 + Math.random() * 40);
+            }
+
             // DNA is at global [0,0,0], scale could be changed, but usually 1. 
             // We apply inverse matrix to convert DNA world pos -> Project local pos
             dV.applyMatrix4(invFinalMat);
