@@ -172,6 +172,8 @@ export function DebugMonitorHUD({ videoTextureCache, viewMode, activeUrl, active
       incidents: debugMetrics.incidents.slice(0, 25)
     };
 
+    // Endpoint existuje jen na lokálním dev serveru (vite plugin) – v produkci nic neposílat
+    if (!import.meta.env.DEV) return;
     fetch('/api/debug-log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
