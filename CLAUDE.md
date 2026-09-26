@@ -22,6 +22,7 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 | `.agents/AGENTS.md` | Architektura scény, CMS, asset pipeline pravidla |
 | `REMOTE_SETUP.md` | Git workflow, push před odchodem, GitHub Pages workflow |
 | `LIGHTING.md` | Všechna světla, falešná světla, samosvit a post-processing podle scénářů (ORBIT / průlet / INSIDE / 3D tisk). **Při změně nebo nálezu světla ho aktualizuj.** |
+| `MOBILE.md` | Seznam věcí k optimalizaci pro mobily (GPU, post-processing, videa, ovládání). **Při přidání nebo nálezu čehokoli rizikového pro mobil ho sem zapiš.** |
 | `src/App.jsx` | Hlavní orchestrace scény (~43KB) – VideoManager, videoTextureCache |
 | `vite.config.js` | Plugin pro auto-skenování `public/obsah/` — **NEDOTÝKAT se bez konzultace** |
 
