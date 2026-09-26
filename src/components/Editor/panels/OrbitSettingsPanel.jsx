@@ -75,7 +75,7 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
       <DashboardCard title="Světlo a Prostředí" icon="🌍" color="#3b82f6">
         <DenseSlider desc="Intenzita textury oblohy odrážející se ve skle." label="HDRI Obloha" min={0} max={5} step={0.1} color="#3b82f6" value={appConfig.hdriIntensity ?? 1.0} onChange={v => updateConfig('hdriIntensity', v)} />
         <DenseSlider desc="Síla ambientního nasvícení (nepřímé světlo)." label="Okolní odrazy" min={0} max={2} step={0.1} color="#3b82f6" value={appConfig.environmentIntensity ?? 0.8} onChange={v => updateConfig('environmentIntensity', v)} />
-        <DenseColor desc="Základní barva nekonečného prostoru za scénou." label="Barva pozadí" value={appConfig.darkStudioBg?.color ?? '#0a0a0f'} onChange={v => updateBackground('color', v)} />
+        <DenseColor desc="Základní barva nekonečného prostoru za scénou." label="Barva pozadí" value={appConfig.backgroundSettings?.color ?? appConfig.backgroundSettings?.centerColor ?? '#0a0a0f'} onChange={v => updateBackground('color', v)} />
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#3b82f6', marginBottom: '8px' }}>Bodové osvětlení z kamery</div>
         <DenseToggle desc="Spustí kuželové světlo svítící z pohledu kamery." label="Přisvícení objektů" checked={appConfig.cameraSpotLight?.enabled ?? false} color="#3b82f6" onChange={v => updateCameraSpotLight('enabled', v)} />

@@ -766,6 +766,14 @@ function App() {
   const [appConfig, setAppConfig] = useState(config || {});
   
   const pauseOnBlur = appConfig.powerSaving?.pauseOnBlur ?? true;
+
+  // Persist only this flag: start from the on-disk config (not the live editor state),
+  // so unsaved Editor tweaks are not written to disk by this toggle.
+  const setPauseOnBlurPersisted = (value) => {
+    setAppConfig(prev => ({ ...prev, powerSaving: { ...(prev.powerSaving || {}), pauseOnBlur: value } }));
+    const fileConfig = { ...config, powerSaving: { ...(config.powerSaving || {}), pauseOnBlur: value } };
+    fetch('/api/settings', { method: 'POST', body: JSON.stringify({ config: fileConfig }) }).catch(() => {});
+  };
   const [isSuspended, setIsSuspended] = useState(false);
   
   const allVideoUrls = useMemo(() => {
@@ -1096,8 +1104,17 @@ function App() {
         style={{ position: 'absolute', top: 10, left: 10, zIndex: 1000, background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', pointerEvents: 'auto' }}
         onClick={() => setIsEditorOpen(true)}
       >
-        âš™ď¸Ź Editor
+        ⚙️ Editor
       </button>
+
+      {/* Quick toggle: pause rendering (0 % GPU) when the window loses focus. Persisted straight to config.json. */}
+      <label
+        style={{ position: 'absolute', top: 10, left: 100, zIndex: 1000, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', userSelect: 'none' }}
+        title="Zastaví render (0 % GPU), když klikneš mimo okno. Ukládá se hned do config.json."
+      >
+        <input type="checkbox" checked={pauseOnBlur} onChange={(e) => setPauseOnBlurPersisted(e.target.checked)} />
+        Úsporný režim GPU
+      </label>
 
       {isSuspended && (appConfig.powerSaving?.showBadge ?? true) && (
         <div 

@@ -60,11 +60,14 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 - **Souřadnice:** particle mesh je v `inverseGroup` → renderuje se ve **world space**. DNA cíle jsou world (`dnaMatrix`), tvar projektu je node-local a do world ho převádí `uFinalMat` v GPGPU shaderu.
 - **Rezervní kostka:** projekt má víc particlů než DNA vertexů (DNA 16 463) → přebytek čeká v kostce ±12–16 nad/pod **kamerou** (`uCameraY`, flag = záporné `dna.w`).
 - **Stránka bez particlů** (např. showreel) → fallback `DNA_ONLY_SETTINGS` (DNA z nodu `dna`), jinak by zmizela celá DNA.
+- **GPGPU se přestavuje JEN při změně počtu particlů.** Přepnutí projektu (stejné nody, jiné nastavení) jen přepíše cílové textury `tBasePosition`/`tDnaPosition` in-place (`writeTargets`) → particly plynule doletí, žádný rebuild = žádný lag/probliknutí. `base.w` = projektový scale, levitační fáze se počítá hashem z UV. Náhoda v `GeometryParticleObject` je seedovaná (`rand(i,k)`), aby DNA byla při každém přepočtu identická.
 - **GPGPU dispose je odložený** (`pendingDisposeRef` + `flush`) – okamžitý dispose v cleanupu způsoboval GPU texture leak. Neměnit zpět.
 - Node končící na `1` (např. `Particles_Xelith_Obsah1`) je dle `isSolidNode()` **solid**, ne particly.
 - GLB `newworldorder.glb` obsahuje jen Xelith nody – doomsday nemá vlastní particle nody (v `settings.json` používá Xelith nody).
-- Debug: v DEV je `window.__r3f` (R3F store). `__r3f.gl.info.memory` = počet textur/geometrií (kontrola leaků), `__r3f.get().camera` = aktuální kamera.
+- Debug: v DEV je `window.__r3f` (R3F store) a `window.__gpgpu` (Set živých GPGPU systémů – `readRenderTargetPixels` na `gpuCompute.getCurrentRenderTarget(posVar)` pro kontrolu pozic). `__r3f.gl.info.memory` = počet textur/geometrií (kontrola leaků), `__r3f.get().camera` = aktuální kamera.
 - Dev server: `.claude/launch.json` (`webos-dev`, port 5173).
+- **Pozadí** (`DarkStudioBackground`) je jednobarevné = `config.backgroundSettings.color` (Editor → „Barva pozadí“). Žádný gradient.
+- **Úsporný režim GPU** (`powerSaving.pauseOnBlur`) – checkbox vedle tlačítka Editor, ukládá se hned do `config.json` přes `/api/settings` (vychází z on-disk configu, ne z neuloženého stavu editoru). Zápis configu způsobí reload stránky (Vite HMR).
 
 ---
 

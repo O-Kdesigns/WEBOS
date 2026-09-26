@@ -4,6 +4,13 @@ import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
 import { ParticleMaterial } from './ParticleMaterial';
 
+// Deterministic per-particle random in [0,1). Using Math.random() re-rolled DNA sizes/positions every
+// time particlesData was recomputed (project switch) -> the DNA visibly "shimmered". Seeded = identical DNA.
+const rand = (i, k) => {
+  const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+
 export function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -90,20 +97,20 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         const baseSize = (settings.baseSize ?? 0.1) * sizeMult;
         const sizeRandomness = settings.sizeRandomness ?? 0.5;
 
-        const isLarge = Math.random() > 0.95;
-        let scale = baseSize * (1.0 + (Math.random() - 0.5) * sizeRandomness);
+        const isLarge = rand(i, 1) > 0.95;
+        let scale = baseSize * (1.0 + (rand(i, 2) - 0.5) * sizeRandomness);
         if (isLarge) {
-          scale += baseSize * (2.0 + Math.random()) * sizeRandomness;
+          scale += baseSize * (2.0 + rand(i, 3)) * sizeRandomness;
         }
         scale = Math.max(0.001, scale);
         
-        const speed = Math.random() * 0.5 + 0.1;
-        const offset = Math.random() * Math.PI * 2;
+        const speed = rand(i, 4) * 0.5 + 0.1;
+        const offset = rand(i, 5) * Math.PI * 2;
 
         // --- DNA Morphing Setup ---
         
           let dnaX = 0, dnaY = 0, dnaZ = 0;
-          let dScale = dnaBaseScale * (1.0 + (Math.random() - 0.5) * 0.5);
+          let dScale = dnaBaseScale * (1.0 + (rand(i, 6) - 0.5) * 0.5);
           
           if (dnaVertices.length > 0) {
               if (i < dnaVertices.length) {
@@ -118,9 +125,9 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
                   // Reserve cube: surplus particles wait above/below the camera (Y is camera-relative,
                   // the GPGPU shader adds the camera world Y). Negative scale flags them as reserve.
                   const isAbove = (i % 2 === 0);
-                  dnaX = (Math.random() - 0.5) * 4;
-                  dnaY = isAbove ? (12 + Math.random() * 4) : -(12 + Math.random() * 4);
-                  dnaZ = (Math.random() - 0.5) * 4;
+                  dnaX = (rand(i, 7) - 0.5) * 4;
+                  dnaY = isAbove ? (12 + rand(i, 8) * 4) : -(12 + rand(i, 8) * 4);
+                  dnaZ = (rand(i, 9) - 0.5) * 4;
                   dScale = -Math.max(0.001, dScale);
               }
           } else {

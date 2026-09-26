@@ -78,7 +78,7 @@
     "centerColor": "#060608",
     "edgeColor": "#232630",
     "rimPower": 2.2,
-    "color": "#ffffff"
+    "color": "#0a0a0f"
   },
   "particlePhysics": {
     "mouseRadius": 0.1,

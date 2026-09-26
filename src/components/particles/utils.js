@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRenderer.js';
@@ -83,7 +83,8 @@ void main() {
     
     // 2. Výpočet cílové pozice s levitací (nastavitelná amplituda a rychlost)
     vec3 projLocal = base.xyz;
-    float offset = base.w;
+    // Per-particle phase derived from the texel (base.w now holds the project scale).
+    float offset = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
     projLocal.y += sin(uTime * uFloatSpeed + offset) * uFloatAmplitude;
     vec3 projTarget = (uFinalMat * vec4(projLocal, 1.0)).xyz;
     float projScale = length(uFinalMat[0].xyz);
@@ -118,20 +119,47 @@ void main() {
     pos.xyz += (targetPos - pos.xyz) * returnSpeed;
     
     // Uložíme interpolovanou velikost (scale) do w komponenty (vertex shader ji načte)
-    // projektový scale je uložen ve vel.w
-    pos.w = mix(dnaScale, vel.w * projScale, tProgress);
+    // projektový scale je uložen v base.w
+    pos.w = mix(dnaScale, base.w * projScale, tProgress);
     
     gl_FragColor = pos;
 }
 `;
 
 // --- GPGPU HOOK ---
+// Writes per-particle targets into the data textures.
+// base = project shape (xyz) + project scale (w); dna = DNA state (xyz) + DNA scale (w, negative = reserve cube).
+function writeTargets(size, particlesData, basePos, dnaPos, pos0) {
+  const bd = basePos.image.data, dd = dnaPos.image.data, pd = pos0 ? pos0.image.data : null;
+  const total = size * size;
+  for (let i = 0; i < total; i++) {
+    const idx = i * 4;
+    const p = particlesData[i];
+    if (!p) continue;
+    const dx = p.dnaX !== undefined ? p.dnaX : p.x;
+    const dy = p.dnaY !== undefined ? p.dnaY : p.y;
+    const dz = p.dnaZ !== undefined ? p.dnaZ : p.z;
+    const ds = p.dnaScale !== undefined ? p.dnaScale : p.scale;
+    bd[idx] = p.x; bd[idx + 1] = p.y; bd[idx + 2] = p.z; bd[idx + 3] = p.scale;
+    dd[idx] = dx; dd[idx + 1] = dy; dd[idx + 2] = dz; dd[idx + 3] = ds;
+    if (pd) { pd[idx] = dx; pd[idx + 1] = dy; pd[idx + 2] = dz; pd[idx + 3] = Math.abs(ds); }
+  }
+  basePos.needsUpdate = true;
+  dnaPos.needsUpdate = true;
+}
+
 export function useGPGPU(count, particlesData, gl) {
   const [compute, setCompute] = useState(null);
   const pendingDisposeRef = useRef([]);
+  const dataRef = useRef(particlesData);
+  dataRef.current = particlesData;
 
+  // The GPGPU system is (re)created ONLY when the particle count changes.
+  // Switching projects (same nodes, different size/colour settings) must NOT rebuild it:
+  // a rebuild costs a frame hitch and resets positions/scales -> visible DNA "blink".
+  const hasData = !!(particlesData && particlesData.length);
   useEffect(() => {
-    if (!count || count === 0 || !particlesData || !particlesData.length) {
+    if (!count || !hasData) {
       setCompute(null);
       return;
     }
@@ -140,43 +168,10 @@ export function useGPGPU(count, particlesData, gl) {
     const gpuCompute = new GPUComputationRenderer(size, size, gl);
     
     const pos0 = gpuCompute.createTexture();
-    const vel0 = gpuCompute.createTexture();
+    const vel0 = gpuCompute.createTexture(); // zero velocity
     const basePos = gpuCompute.createTexture();
     const dnaPos = gpuCompute.createTexture();
-    
-    let i = 0;
-    for(let y = 0; y < size; y++) {
-        for(let x = 0; x < size; x++) {
-            const idx = i * 4;
-            const p = particlesData[i];
-            if (p) {
-                // Výchozí pozice pro rendering (pokud je DNA morph, startuje rovnou tam)
-                pos0.image.data[idx] = p.dnaX !== undefined ? p.dnaX : p.x;
-                pos0.image.data[idx+1] = p.dnaY !== undefined ? p.dnaY : p.y;
-                pos0.image.data[idx+2] = p.dnaZ !== undefined ? p.dnaZ : p.z;
-                pos0.image.data[idx+3] = Math.abs(p.dnaScale !== undefined ? p.dnaScale : p.scale);
-                
-                // Paměť pro původní stav a levitaci (Projekt)
-                basePos.image.data[idx] = p.x;
-                basePos.image.data[idx+1] = p.y;
-                basePos.image.data[idx+2] = p.z;
-                basePos.image.data[idx+3] = p.offset; // offset for levitation
-
-                // DNA state and scales
-                dnaPos.image.data[idx] = p.dnaX !== undefined ? p.dnaX : p.x;
-                dnaPos.image.data[idx+1] = p.dnaY !== undefined ? p.dnaY : p.y;
-                dnaPos.image.data[idx+2] = p.dnaZ !== undefined ? p.dnaZ : p.z;
-                dnaPos.image.data[idx+3] = p.dnaScale !== undefined ? p.dnaScale : p.scale; 
-
-                // We can use vel0.w to store the project scale permanently since velocity only needs xyz!
-                vel0.image.data[idx] = 0;
-                vel0.image.data[idx+1] = 0;
-                vel0.image.data[idx+2] = 0;
-                vel0.image.data[idx+3] = p.scale; // store project scale here
-            }
-            i++;
-        }
-    }
+    writeTargets(size, dataRef.current, basePos, dnaPos, pos0);
     
     const velVar = gpuCompute.addVariable("textureVelocity", fragmentShaderVel, vel0);
     const posVar = gpuCompute.addVariable("texturePosition", fragmentShaderPos, pos0);
@@ -204,14 +199,25 @@ export function useGPGPU(count, particlesData, gl) {
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);
     
-    const computeObj = { gpuCompute, velVar, posVar, size, disposed: false };
+    const computeObj = { gpuCompute, velVar, posVar, size, disposed: false, writtenData: dataRef.current };
     setCompute(computeObj);
+    if (import.meta.env.DEV) { (window.__gpgpu = window.__gpgpu || new Set()).add(computeObj); }
 
     // Disposal is deferred: after a dependency change the old system is still used for a frame or two
     // until React re-renders with the new one. Disposing immediately made three.js silently re-allocate
     // the render targets / data textures on the next compute() -> GPU texture leak + one-frame collapse.
     return () => { pendingDisposeRef.current.push(computeObj); };
-  }, [count, particlesData, gl]);
+  }, [count, hasData, gl]);
+
+  // Same count, new targets (project switch / editor tweak): update the target textures in place.
+  // Current particle positions live on in the ping-pong render targets, so particles glide to the
+  // new targets instead of being reset.
+  useLayoutEffect(() => {
+    if (!compute || compute.disposed || !particlesData || compute.writtenData === particlesData) return;
+    const u = compute.posVar.material.uniforms;
+    writeTargets(compute.size, particlesData, u.tBasePosition.value, u.tDnaPosition.value, null);
+    compute.writtenData = particlesData;
+  }, [compute, particlesData]);
 
   // Flush deferred disposals once the new system has taken over (called from useParticleLogic)
   // and on unmount.
@@ -232,6 +238,7 @@ export function useGPGPU(count, particlesData, gl) {
 function disposeCompute(c) {
   if (!c || c.disposed) return;
   c.disposed = true;
+  if (import.meta.env.DEV) window.__gpgpu?.delete(c);
   const u = c.posVar.material.uniforms;
   // Data textures that are not owned by GPUComputationRenderer
   u.tBasePosition.value?.dispose();

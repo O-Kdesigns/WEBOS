@@ -53,17 +53,9 @@ export function DarkStudioBackground({ appConfig }) {
           varying vec3 vLocalPosition;
 
           void main() {
-            vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-            // Inverted sphere normal
-            vec3 n = normalize(-vNormal);
-            float rim = 1.0 - max(dot(n, viewDir), 0.0);
-            float edgeFactor = pow(clamp(rim, 0.0, 1.0), uRimPower);
-
-            // Subtle vertical horizon curve for studio gradient feel
-            float horizon = sin(clamp((normalize(vLocalPosition).y * 0.5 + 0.5), 0.0, 1.0) * 3.14159);
-            
-            vec3 color = mix(uCenterColor, uEdgeColor, edgeFactor);
-            color += uEdgeColor * (horizon * 0.15);
+            // Uniform background colour exactly as set in the Editor ("Barva pozadí").
+            // The old rim/horizon gradient made the colour change with camera position while scrolling.
+            vec3 color = uCenterColor;
 
             gl_FragColor = vec4(color, 1.0);
           }
