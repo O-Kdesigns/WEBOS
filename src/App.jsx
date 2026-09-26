@@ -14,6 +14,7 @@ import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { AtmosphereDust } from './AtmosphereDust';
 import { TvGlass, useTvGlass } from './TvGlass';
 import { SolidPrintDriver, usePrintableSolid } from './SolidPrint';
+import { useAiLive, useAiLiveTicker } from './AiLiveMode';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
@@ -776,15 +777,11 @@ function App() {
   const [pagesData, setPagesData] = useState(settings.pages || []);
   const [appConfig, setAppConfig] = useState(config || {});
   
-  const pauseOnBlur = appConfig.powerSaving?.pauseOnBlur ?? true;
+  // AI živý render (src/AiLiveMode.js): nepauzuje při ztrátě fokusu a renderuje i v neaktivním tabu
+  const [aiLive, setAiLive] = useAiLive();
+  useAiLiveTicker(aiLive);
+  const pauseOnBlur = !aiLive && (appConfig.powerSaving?.pauseOnBlur ?? true);
 
-  // Persist only this flag: start from the on-disk config (not the live editor state),
-  // so unsaved Editor tweaks are not written to disk by this toggle.
-  const setPauseOnBlurPersisted = (value) => {
-    setAppConfig(prev => ({ ...prev, powerSaving: { ...(prev.powerSaving || {}), pauseOnBlur: value } }));
-    const fileConfig = { ...config, powerSaving: { ...(config.powerSaving || {}), pauseOnBlur: value } };
-    fetch('/api/settings', { method: 'POST', body: JSON.stringify({ config: fileConfig }) }).catch(() => {});
-  };
   const [isSuspended, setIsSuspended] = useState(false);
   
   const allVideoUrls = useMemo(() => {
@@ -1124,13 +1121,13 @@ function App() {
         ⚙️ Editor
       </button>
 
-      {/* Quick toggle: pause rendering (0 % GPU) when the window loses focus. Persisted straight to config.json. */}
+      {/* AI živý render: plný render i bez fokusu / v neaktivním tabu. Ukládá se do localStorage (jen tento prohlížeč). */}
       <label
         style={{ position: 'absolute', top: 10, left: 100, zIndex: 1000, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', userSelect: 'none' }}
-        title="Zastaví render (0 % GPU), když klikneš mimo okno. Ukládá se hned do config.json."
+        title="Plný render i když okno nemá fokus nebo je tab na pozadí (pro práci s Claude). Vypnuto = platí powerSaving z configu. Pamatuje si to jen tento prohlížeč; jde i přes ?ai=1 / ?ai=0."
       >
-        <input type="checkbox" checked={pauseOnBlur} onChange={(e) => setPauseOnBlurPersisted(e.target.checked)} />
-        Úsporný režim GPU
+        <input type="checkbox" checked={aiLive} onChange={(e) => setAiLive(e.target.checked)} />
+        🤖 AI živý render
       </label>
 
       {isSuspended && (appConfig.powerSaving?.showBadge ?? true) && (
