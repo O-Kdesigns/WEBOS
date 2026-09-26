@@ -12,6 +12,7 @@ import { ParticleObject } from './components/particles/ParticleObject';
 import { MusicPlayer } from './MusicPlayer';
 import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { AtmosphereDust } from './AtmosphereDust';
+import { TvGlass, useTvParts, useTvMaterials } from './TvGlass';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
@@ -527,6 +528,10 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
 
   const totalPages = Math.max(pagesData.length, 1);
 
+  // skleněné tělo televize (nody TV_* z Blenderu), video zůstává na GlassDesk
+  const tvParts = useTvParts(nodes);
+  const tvMaterials = useTvMaterials(tvParts, fade);
+
   let baseDeskNode = nodes.GlassDesk || nodes['GlassDesk-Xelith'];
   if (!baseDeskNode) {
     const glassKey = Object.keys(nodes).find(k => k.startsWith('GlassDesk'));
@@ -600,6 +605,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
                 />
               )}
             </a.mesh>
+            <TvGlass parts={tvParts} materials={tvMaterials} />
             </group>
           </group>
         )
