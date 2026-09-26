@@ -290,10 +290,32 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
   );
 }
 
+const DNA_ONLY_SETTINGS = { hasParticles: true, dnaOnly: true, colorMode: 'video', sizeRandomness: 0.5, selectedNodes: [] };
+
 function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY, rotationY, transitionProgress }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
-  if (!page || !page.particlesSettings?.hasParticles) return null;
+  if (!page) return null;
+
+  // In ORBIT the DNA is built from the active project's particles (single particle system).
+  // A page without its own particles still needs the DNA -> render the DNA node itself, frozen in DNA state.
+  if (!page.particlesSettings?.hasParticles) {
+    if (!nodes.dna) return null;
+    return (
+      <ProjectParticleNode
+        node={nodes.dna}
+        nodeName="dna"
+        settings={DNA_ONLY_SETTINGS}
+        appConfig={appConfig}
+        videoTexture={videoTexture}
+        rotationY={rotationY}
+        pageDistance={pageDistance}
+        transitionProgress={0}
+        dnaGeometry={nodes.dna.geometry}
+        dnaMatrix={nodes.dna.matrixWorld}
+      />
+    );
+  }
 
   const settings = page.particlesSettings;
   const selected = settings.selectedNodes || [];
@@ -966,6 +988,7 @@ function App() {
           shadows 
           frameloop={isSuspended ? 'never' : 'always'}
           gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
+          onCreated={(state) => { if (import.meta.env.DEV) window.__r3f = state; }}
         >
           <RenderRestorationHandler isSuspended={isSuspended} />
           <DnaHeightDetector setDnaHeight360={setDetectedDnaHeight360} />

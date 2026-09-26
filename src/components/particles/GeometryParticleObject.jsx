@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useLayoutEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
@@ -115,10 +115,13 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
                   dnaY = dV.y;
                   dnaZ = dV.z;
               } else {
+                  // Reserve cube: surplus particles wait above/below the camera (Y is camera-relative,
+                  // the GPGPU shader adds the camera world Y). Negative scale flags them as reserve.
                   const isAbove = (i % 2 === 0);
                   dnaX = (Math.random() - 0.5) * 4;
                   dnaY = isAbove ? (12 + Math.random() * 4) : -(12 + Math.random() * 4);
                   dnaZ = (Math.random() - 0.5) * 4;
+                  dScale = -Math.max(0.001, dScale);
               }
           } else {
               dnaX = x; dnaY = y; dnaZ = z;
@@ -150,7 +153,9 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
      return uvs;
   }, [count, compute]);
 
-  useEffect(() => {
+  // Layout effect: the compute UV attribute must exist before the next rendered frame,
+  // otherwise all instances sample texel 0 for one frame (visible collapse/flash).
+  useLayoutEffect(() => {
     if (!meshRef.current || !compute) return;
 
     for (let i = 0; i < count; i++) {
@@ -183,7 +188,8 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   });
 
   const transform = settings.transform || { position: [posX, 0, posZ] };
-  const logicSettings = useMemo(() => ({ ...settings, transitionProgress }), [settings, transitionProgress]);
+  // dnaOnly = page without its own particle shape: particles stay in the DNA in both modes.
+  const logicSettings = useMemo(() => ({ ...settings, transitionProgress: settings.dnaOnly ? 0 : transitionProgress }), [settings, transitionProgress]);
   useParticleLogic(meshRef, logicSettings, appConfig, 0, compute);
 
   return (

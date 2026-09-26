@@ -64,6 +64,12 @@ uniform float uScatter;
 uniform float uTransitionProgress;
 uniform sampler2D tBasePosition;
 uniform sampler2D tDnaPosition;
+// World matrix of the project node group (page offset + inside pivot + node transform).
+// The particle mesh renders in world space (inverse group), so project shape targets
+// stored in node-local space must be lifted into world space here.
+uniform mat4 uFinalMat;
+// Camera world Y - the "reserve cube" of surplus particles (dna.w < 0) rides with the camera, out of view.
+uniform float uCameraY;
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -76,16 +82,24 @@ void main() {
     pos.xyz += vel.xyz;
     
     // 2. Výpočet cílové pozice s levitací (nastavitelná amplituda a rychlost)
-    vec3 projTarget = base.xyz; 
+    vec3 projLocal = base.xyz;
     float offset = base.w;
-    projTarget.y += sin(uTime * uFloatSpeed + offset) * uFloatAmplitude;
+    projLocal.y += sin(uTime * uFloatSpeed + offset) * uFloatAmplitude;
+    vec3 projTarget = (uFinalMat * vec4(projLocal, 1.0)).xyz;
+    float projScale = length(uFinalMat[0].xyz);
+
+    // Surplus particles (more project vertices than DNA vertices) are flagged with negative dna.w.
+    // Their DNA-state target is relative to the camera height so the cube follows the camera.
+    float isReserve = step(dna.w, 0.0);
+    vec3 dnaTarget = dna.xyz + vec3(0.0, uCameraY * isReserve, 0.0);
+    float dnaScale = abs(dna.w);
     
     // --- ORGANIC MORPH EFFECT ---
     // Smoothstep pro hezký náběh (ease-in-out)
     float tProgress = smoothstep(0.0, 1.0, uTransitionProgress);
     
     // Pozice: z DNA (při t=0) do tvaru projektu (při t=1)
-    vec3 targetPos = mix(dna.xyz, projTarget, tProgress);
+    vec3 targetPos = mix(dnaTarget, projTarget, tProgress);
     
     // --- SCATTER EFFECT (Pro GlobalBackground) ---
     vec3 radial = normalize(base.xyz + vec3(0.001));
@@ -98,11 +112,14 @@ void main() {
     targetPos = mix(targetPos, scatterTarget, uScatter);
     
     // 3. Hladký návrat k cíli
-    pos.xyz += (targetPos - pos.xyz) * uReturnSpeed;
+    // Reserve particles snap to the camera-relative cube while in ORBIT (no lag into view while scrolling),
+    // and fly smoothly once the INSIDE morph starts.
+    float returnSpeed = mix(uReturnSpeed, 1.0, isReserve * (1.0 - step(0.001, tProgress)));
+    pos.xyz += (targetPos - pos.xyz) * returnSpeed;
     
     // Uložíme interpolovanou velikost (scale) do w komponenty (vertex shader ji načte)
     // projektový scale je uložen ve vel.w
-    pos.w = mix(dna.w, vel.w, tProgress);
+    pos.w = mix(dnaScale, vel.w * projScale, tProgress);
     
     gl_FragColor = pos;
 }
@@ -111,6 +128,7 @@ void main() {
 // --- GPGPU HOOK ---
 export function useGPGPU(count, particlesData, gl) {
   const [compute, setCompute] = useState(null);
+  const pendingDisposeRef = useRef([]);
 
   useEffect(() => {
     if (!count || count === 0 || !particlesData || !particlesData.length) {
@@ -136,7 +154,7 @@ export function useGPGPU(count, particlesData, gl) {
                 pos0.image.data[idx] = p.dnaX !== undefined ? p.dnaX : p.x;
                 pos0.image.data[idx+1] = p.dnaY !== undefined ? p.dnaY : p.y;
                 pos0.image.data[idx+2] = p.dnaZ !== undefined ? p.dnaZ : p.z;
-                pos0.image.data[idx+3] = p.dnaScale !== undefined ? p.dnaScale : p.scale; 
+                pos0.image.data[idx+3] = Math.abs(p.dnaScale !== undefined ? p.dnaScale : p.scale);
                 
                 // Paměť pro původní stav a levitaci (Projekt)
                 basePos.image.data[idx] = p.x;
@@ -180,35 +198,46 @@ export function useGPGPU(count, particlesData, gl) {
     posVar.material.uniforms.uTransitionProgress = { value: 1.0 }; // Default k 1.0 pro safety
     posVar.material.uniforms.tBasePosition = { value: basePos };
     posVar.material.uniforms.tDnaPosition = { value: dnaPos };
+    posVar.material.uniforms.uFinalMat = { value: new THREE.Matrix4() };
+    posVar.material.uniforms.uCameraY = { value: 0 };
     
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);
     
-    setCompute({ gpuCompute, velVar, posVar, size });
+    const computeObj = { gpuCompute, velVar, posVar, size, disposed: false };
+    setCompute(computeObj);
 
-    return () => {
-      // Úplný úklid alokovaných textur a render targetů v GPU paměti
-      if (pos0?.dispose) pos0.dispose();
-      if (vel0?.dispose) vel0.dispose();
-      if (basePos?.dispose) basePos.dispose();
-      if (dnaPos?.dispose) dnaPos.dispose();
-
-      if (gpuCompute.variables) {
-        gpuCompute.variables.forEach(v => {
-          if (v.renderTargets) {
-            v.renderTargets.forEach(rt => {
-              if (rt?.texture?.dispose) rt.texture.dispose();
-              if (rt?.dispose) rt.dispose();
-            });
-          }
-          if (v.material?.dispose) v.material.dispose();
-        });
-      }
-      if (gpuCompute.dispose) gpuCompute.dispose();
-    };
+    // Disposal is deferred: after a dependency change the old system is still used for a frame or two
+    // until React re-renders with the new one. Disposing immediately made three.js silently re-allocate
+    // the render targets / data textures on the next compute() -> GPU texture leak + one-frame collapse.
+    return () => { pendingDisposeRef.current.push(computeObj); };
   }, [count, particlesData, gl]);
 
-  return compute;
+  // Flush deferred disposals once the new system has taken over (called from useParticleLogic)
+  // and on unmount.
+  const flushRef = useRef(null);
+  flushRef.current = (keep) => {
+    const pending = pendingDisposeRef.current;
+    for (let i = pending.length - 1; i >= 0; i--) {
+      if (pending[i] === keep) continue;
+      disposeCompute(pending[i]);
+      pending.splice(i, 1);
+    }
+  };
+  useEffect(() => () => flushRef.current(null), []);
+
+  return compute ? Object.assign(compute, { flush: flushRef }) : null;
+}
+
+function disposeCompute(c) {
+  if (!c || c.disposed) return;
+  c.disposed = true;
+  const u = c.posVar.material.uniforms;
+  // Data textures that are not owned by GPUComputationRenderer
+  u.tBasePosition.value?.dispose();
+  u.tDnaPosition.value?.dispose();
+  // Disposes render targets, initial value textures, materials and the fullscreen quad
+  c.gpuCompute.dispose();
 }
 
 // --- LOGIKA ---
@@ -241,7 +270,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
   }, [mouseVelocity]);
 
   useFrame((state) => {
-    if (!meshRef.current || !compute) return;
+    if (!meshRef.current || !compute || compute.disposed) return;
     const time = state.clock.getElapsedTime();
     
     if (settings.isGlobalLevitating) {
@@ -264,7 +293,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     // Nové nastavení rychlosti návratu částic
     posUniforms.uReturnSpeed.value = phys.returnSpeed ?? 0.05;
     
-    if (settings.transitionProgress) {
+    if (settings.transitionProgress != null) {
       posUniforms.uTransitionProgress.value = settings.transitionProgress.get ? settings.transitionProgress.get() : settings.transitionProgress;
     }
 
@@ -318,6 +347,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       velUniforms.uMouseVel.value.set(0,0,0);
     }
     
+    posUniforms.uCameraY.value = worldCameraPos.current.y;
     compute.gpuCompute.compute();
     
     const tex = compute.gpuCompute.getCurrentRenderTarget(compute.posVar).texture;
@@ -339,6 +369,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
             }
         }
     }
+    // The mesh now samples the current system's texture -> old systems can be freed safely.
+    if (compute.flush) compute.flush.current(compute);
   });
 }
 

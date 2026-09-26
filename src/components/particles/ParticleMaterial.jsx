@@ -38,7 +38,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       if (matRef.current.uniforms.uMinDark && settings.transitionMinDark !== undefined) {
         matRef.current.uniforms.uMinDark.value = settings.transitionMinDark;
       }
-      if (matRef.current.uniforms.uTransitionProgress && transitionProgress) {
+      if (matRef.current.uniforms.uTransitionProgress && transitionProgress != null) {
         matRef.current.uniforms.uTransitionProgress.value = transitionProgress.get ? transitionProgress.get() : transitionProgress;
       }
     }
