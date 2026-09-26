@@ -61,6 +61,8 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 - **Rezervní kostka:** projekt má víc particlů než DNA vertexů (DNA 16 463) → přebytek čeká v kostce ±12–16 nad/pod **kamerou** (`uCameraY`, flag = záporné `dna.w`).
 - **Stránka bez particlů** (např. showreel) → fallback `DNA_ONLY_SETTINGS` (DNA z nodu `dna`), jinak by zmizela celá DNA.
 - **GPGPU se přestavuje JEN při změně počtu particlů.** Přepnutí projektu (stejné nody, jiné nastavení) jen přepíše cílové textury `tBasePosition`/`tDnaPosition` in-place (`writeTargets`) → particly plynule doletí, žádný rebuild = žádný lag/probliknutí. `base.w` = projektový scale, levitační fáze se počítá hashem z UV. Náhoda v `GeometryParticleObject` je seedovaná (`rand(i,k)`), aby DNA byla při každém přepočtu identická.
+- **Matice ve `useFrame`:** `matrixWorld` se obnovuje až při renderu (po `useFrame`). Pivot projektu při přepnutí skočí (yStep + rotace) → `GeometryParticleObject` volá `worldGroup.updateWorldMatrix(true,false)` před výpočtem inverze, jinak DNA + rezervní kostka na 1 snímek poskočí.
+- **GPGPU se vytváří v `useLayoutEffect`** (ne `useEffect`), aby nově mountnutý objekt (doomsday → showreel) neměl jeden snímek bez pozic (probliknutí).
 - **GPGPU dispose je odložený** (`pendingDisposeRef` + `flush`) – okamžitý dispose v cleanupu způsoboval GPU texture leak. Neměnit zpět.
 - Node končící na `1` (např. `Particles_Xelith_Obsah1`) je dle `isSolidNode()` **solid**, ne particly.
 - GLB `newworldorder.glb` obsahuje jen Xelith nody – doomsday nemá vlastní particle nody (v `settings.json` používá Xelith nody).

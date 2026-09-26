@@ -158,7 +158,10 @@ export function useGPGPU(count, particlesData, gl) {
   // Switching projects (same nodes, different size/colour settings) must NOT rebuild it:
   // a rebuild costs a frame hitch and resets positions/scales -> visible DNA "blink".
   const hasData = !!(particlesData && particlesData.length);
-  useEffect(() => {
+  // Layout effect (not useEffect): setCompute here re-renders synchronously before the next frame.
+  // With useEffect a freshly mounted object (e.g. doomsday -> showreel) rendered one frame without
+  // GPGPU positions -> the DNA vanished for a frame (visible as a noise "blink").
+  useLayoutEffect(() => {
     if (!count || !hasData) {
       setCompute(null);
       return;

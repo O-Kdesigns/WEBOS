@@ -185,6 +185,10 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   
   useFrame(() => {
     if (worldGroupRef.current && inverseGroupRef.current && compute) {
+      // matrixWorld is only refreshed during render (after useFrame). On a project switch the parent
+      // pivot jumps (yStep + rotation) at commit -> a stale matrix shifted the whole DNA + reserve cube
+      // for one frame (cube flashed at top/bottom). Refresh it now so the inverse matches this frame.
+      worldGroupRef.current.updateWorldMatrix(true, false);
       const mat = worldGroupRef.current.matrixWorld;
       if (compute.posVar.material.uniforms.uFinalMat) {
         compute.posVar.material.uniforms.uFinalMat.value.copy(mat);
