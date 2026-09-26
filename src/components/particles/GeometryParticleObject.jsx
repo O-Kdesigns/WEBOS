@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useEffect } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
 import { ParticleMaterial } from './ParticleMaterial';
@@ -67,39 +67,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         }
       }
 
-      // Compute transform matrix
-      const yStep = 50; // default yStep from App.jsx, let's hardcode or approximate if not provided, or wait, it's in App.jsx. Let's just use 50. Wait, yStep is usually 30 or 50. Let's look at App.jsx to see yStep.
-      // Actually, we can just pass the world inverse matrix directly, but doing it mathematically is fine.
-      // A safer trick: If we just use world coordinates for target in GPGPU? No, GPGPU runs in local space.
-      // Let's compute local DNA coords.
-              const cIdx = currentIndex || 0;
-        const pDist = pageDistance || (Math.PI * 2 / 8);
-        const cYStep = appConfig?.yStep ?? 30; // fallback
-
-        const carouselMat = new THREE.Matrix4()
-            .makeTranslation(0, cIdx * -cYStep, 0)
-            .multiply(new THREE.Matrix4().makeRotationY(cIdx * pDist));
-
-        let nodeMat;
-        if (nodeMatrix) {
-            nodeMat = nodeMatrix;
-        } else {
-            const transformPos = settings.transform?.position || [posX, 0, posZ];
-            const transformQuat = settings.transform?.quaternion || [0,0,0,1];
-            const transformScale = settings.transform?.scale || [1,1,1];
-            const pQuat = Array.isArray(transformQuat) ? new THREE.Quaternion().fromArray(transformQuat) : transformQuat;
-            const pPos = Array.isArray(transformPos) ? new THREE.Vector3().fromArray(transformPos) : transformPos;
-            const pScale = Array.isArray(transformScale) ? new THREE.Vector3().fromArray(transformScale) : transformScale;
-            nodeMat = new THREE.Matrix4().compose(pPos, pQuat, pScale);
-        }
-
-        const finalMat = carouselMat.multiply(nodeMat);
-
-      const invFinalMat = finalMat.clone().invert();
-      
-      const invScale = new THREE.Vector3().setFromMatrixScale(invFinalMat);
-
-      const dnaBaseScale = (appConfig?.dnaSettings?.baseSize ?? 0.08) * invScale.x;
+      const dnaBaseScale = (appConfig?.dnaSettings?.baseSize ?? 0.08);
 
       for (let i = 0; i < count; i++) {
         let x = 0, y = 0, z = 0;
@@ -143,7 +111,6 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
                   if (dnaMatrix) {
                       dV.applyMatrix4(dnaMatrix);
                   }
-                  dV.applyMatrix4(invFinalMat);
                   dnaX = dV.x;
                   dnaY = dV.y;
                   dnaZ = dV.z;
@@ -162,7 +129,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         data.push({ x, y, z, scale, color, speed, offset, dnaX, dnaY, dnaZ, dnaScale: dScale });
       }
       return data;
-    }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier, dnaGeometry, currentIndex, pageDistance, appConfig]);
+    }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier, dnaGeometry, dnaMatrix]);
 
   const compute = useGPGPU(count, particlesData, gl);
 
@@ -201,16 +168,32 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
   }, [count, particlesData, dummy, compute, computeUVs, segW, segH]);
 
+  const worldGroupRef = useRef();
+  const inverseGroupRef = useRef();
+  
+  useFrame(() => {
+    if (worldGroupRef.current && inverseGroupRef.current && compute) {
+      const mat = worldGroupRef.current.matrixWorld;
+      if (compute.posVar.material.uniforms.uFinalMat) {
+        compute.posVar.material.uniforms.uFinalMat.value.copy(mat);
+      }
+      inverseGroupRef.current.matrix.copy(mat).invert();
+      inverseGroupRef.current.matrixAutoUpdate = false;
+    }
+  });
+
   const transform = settings.transform || { position: [posX, 0, posZ] };
   const logicSettings = useMemo(() => ({ ...settings, transitionProgress }), [settings, transitionProgress]);
   useParticleLogic(meshRef, logicSettings, appConfig, 0, compute);
 
   return (
-    <group {...transform}>
-      <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
-        <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} />
-      </instancedMesh>
+    <group ref={worldGroupRef} {...transform}>
+      <group ref={inverseGroupRef}>
+        <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
+          <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
+          <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} />
+        </instancedMesh>
+      </group>
     </group>
   );
 }
