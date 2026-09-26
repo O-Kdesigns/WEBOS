@@ -11,6 +11,7 @@ import { Editor } from './components/Editor/Editor';
 import { ParticleObject } from './components/particles/ParticleObject';
 import { MusicPlayer } from './MusicPlayer';
 import { VolumetricLightPass, CenterLight } from './VolumetricLight';
+import { AtmosphereDust } from './AtmosphereDust';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
@@ -1003,6 +1004,7 @@ function App() {
           <CanvasDebugTracker />
           <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
           
+          <AtmosphereDust appConfig={appConfig} springScrollY={springScrollY} rotationY={rotationY} pageDistance={pageDistance} />
           <a.group position-y={springScrollY}>
             <DarkStudioBackground appConfig={appConfig} />
             <CenterLight appConfig={appConfig} />

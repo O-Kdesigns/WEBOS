@@ -76,7 +76,25 @@ const VolumetricLightShader = {
     uCenterRaysExposure: { value: 1.2 },
     uCenterRaysRadius: { value: 0.65 },
     uCenterRayLength: { value: 0.45 },
-    uCenterRayDensity: { value: 1.0 }
+    uCenterRayDensity: { value: 1.0 },
+
+    // Cinematic vrstva (Active Theory look): DOF, bloom, atmosféra, zrno, viněta
+    tBlur: { value: dummyTexture },
+    uCineEnabled: { value: 1.0 },
+    uDofStrength: { value: 1.0 },
+    uFocusDist: { value: 8.0 },
+    uFocusRange: { value: 2.0 },
+    uBloomStrength: { value: 0.8 },
+    uBloomThreshold: { value: 0.45 },
+    uAtmoColor: { value: new THREE.Color('#2f9a9a') },
+    uAtmoPos: { value: new THREE.Vector2(0.1, 1.05) },
+    uAtmoSize: { value: 0.9 },
+    uAtmoStrength: { value: 0.35 },
+    uAtmo2Color: { value: new THREE.Color('#15606b') },
+    uAtmo2Pos: { value: new THREE.Vector2(0.0, -0.05) },
+    uAtmo2Strength: { value: 0.15 },
+    uGrain: { value: 0.05 },
+    uCineVignette: { value: 0.45 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -152,6 +170,23 @@ const VolumetricLightShader = {
     uniform float uCenterRayLength;
     uniform float uCenterRayDensity;
 
+    uniform sampler2D tBlur;
+    uniform float uCineEnabled;
+    uniform float uDofStrength;
+    uniform float uFocusDist;
+    uniform float uFocusRange;
+    uniform float uBloomStrength;
+    uniform float uBloomThreshold;
+    uniform vec3 uAtmoColor;
+    uniform vec2 uAtmoPos;
+    uniform float uAtmoSize;
+    uniform float uAtmoStrength;
+    uniform vec3 uAtmo2Color;
+    uniform vec2 uAtmo2Pos;
+    uniform float uAtmo2Strength;
+    uniform float uGrain;
+    uniform float uCineVignette;
+
     varying vec2 vUv;
 
     const int NUM_SAMPLES = 48;
@@ -203,8 +238,37 @@ const VolumetricLightShader = {
       return clamp(n * 0.5 + 0.5, 0.0, 1.0);
     }
 
+    // Cinematic dokončení: bloom z rozmazaného bufferu, atmosférická záře, viněta, filmové zrno
+    vec3 cinematicFinish(vec3 col, bool isBg) {
+      if (uCineEnabled < 0.5) return col;
+      vec3 blurCol = texture2D(tBlur, vUv).rgb;
+      float bLum = dot(blurCol, vec3(0.299, 0.587, 0.114));
+      col += blurCol * smoothstep(uBloomThreshold, uBloomThreshold + 0.35, bLum) * uBloomStrength;
+
+      vec2 asp = vec2(uAspect, 1.0);
+      float a1 = 1.0 - smoothstep(0.0, uAtmoSize, length((vUv - uAtmoPos) * asp));
+      float a2 = 1.0 - smoothstep(0.0, uAtmoSize * 1.2, length((vUv - uAtmo2Pos) * asp));
+      float objMask = isBg ? 1.0 : 0.55;
+      col += (uAtmoColor * a1 * a1 * uAtmoStrength + uAtmo2Color * a2 * a2 * uAtmo2Strength) * objMask;
+
+      vec2 vc = (vUv - 0.5) * asp;
+      col *= 1.0 - smoothstep(0.35, 1.1, length(vc)) * uCineVignette;
+
+      float g = fract(sin(dot(gl_FragCoord.xy + fract(uTime * 7.13) * 91.7, vec2(12.9898, 78.233))) * 43758.5453);
+      col += (g - 0.5) * uGrain;
+      return max(col, vec3(0.0));
+    }
+
     void main() {
       vec4 baseColor = texture2D(tDiffuse, vUv);
+      float cineDepth = texture2D(tDepth, vUv).r;
+      bool cineBg = cineDepth >= 0.9999;
+      // Hloubka ostrosti: mimo ohniskovou rovinu se míchá s rozmazanou kopií scény (bokeh)
+      if (uCineEnabled > 0.5 && uDofStrength > 0.001 && !cineBg) {
+        float lz = getLinearDepth(cineDepth, uCameraNear, uCameraFar);
+        float coc = smoothstep(0.0, max(0.01, uFocusRange), abs(lz - uFocusDist)) * uDofStrength;
+        baseColor.rgb = mix(baseColor.rgb, texture2D(tBlur, vUv).rgb, clamp(coc, 0.0, 1.0));
+      }
       float dither = getDither(gl_FragCoord.xy) * uDitherStrength;
 
       // ==========================================
@@ -250,7 +314,7 @@ const VolumetricLightShader = {
 
       // If purely in ORBIT mode, return early for speed
       if (uInsideTransition <= 0.001) {
-        gl_FragColor = vec4(orbitColor, baseColor.a);
+        gl_FragColor = vec4(cinematicFinish(orbitColor, cineBg), baseColor.a);
         return;
       }
 
@@ -476,7 +540,7 @@ const VolumetricLightShader = {
       float t = smoothstep(0.0, 1.0, uInsideTransition);
       vec3 finalColor = mix(orbitColor, finalInside, t);
 
-      gl_FragColor = vec4(finalColor, baseColor.a);
+      gl_FragColor = vec4(cinematicFinish(finalColor, cineBg), baseColor.a);
     }
   `
 };
@@ -528,6 +592,42 @@ export function CenterLight({ appConfig }) {
   );
 }
 
+// Rozmazání pro cinematic vrstvu (DOF + bloom) ve 1/4 rozlišení.
+// uMode 0 = downsample (4 bilineární vzorky = průměr 4x4 pixelů, bez blikání malých particlů), 1 = 9-tap gauss podél uDir.
+const CineBlurShader = {
+  uniforms: {
+    tInput: { value: null },
+    uTexel: { value: new THREE.Vector2(1, 1) },
+    uDir: { value: new THREE.Vector2(1, 0) },
+    uMode: { value: 0 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+  `,
+  fragmentShader: `
+    uniform sampler2D tInput;
+    uniform vec2 uTexel;
+    uniform vec2 uDir;
+    uniform float uMode;
+    varying vec2 vUv;
+    void main() {
+      if (uMode < 0.5) {
+        vec2 o = uTexel;
+        vec3 c = texture2D(tInput, vUv + vec2(-o.x, -o.y)).rgb + texture2D(tInput, vUv + vec2(o.x, -o.y)).rgb
+               + texture2D(tInput, vUv + vec2(-o.x, o.y)).rgb + texture2D(tInput, vUv + vec2(o.x, o.y)).rgb;
+        gl_FragColor = vec4(c * 0.25, 1.0);
+        return;
+      }
+      vec2 d = uDir * uTexel;
+      vec3 c = texture2D(tInput, vUv).rgb * 0.2270270270;
+      c += (texture2D(tInput, vUv + d * 1.3846153846).rgb + texture2D(tInput, vUv - d * 1.3846153846).rgb) * 0.3162162162;
+      c += (texture2D(tInput, vUv + d * 3.2307692308).rgb + texture2D(tInput, vUv - d * 3.2307692308).rgb) * 0.0702702703;
+      gl_FragColor = vec4(c, 1.0);
+    }
+  `
+};
+
 export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTexture = null }) {
   const { gl, scene, camera, size } = useThree();
 
@@ -561,6 +661,36 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       }
     };
   }, [sceneTarget]);
+
+  // Cinematic blur chain (1/4 rozlišení, ping-pong)
+  const blurTargets = useMemo(() => {
+    const bw = Math.max(1, Math.floor(width / 4));
+    const bh = Math.max(1, Math.floor(height / 4));
+    const opts = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, type: THREE.HalfFloatType, depthBuffer: false };
+    const a = new THREE.WebGLRenderTarget(bw, bh, opts);
+    const b = new THREE.WebGLRenderTarget(bw, bh, opts);
+    a.texture.generateMipmaps = false;
+    b.texture.generateMipmaps = false;
+    return { a, b, bw, bh };
+  }, [width, height]);
+
+  useEffect(() => () => { blurTargets.a.dispose(); blurTargets.b.dispose(); }, [blurTargets]);
+
+  const blurPass = useMemo(() => {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.clone(CineBlurShader.uniforms),
+      vertexShader: CineBlurShader.vertexShader,
+      fragmentShader: CineBlurShader.fragmentShader,
+      depthTest: false,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+    const bScene = new THREE.Scene();
+    bScene.add(mesh);
+    return { scene: bScene, material: mat, mesh };
+  }, []);
+
+  useEffect(() => () => { blurPass.material.dispose(); blurPass.mesh.geometry.dispose(); }, [blurPass]);
 
   const { quadScene, quadCamera, material } = useMemo(() => {
     const qScene = new THREE.Scene();
@@ -790,6 +920,51 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     debugMetrics.drawCalls = gl.info.render.calls;
     debugMetrics.triangles = gl.info.render.triangles;
     debugMetrics.textures = gl.info.memory.textures;
+
+    // 1b. Cinematic blur chain: downsample -> 2x (H + V gauss) ve 1/4 rozlišení
+    // DEV: window.__cineOverride = { ... } přepíše hodnoty živě (ladění bez reloadu)
+    const cine = (import.meta.env.DEV && typeof window !== 'undefined' && window.__cineOverride)
+      ? { ...(appConfig?.cinematic || {}), ...window.__cineOverride }
+      : (appConfig?.cinematic || {});
+    const cineOn = cine.enabled ?? true;
+    mat.uniforms.uCineEnabled.value = cineOn ? 1.0 : 0.0;
+    if (cineOn) {
+      const bu = blurPass.material.uniforms;
+      const { a, b, bw, bh } = blurTargets;
+      bu.tInput.value = sceneTarget.texture;
+      bu.uTexel.value.set(1 / width, 1 / height);
+      bu.uMode.value = 0;
+      gl.setRenderTarget(a);
+      gl.render(blurPass.scene, quadCamera);
+      bu.uMode.value = 1;
+      const radius = cine.blurRadius ?? 1.5;
+      for (let it = 0; it < 2; it++) {
+        const r = radius * (it + 1);
+        bu.uTexel.value.set(1 / bw, 1 / bh);
+        bu.tInput.value = a.texture; bu.uDir.value.set(r, 0);
+        gl.setRenderTarget(b); gl.render(blurPass.scene, quadCamera);
+        bu.tInput.value = b.texture; bu.uDir.value.set(0, r);
+        gl.setRenderTarget(a); gl.render(blurPass.scene, quadCamera);
+      }
+      mat.uniforms.tBlur.value = a.texture;
+
+      // Ohnisko: vodorovná vzdálenost kamery od osy DNA (x=0, z=0) + posun z configu
+      const autoFocus = Math.hypot(camWorldPosRef.current.x, camWorldPosRef.current.z);
+      mat.uniforms.uFocusDist.value = autoFocus + (cine.focusOffset ?? 0);
+      mat.uniforms.uFocusRange.value = cine.focusRange ?? 2.5;
+      mat.uniforms.uDofStrength.value = cine.dofStrength ?? 0.9;
+      mat.uniforms.uBloomStrength.value = cine.bloomStrength ?? 0.8;
+      mat.uniforms.uBloomThreshold.value = cine.bloomThreshold ?? 0.45;
+      mat.uniforms.uAtmoColor.value.set(cine.atmoColor ?? '#2f9a9a');
+      mat.uniforms.uAtmoPos.value.set(cine.atmoX ?? 0.1, cine.atmoY ?? 1.05);
+      mat.uniforms.uAtmoSize.value = cine.atmoSize ?? 0.9;
+      mat.uniforms.uAtmoStrength.value = cine.atmoStrength ?? 0.35;
+      mat.uniforms.uAtmo2Color.value.set(cine.atmo2Color ?? '#15606b');
+      mat.uniforms.uAtmo2Pos.value.set(cine.atmo2X ?? 0.0, cine.atmo2Y ?? -0.05);
+      mat.uniforms.uAtmo2Strength.value = cine.atmo2Strength ?? 0.15;
+      mat.uniforms.uGrain.value = cine.grain ?? 0.05;
+      mat.uniforms.uCineVignette.value = cine.vignette ?? 0.45;
+    }
 
     // 2. Vykreslení fullscreen quadu s postprocessingem na obrazovku
     gl.setRenderTarget(null);

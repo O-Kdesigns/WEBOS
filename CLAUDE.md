@@ -71,6 +71,9 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 - **Pozadí** (`DarkStudioBackground`) je jednobarevné = `config.backgroundSettings.color` (Editor → „Barva pozadí“). Žádný gradient.
 - **Úsporný režim GPU** (`powerSaving.pauseOnBlur`) – checkbox vedle tlačítka Editor, ukládá se hned do `config.json` přes `/api/settings` (vychází z on-disk configu, ne z neuloženého stavu editoru). Zápis configu způsobí reload stránky (Vite HMR).
 
+- **Cinematic vrstva (Active Theory look)** v `VolumetricLight.jsx`: DOF (ohnisko = vzdálenost kamery od osy DNA + `focusOffset`), bloom, atmosférická záře, zrno, viněta – vše z jednoho blur řetězce ve 1/4 rozlišení. Config `cinematic` (`enabled:false` vypne). V DEV lze ladit živě přes `window.__cineOverride = {...}`.
+- **Atmosférický prach** `src/AtmosphereDust.jsx`: 4000 bodů s vlastním bokehem (1 draw call, animace jen ve shaderu). Config `atmosphereDust`.
+
 ---
 
 ## Plánováno (TODO)
