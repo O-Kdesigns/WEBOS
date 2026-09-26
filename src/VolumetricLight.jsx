@@ -241,7 +241,8 @@ const VolumetricLightShader = {
     // Cinematic dokončení: bloom z rozmazaného bufferu, atmosférická záře, viněta, filmové zrno
     vec3 cinematicFinish(vec3 col, bool isBg) {
       if (uCineEnabled < 0.5) return col;
-      vec3 blurCol = texture2D(tBlur, vUv).rgb;
+      // clamp: HDR zdroje (světlé solidy, paprsky) mají hodnoty >> 1 -> bez stropu z nich bloom dělal bílé fleky
+      vec3 blurCol = min(texture2D(tBlur, vUv).rgb, vec3(1.0));
       float bLum = dot(blurCol, vec3(0.299, 0.587, 0.114));
       col += blurCol * smoothstep(uBloomThreshold, uBloomThreshold + 0.35, bLum) * uBloomStrength;
 
@@ -952,8 +953,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       const autoFocus = Math.hypot(camWorldPosRef.current.x, camWorldPosRef.current.z);
       mat.uniforms.uFocusDist.value = autoFocus + (cine.focusOffset ?? 0);
       mat.uniforms.uFocusRange.value = cine.focusRange ?? 2.5;
-      mat.uniforms.uDofStrength.value = cine.dofStrength ?? 0.9;
-      mat.uniforms.uBloomStrength.value = cine.bloomStrength ?? 0.8;
+      // INSIDE: jiná kamera i scéna (světlé solidy) -> DOF by rozmazal obsah a bloom by solidy
+      // přepálil do bílých fleků. Obojí plynule stáhnout podle přechodu ORBIT -> INSIDE.
+      const inside = transitionRef.current;
+      mat.uniforms.uDofStrength.value = (cine.dofStrength ?? 0.9) * (1 - inside);
+      mat.uniforms.uBloomStrength.value = (cine.bloomStrength ?? 0.8) * (1 - inside * (1 - (cine.insideBloom ?? 0.0)));
       mat.uniforms.uBloomThreshold.value = cine.bloomThreshold ?? 0.45;
       mat.uniforms.uAtmoColor.value.set(cine.atmoColor ?? '#2f9a9a');
       mat.uniforms.uAtmoPos.value.set(cine.atmoX ?? 0.1, cine.atmoY ?? 1.05);
