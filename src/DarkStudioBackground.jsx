@@ -50,6 +50,7 @@ export function DarkStudioBackground({ appConfig }) {
           uniform float uRimPower;
           varying vec3 vWorldPosition;
           varying vec3 vNormal;
+          varying vec3 vLocalPosition;
 
           void main() {
             vec3 viewDir = normalize(cameraPosition - vWorldPosition);
