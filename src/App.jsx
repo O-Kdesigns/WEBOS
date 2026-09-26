@@ -13,6 +13,7 @@ import { MusicPlayer } from './MusicPlayer';
 import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { AtmosphereDust } from './AtmosphereDust';
 import { TvGlass, useTvGlass } from './TvGlass';
+import { SolidPrintDriver, usePrintableSolid } from './SolidPrint';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
@@ -199,6 +200,9 @@ function SolidObject({ node }) {
     cl.scale.set(1, 1, 1);
     return cl;
   }, [node]);
+
+  // 3D tisk: vlastní materiály s řezem + žárem (SolidPrint.jsx)
+  usePrintableSolid(cloned);
 
   const transforms = useMemo(() => {
     if (!node) return null;
@@ -1089,6 +1093,11 @@ function App() {
                     transitionProgress={transitionProgress}
                   />
                 </InsideProjectPivot>
+                <SolidPrintDriver
+                  viewMode={viewMode}
+                  transitionProgress={transitionProgress}
+                  appConfig={appConfig}
+                />
                 <VolumetricLightPass 
                   appConfig={appConfig} 
                   viewMode={viewMode} 

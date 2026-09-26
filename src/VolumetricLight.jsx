@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { debugMetrics } from './DebugMonitor';
 import { TextContrastPass } from './TextContrastPass';
 import { getHudTextMask } from './hudTextMask';
+import { printFx } from './SolidPrint';
 
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 dummyTexture.needsUpdate = true;
@@ -94,7 +95,13 @@ const VolumetricLightShader = {
     uAtmo2Pos: { value: new THREE.Vector2(0.0, -0.05) },
     uAtmo2Strength: { value: 0.15 },
     uGrain: { value: 0.05 },
-    uCineVignette: { value: 0.45 }
+    uCineVignette: { value: 0.45 },
+
+    // 3D tisk solidů: paprsky ze žhavé vrstvy sbíhající se dovnitř k bodu (SolidPrint.jsx)
+    tPrintMask: { value: dummyTexture },
+    uPrintRays: { value: 0.0 },
+    uPrintRayLen: { value: 0.55 },
+    uPrintCenter: { value: new THREE.Vector2(0.5, 0.4) }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -186,6 +193,34 @@ const VolumetricLightShader = {
     uniform float uAtmo2Strength;
     uniform float uGrain;
     uniform float uCineVignette;
+    uniform sampler2D tPrintMask;
+    uniform float uPrintRays;
+    uniform float uPrintRayLen;
+    uniform vec2 uPrintCenter;
+
+    // Paprsky 3D tisku: pixel sbírá žár z masky směrem OD středu -> světlo teče ze žhavé vrstvy
+    // k bodu uPrintCenter (televize), ven za vrstvu nic nesvítí.
+    vec3 printRays(vec2 uv, float dither) {
+      vec2 d = (uv - uPrintCenter) * vec2(uAspect, 1.0);
+      float dl = length(d);
+      vec2 dir = dl > 0.0001 ? d / dl : vec2(0.0, 1.0);
+      vec2 stepUv = dir / vec2(uAspect, 1.0) * (uPrintRayLen / 40.0);
+      vec2 s = uv + stepUv * dither;
+      vec3 acc = vec3(0.0);
+      float w = 1.0;
+      for (int i = 0; i < 40; i++) {
+        s += stepUv;
+        acc += texture2D(tPrintMask, clamp(s, vec2(0.0), vec2(1.0))).rgb * w;
+        w *= 0.955;
+      }
+      // pruhování podle úhlu (jednotlivé paprsky místo plochého klínu), pomalu se vlní
+      float ang = atan(d.y, d.x) * 38.0 + uTime * 0.4;
+      float fa = fract(ang), ia = floor(ang);
+      float h0 = fract(sin(ia * 91.345) * 47453.5453), h1 = fract(sin((ia + 1.0) * 91.345) * 47453.5453);
+      float streak = 0.45 + 0.9 * mix(h0, h1, fa * fa * (3.0 - 2.0 * fa));
+      // u cíle se paprsky měkce slijí, ať nevznikne ostrá špička
+      return acc * (uPrintRays / 40.0) * streak * smoothstep(0.0, 0.14, dl);
+    }
 
     varying vec2 vUv;
 
@@ -540,6 +575,11 @@ const VolumetricLightShader = {
       // ==========================================
       float t = smoothstep(0.0, 1.0, uInsideTransition);
       vec3 finalColor = mix(orbitColor, finalInside, t);
+      if (uPrintRays > 0.001) {
+        // žhavá vrstva prosvítí i přes mlhu INSIDE + paprsky k televizi
+        finalColor += texture2D(tPrintMask, vUv).rgb * uPrintRays * 0.25;
+        finalColor += printRays(vUv, dither);
+      }
 
       gl_FragColor = vec4(cinematicFinish(finalColor, cineBg), baseColor.a);
     }
@@ -882,6 +922,13 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     if (vl.color) {
       mat.uniforms.uLightColor.value.set(vl.color);
     }
+
+    // 0. Maska žhavé vrstvy 3D tisku (jen když se tiskne)
+    const printMask = printFx.renderMask ? printFx.renderMask(gl, camera) : null;
+    mat.uniforms.uPrintRays.value = printMask ? printFx.rays : 0;
+    mat.uniforms.tPrintMask.value = printMask || dummyTexture;
+    mat.uniforms.uPrintRayLen.value = printFx.rayLength;
+    mat.uniforms.uPrintCenter.value.copy(printFx.center);
 
     // 1. Vykreslení hlavní scény včetně hloubkového bufferu do render targetu
     gl.setRenderTarget(sceneTarget);
