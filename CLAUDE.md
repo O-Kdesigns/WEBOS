@@ -72,6 +72,8 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 - **Úsporný režim GPU** (`powerSaving.pauseOnBlur`) – checkbox vedle tlačítka Editor, ukládá se hned do `config.json` přes `/api/settings` (vychází z on-disk configu, ne z neuloženého stavu editoru). Zápis configu způsobí reload stránky (Vite HMR).
 
 - **Cinematic vrstva (Active Theory look)** v `VolumetricLight.jsx`: DOF (ohnisko = vzdálenost kamery od osy DNA + `focusOffset`), bloom, atmosférická záře, zrno, viněta – vše z jednoho blur řetězce ve 1/4 rozlišení. Config `cinematic` (`enabled:false` vypne). V DEV lze ladit živě přes `window.__cineOverride = {...}`.
+- **Televize (desky):** video je na `GlassDesk` (web bere geometrii + world transform, UV otočené o 180°). Skleněné tělo = děti `TV_*` (`src/TvGlass.jsx`, vlastní levný shader, ladí se custom properties v Blenderu `tvOpacity/tvTint/tvRim/tvRimStrength` → export extras). Nové nody NESMÍ začínat `GlassDesk` (`DnaHeightDetector` bere první dva `GlassDesk*` pro výšku DNA).
+- **Blender pipeline:** zdroj `C:/WEBOS/ASSETS/newworldorderN.blend` (Claude ukládá jako `…6ai.blend`), export → `public/obsah/everything/newworldorder.glb`. Nastavení exportu je uložené ve scéně (`scene['glTF2ExportSettings']`: apply, cameras, extras, lights, loose verts). Headless: `"C:/Program Files/Blender Foundation/Blender 5.1/blender.exe" -b file.blend --python script.py`, export `bpy.ops.export_scene.gltf(filepath=..., export_format='GLB', **settings)`.
 - **Atmosférický prach** `src/AtmosphereDust.jsx`: 4000 bodů s vlastním bokehem (1 draw call, animace jen ve shaderu). Config `atmosphereDust`.
 
 ---
