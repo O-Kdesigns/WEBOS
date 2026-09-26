@@ -1,181 +1,104 @@
-# 🚀 Remote Development Setup
+# Remote Development Setup — WEBOS
 
-**Datum:** 2026-09-26  
-**Stav:** Připraveno pro vzdálenou práci s Claude Code
-
----
-
-## 📋 Krátký přehled projektu
-
-- **Typ:** 3D interaktivní webové portfolio (React + Three.js)
-- **Architektura:** DNA helix (vertikální scroll s rotující kamerou)
-- **Branche:** `main` (aktuální) + `backup/cylinder-version` (původní válec)
-- **Status:** 107 unpushed commitů (připraveno na push)
-- **Velikost repo:** ~500 MB (bez node_modules, dist, media)
+Aktualizováno: 2026-09-26
 
 ---
 
-## 🔧 Klíčová pravidla projektu (z GEMINI.md)
+## Git & GitHub
 
-### Performance Rules
-1. **Single Active Video Stream** – Jen jedno video přehrává najednou
-2. **Zero-Allocation Render Loop** – Žádné `new` v useFrame
-3. **H.264 Video Codec** – Striktně H.264 s faststart, ne HEVC
-4. **GPU Memory Cleanup** – Explicitní dispose() na GPGPU smyčkách
+- **Remote:** `git@github.com:O-Kdesigns/WEBOS.git`
+- **SSH klíč:** `~/.ssh/github_webos` (přidán na O-Kdesigns GitHub účet)
+- **SSH config:** `~/.ssh/config` routuje `github.com` na `github_webos` klíč
+- **Repo velikost:** ~239 MB (po odstranění videí z git historie)
+- **Videa:** Lokálně v `C:\WEBOS\blender\`, v gitu nejsou (ani LFS)
 
-### Architecture Rules
-1. **DNA Helix** – Vertikální scroll s rotující kamerou
-2. **Component Split** – Max 500 řádků na file
-3. **Atomic Changes** – Vždy commit + feedback loop
-4. **Async Fallback** – textureCache.get() s React state fallback
-
----
-
-## 💻 Workflow pro Remote Development
-
-### Ty pracuješ, já commituju:
+### Běžný workflow
 
 ```bash
-# Ty něco řekneš v chatu (Claude Code)
-# Já upravím kód, otestuji, commituju
+# Průběžná práce
+git add <soubor>
+git commit -m "feat: popis"
 
-# Každý commit bude mít:
-# - Jasný popis (CO a PROČ)
-# - Typ změny (feat/fix/refactor/perf)
-# - Reference na GEMINI.md pravidla (pokud relevantní)
-```
-
-### Když odchází od počítače:
-
-```bash
+# Před odchodem od PC
 git push origin main
-# -> GitHub se aktualizuje
-# -> Ty můžeš koukat na kód online
-# -> Příští session: `git pull` v Claude Code
 ```
 
-### Pokud chceš experimentovat:
+### Pokud pushuje poprvé po filter-repo
 
 ```bash
-# 1. Vytvoř si feature branch
-git checkout -b feat/tvoje-idea
-
-# 2. Pracuje se na něm
-# 3. Až budeš spokojen/á:
-git merge main
-git checkout main
-# -> Je to zpátky v main
+git push --force origin main
 ```
 
 ---
 
-## 🔌 Remote Control (Vzdálený přístup)
+## Launcher (WEBOS.bat)
 
-Když nejsi u počítače a chceš se koukat / upravovat:
+Zkratka `WEBOS.lnk` v `C:\WEBOS\` spouští `WEBOS.bat`:
+1. Zkontroluje jestli běží `claude.exe` (Claude Code) — pokud ne, spustí ho
+2. Spustí `open_browser.cjs` na pozadí (počká na server, otevře Brave)
+3. Spustí `npm run dev`
 
-### Varianta 1: Cloud Claude Session (nejjednoduší)
-```
-Řekneš: "Přesuň session do cloudu"
-Já: Přesunem se na cloud Claude Agent SDK
--> Máš přístup na:
-   - Browser (síť, čtení)
-   - Terminal (git, npm)
-   - GitHub (čtení/zápis)
-   - Bez přístupu na lokální soubory
-```
-
-### Varianta 2: Remote Control (s přístupem na PC)
-```
-Potřebuješ: 
-1. Remote Control zapnutý na PC
-2. Synchronizace přes Claude API
-3. Přístup na .git, src/, public/
-
-Status: Zatím není nastaveno, lze zkonfigurovat v /config
-```
+Claude Code exe: `%LOCALAPPDATA%\Microsoft\WindowsApps\claude-desktop.exe`
 
 ---
 
-## 📁 Struktura projektu
+## Remote workflow z iPadu / mobilu
+
+Když odcházíš od PC:
 
 ```
-WEBOS/
-├── .agents/              # AI agent pravidla (AGENTS.md)
-├── .git/                 # Git repo (107 unpushed commits)
-├── src/                  # React komponenty (~420KB)
-│   ├── App.jsx
-│   ├── components/       # UI + 3D komponenty
-│   ├── hooks/
-│   └── ...
-├── public/obsah/         # Jednotlivé projekty portfolia
-│   ├── 0_uvod/
-│   ├── 1_prvni_projekt/
-│   └── ... (číslo určuje pořadí)
-├── GEMINI.md             # Pravidla pro výkon & vývojářské instrukce
-├── AGENTS.md             # Architektura + AI pravidla
-├── REMOTE_SETUP.md       # Tenhle soubor
-└── package.json
+1. Řekni: "pushni to"
+2. Já pushnu na GitHub
+3. Na iPadu: otevři Claude Code → nová session
+4. Session se spustí v cloudu, přečte GitHub repozitář
+5. Řekni "uprav X" → commitnu → "pushni a spusť Pages deploy"
+6. Za ~2 minuty si v Brave otevřeš github.io/WEBOS a vidíš změny
 ```
 
-### Soubory kterých se NE DJA DOTÝKAT bez konzultace:
-- `vite.config.js` – Plugin pro automatické načítání obsahu
-- `public/obsah/` struktura – Pojmenování musí být `N_nazev`
-- Three.js render loop – Striktní performance rules
+### GitHub Pages (TODO — zatím nenastaveno)
+
+- GitHub Actions workflow pro auto-deploy na push do main
+- Pages URL: `https://o-kdesigns.github.io/WEBOS/`
+- Videa na Pages nebudou (jen lokálně) — plánován placeholder fallback
+
+### Placeholder video fallback (plánováno)
+
+Pokud build detekuje `window.location.hostname.includes('github.io')`, přepne VideoManager na malé, nízko-rozlišené, krátké loop video z `public/`. Produkční videa zůstávají jen lokálně a na Netlify.
 
 ---
 
-## 🎯 Next Steps
-
-- [ ] Projít `src/App.jsx` a pochopit flow
-- [ ] Zkontrolovat `package.json` a nainstalovat deps (`npm install`)
-- [ ] Spustit dev server (`npm run dev`)
-- [ ] Otestovat v prohlížeči (HMR, 3D scene)
-- [ ] Setup Remote Control (pokud chceš pracovat vzdáleně bez PC)
-- [ ] Pushovat 107 commitů na GitHub (postupně?)
-
----
-
-## ⚡ Commands Reference
+## Větve
 
 ```bash
-# Development
-npm run dev              # Spustit dev server
-npm run build            # Build production
-npm run preview          # Preview build
+git checkout main                    # DNA helix (aktuální vývoj)
+git checkout backup/cylinder-version # Původní válcová verze (stabilní záloha)
+```
 
-# Git
-git status               # Viz unpushed commits
+---
+
+## Užitečné příkazy
+
+```bash
+npm run dev              # Dev server (localhost:5173)
+npm run build            # Production build
 git log --oneline -10    # Posledních 10 commitů
-git push origin main     # Push 107 commitů
-git checkout backup/cylinder-version  # Vrátit se na starou verzi
-
-# Diagnostika
-git diff main backup/cylinder-version  # Porovnání verzí
+git status               # Co je rozpracováno
+git push origin main     # Push na GitHub
 ```
 
 ---
 
-## 🤖 Jak pracovat s Claude Code
-
-1. **Řekni co chceš:** "Oprav bug v App.jsx" / "Přidej 3D animaci"
-2. **Já přečtu relevantní files:** GEMINI.md, AGENTS.md, src/
-3. **Udělám změnu** s explicitními commity
-4. **Kdykoli:** "Pushni to" → kód jde na GitHub
-5. **Offline:** "Přesuň session do cloudu" → pokračuješ bez PC
-
----
-
-## 📞 Need Help?
+## Soubory ve workspace
 
 ```
-Pokud se něco rozbije:
-1. Podívej se na nejnovější commit: git log --oneline -5
-2. Řekni: "Vrátit se na předchozí commit"
-3. Já rollbackneme a vyřešíme to jinak
+C:\WEBOS\
+├── WEBOS\               # Git repozitář (tento projekt)
+│   ├── src\             # React + Three.js komponenty
+│   ├── public\obsah\    # Projekty portfolia (0_uvod, 1_prvni_projekt...)
+│   ├── CLAUDE.md        # Hlavní context pro Claude Code (auto-načte se)
+│   ├── GEMINI.md        # 15 výkonnostních pravidel
+│   ├── .agents\AGENTS.md # Architektura + AI pravidla
+│   └── WEBOS.bat        # Launcher
+├── blender\             # Blender soubory + exporty (NOT v gitu)
+└── WEBOS.lnk            # Zkratka pro spuštění
 ```
-
-**Vše je reversibilní!** 🔄
-
----
-
-*Aktualizováno: 2026-09-26*

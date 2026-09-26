@@ -1,49 +1,78 @@
-# Pravidla a architektura projektu 3D Portfolio
+# Pravidla a architektura projektu WEBOS
 
-Tento soubor slouží jako sdílená paměť pro všechny budoucí konverzace s AI asistenty (Antigravity). Asistent si tento soubor vždy přečte, než začne pomáhat s kódem.
+Tento soubor slouží jako sdílená paměť pro všechny budoucí konverzace s Claude Code. Přečti ho před jakoukoliv prací na kódu.
 
-## 1. O projektu (Koncept a Prostor)
-- **Typ aplikace:** 3D interaktivní webové portfolio.
-- **Hlavní myšlenka (Kamera uvnitř):** Uživatel (kamera) se nachází přesně ve středu (0, 0, 0) 3D scény (ostrova). Pomocí swipování na mobilu (nebo scrollování na PC) rotuje **samotná kamera** kolem své osy (doleva/doprava), nikoliv scéna kolem ní.
-- **Kouzlo rotace a FOV:** Ostrov a objekty portfolia jsou staticky rozmístěny do kruhu kolem kamery.
-- **Krok 90 stupňů:** Kamera se při každém swipu otočí o přesných 90 stupňů. FOV kamery (a případně vzdálenost) je nastaveno tak, aby v jednom záběru viděla přesně "čtvrtinu" ostrova a příslušný projekt. Při rotaci uživatel zahlédne, jak 3D prostředí (na březích) fyzicky a prostorově navazuje na sousední kvadrant. Nechceme umělé problikávání nebo prolínání textur (žádný shader crossfade na ostrově) – prostředí je skutečné a plně 3D.
+---
 
-## 2. Technologický stack (V čem děláme)
-- **Základ UI a logiky:** React, JavaScript (ne TypeScript).
-- **Základ 3D:** Three.js + React Three Fiber (`@react-three/fiber`, `@react-three/drei`).
-- **3D animace a rotace:** `@react-spring/three` (zajišťuje plynulou fyzikální rotaci kamery/scény).
-- **2D UI a HTML animace:** `framer-motion` (použito např. na vrstvu pro přechodové video nad Canvasem).
-- **Detekce gest:** `@use-gesture/react` (sledování swajpování a kolečka myši).
-- **Build tool:** Vite.
+## 1. O projektu (Koncept a prostor)
+
+- **Typ:** 3D interaktivní webové portfolio.
+- **Architektura:** Kamera letí vertikálně skrz **DNA šroubovici** (Double Helix). Scrollem kamera klesá dolů, šroubovice se synchronně točí. Na příčkách šroubovice jsou zavěšeny projekty.
+- **Záloha:** Původní verze s horizontálním válcem (kamera rotuje kolem osy Y) je na větvi `backup/cylinder-version`.
+
+---
+
+## 2. Technologický stack
+
+- **UI a logika:** React, JavaScript (ne TypeScript)
+- **3D:** Three.js + React Three Fiber (`@react-three/fiber`, `@react-three/drei`)
+- **3D animace:** `@react-spring/three`
+- **2D UI animace:** `framer-motion`
+- **Gesta:** `@use-gesture/react`
+- **Build:** Vite
+
+---
 
 ## 3. Architektura složek a automatické načítání
-- **Obsah (`public/obsah/`):** Zde jsou uloženy složky jednotlivých stránek portfolia (např. `0_uvod`, `1_prvni_projekt`).
-- **Pravidla pojmenování:** Názvy složek v `obsah/` musí vždy začínat číslem (určuje jejich chronologické pořadí v kruhu). Index `0` označuje první stránku, kam se podívá kamera po načtení.
-- **Automatizace (Vite plugin):** V `vite.config.js` je napsán vlastní plugin, který dynamicky skenuje složku `public/obsah/`. Kód v `App.jsx` si seznam načítá z virtuálního modulu `virtual:obsah-folders`. Není potřeba ručně registrovat žádné složky ani cesty v kódu.
-- **Automatické načítání 3D (GLB):** Pokud je uvnitř složky přítomen soubor s příponou `.glb` nebo `.gltf`, React Three Fiber jej automaticky načte a zobrazí nad daným výsekem ostrova přes `useGLTF`.
 
-## 4. Striktní pravidla pro AI (Pokyny pro budoucí konverzace)
-- **Komentování kódu:** Při jakýchkoliv úpravách striktně a podrobně **komentuj kód v angličtině, je to pro tebe lepší**. Je nutné vysvětlit složitější logiku (matematiku, 3D rotace), aby na ni mohl kdykoliv navázat další agent bez ztráty kontextu.
-- **Respektování prostoru:** Řešení 3D přechodů musí vždy zachovávat pocit reálného 3D prostoru (žádné crossfade textury ostrova, ale fyzické uspořádání do prostorového kruhu/polygonu s reálně vymodelovanými okraji nebo přechody na 3D modelu).
-- **Nemazat funkcionality:** Než přepíšeš komponenty (např. `App.jsx` nebo `vite.config.js`), pamatuj, že obsahují logiku pro lazy-loading (optimalizace sousedních prvků), automatické skenování složek a výpočet absolutního úhlu rotace (prevence přetočení). Tyto funkce musí zůstat zachovány.
+- **Obsah:** `public/obsah/` — složky jednotlivých projektů (např. `0_uvod`, `1_prvni_projekt`)
+- **Pojmenování:** Musí začínat číslem (`N_nazev`). Index `0` = první pohled po načtení.
+- **Vite plugin:** `vite.config.js` dynamicky skenuje `public/obsah/` a generuje virtuální modul `virtual:obsah-folders`. **Neměnit bez konzultace.**
+- **Auto GLB:** Pokud složka obsahuje `.glb`/`.gltf`, načte se automaticky přes `useGLTF`.
 
-## 5. Nov� Architektura z v�voje CMS (D�le�it� pro budouc� agenty)
-- **CMS a State Hoisting:** Editor (CMS) je nyn� napojen v re�ln�m �ase. Hlavn� stav aplikace (pagesData, ppConfig) je dr�en p�es useState p��mo v App.jsx a p�ed�v�n jako props. Jak�koliv �prava v Editoru se okam�it� projevuje ve 3D sc�n�, a a� po kliknut� na "Ulo�it trvale" se provede z�pis do JSONu na backendu p�es API.
-- **Slo�ky pro komponenty:** 3D modely pro voln� objekty (stromy, budovy) se neukl�daj� p��mo do slo�ek str�nek, ale do sd�len� slo�ky public/obsah/obsah/levitate/ (pro objekty) nebo public/obsah/trava/ (pro povrchy). Odtud je CMS dynamicky na��t� do roletek.
-- **Optimalizace real-time updat� (textureCache):** Proto�e Editor umo��uje m�nit hodnoty ta�en�m 60kr�t za vte�inu, nelze aplikovat nov� textury uvnit� useMemo. Aplikace barev a materi�l� je p�esunuta do useEffect a textury jsou cachov�ny v glob�ln�m objektu 	extureCache, aby nedoch�zelo k propadu framerate a neust�l�mu stahov�n�.
-- **Event propagation:** Editor m� na sv�m rootu onWheel={(e) => e.stopPropagation()}, aby p�i scrollov�n� nab�dkami neodrotov�vala sc�na na pozad�.
+---
 
-## 6. Zajištění responzivního horizontálního FOV (Three.js kamery)
-- **Problém:** V Three.js je FOV vždy vertikální. Na ultrawide monitorech je vidět příliš mnoho do stran, na užších displejích (16:10) jsou naopak oříznuté boky.
-- **Řešení:** Nepoužívej fixní ov pro kameru, ale vypočítej vertikální FOV dynamicky v useFrame tak, aby zachovalo fixní horizontální úhel (podle zadané reference, např. 16:9).
-- **Postup (Active Theory styl):** V useFrame si načti aktuální aspect ratio z rendereru (state.size.width / state.size.height) a aplikuj vzorec:
-  	argetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (REFERENCE_ASPECT / currentAspect))
-- **Plynulost vs. Animace (Kritické):** Změna aspect ratia (resizing okna) se nesmí animovat přes useSpring. Pokud pošleš dynamické FOV rovnou do springu, animace způsobí pomalé "dotahování" zobrazení při přesunu okna na jiný monitor. 
-- **Správná implementace:** Přes useSpring animuj pouze logický přechod (např. z 0 do 1) mezi stavy (z orbitFov do insideFov). Tento mezivýsledek (přes lerp) pak aplikuj do výše uvedeného vzorce a okamžitě zapiš do cameraRef.current.fov uvnitř useFrame.
+## 4. Striktní pravidla pro Claude Code
 
+- **Komentáře v kódu:** Složitá logika (matematika, 3D rotace, GPU výpočty) musí být komentována anglicky.
+- **Zachování 3D prostoru:** Přechody musí zachovávat pocit reálného 3D (žádné crossfade textury — fyzické 3D uspořádání).
+- **Nemazat funkcionalitu:** `App.jsx` a `vite.config.js` obsahují lazy-loading, auto-skenování složek a výpočet absolutního úhlu. Tyto funkce musí zůstat zachovány.
+
+---
+
+## 5. CMS a State Hoisting
+
+- **Editor (CMS)** je napojen v reálném čase. Hlavní stav (`pagesData`, `ppConfig`) je držen přes `useState` v `App.jsx` a předáván jako props.
+- Úprava v Editoru se okamžitě projevuje ve 3D scéně. Po kliknutí na "Uložit trvale" se zapíše JSON na backend přes API.
+- **Složky pro 3D modely:** Volné objekty (stromy, budovy) → `public/obsah/obsah/levitate/`. Povrchy → `public/obsah/trava/`. CMS je dynamicky načítá do rolovacích nabídek.
+- **textureCache:** Editor mění hodnoty 60× za sekundu, proto se textury aplikují v `useEffect` a cachují v globálním `textureCache` (ne v `useMemo`).
+- **Event propagation:** Editor má `onWheel={(e) => e.stopPropagation()}` na rootu, aby scrollování nabídkami nerotovalo scénou na pozadí.
+
+---
+
+## 6. Responzivní horizontální FOV (Three.js kamery)
+
+- Three.js FOV je vždy vertikální. Na ultra-wide monitoru je vidět příliš mnoho, na 16:10 jsou oříznuté boky.
+- **Řešení:** Vypočítej vertikální FOV dynamicky v `useFrame` podle vzorce:
+  ```
+  targetVFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * (REFERENCE_ASPECT / currentAspect))
+  ```
+- **Pozor:** Změna aspect ratia (resize okna) se nesmí animovat přes `useSpring` — způsobí pomalé "dotahování". Přes spring animuj pouze logický přechod (0→1) mezi stavy, výsledek pak aplikuj do vzorce a zapíše přímo do `cameraRef.current.fov` v `useFrame`.
+
+---
 
 ## 7. Zpracování cest k assetům a dynamické klonování
-- **Cesty k assetům (Editor vs. Aplikace):** Editor ukládá cesty k souborům z API relativně k adresáři `public/obsah` (např. `video/file.mp4`). Samotná aplikace ale běží z rootu a potřebuje k nim absolutní prefix (např. `/obsah/video/file.mp4`), jinak dojde k chybám (černé obrazovky, nenačtené textury).
-- **Pravidlo (resolveAssetUrl):** Vždy používej pomocnou funkci v `App.jsx` (např. `resolveAssetUrl`), která zajistí dynamické a bezpečné připojení prefixu `/obsah/` na frontendu (pokud tam chybí). Neupravuj/neukládej absolutní cesty přímo do `settings.json`, rozbil bys tím spárování s hodnotami v dropdown polích Editoru.
-- **Dynamické klonování 3D modelů:** Při rozmisťování objektů (televize, portály apod.) do kruhu kolem scény se nespoléhej na fixní počet stránek (např. `Math.PI / 2` pro 4 stránky) ani na to, že uživatel v Blenderu ručně vytvořil instance pro každou stránku (např. `GlassDesk-Xelith`, `GlassDesk-Doomsday`).
-- **Pravidlo (Procedurální rozmisťování):** Aplikace si musí najít jeden referenční objekt v GLB (např. první nalezený `GlassDesk`), zjistit počet stránek `totalPages = Math.max(pagesData.length, 1)` a automaticky rozprostřít klony do kruhu tak, že mesh obalí do grupy rotující o `i * (Math.PI * 2) / totalPages`.
+
+- **resolveAssetUrl:** Editor ukládá cesty relativně k `public/obsah` (např. `video/file.mp4`). Aplikace potřebuje absolutní prefix `/obsah/video/file.mp4`. Vždy používej helper funkci `resolveAssetUrl` v `App.jsx`. Neukládej absolutní cesty přímo do `settings.json`.
+- **Procedurální rozmisťování 3D objektů:** Nespoléhej na fixní počet stránek. Najdi jeden referenční objekt v GLB, zjisti `totalPages = Math.max(pagesData.length, 1)` a automaticky rozprostři klony do kruhu: `i * (Math.PI * 2) / totalPages`.
+
+---
+
+## 8. Výkon a GPU — přehled (detail viz GEMINI.md)
+
+Kompletní seznam 15 pravidel je v `GEMINI.md`. Nejdůležitější:
+1. **Single Active Video Stream** — pouze 1 video přehrává najednou
+2. **Zero-Allocation Render Loop** — žádné `new THREE.*` uvnitř `useFrame`
+3. **H.264 + faststart** — nikdy HEVC
+4. **Explicitní dispose()** — na každém GPGPU rendereru při unmount
+5. **Max 500 řádků na komponent** — refaktoruj dřív než soubor nabobtná
