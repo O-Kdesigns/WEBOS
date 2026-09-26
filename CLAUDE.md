@@ -49,7 +49,9 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 - SSH klíč vygenerován a přidán na GitHub O-Kdesigns účet
 - Kód pushnut na GitHub (force push po filter-repo)
 - `.gitignore` aktualizován: node_modules, dist, videa, blend soubory, debug logy
-- LFS nastaven ale nepoužit — videa jsou jen lokálně (Pages fallback plánován)
+- LFS nainstalován, ale nic nesleduje — videa jsou jen lokálně (a na Netlify)
+- **GitHub Pages živě** (od 2026-09-27): https://o-kdesigns.github.io/WEBOS/ – repo je veřejné, `.github/workflows/pages.yml` nasazuje každý push do `main`. Build s `GITHUB_PAGES=true` → `base: '/WEBOS/'`. Cesty k souborům z `public/` v JS vždy přes `withBase()` / `resolveAssetUrl()` z `src/assetUrl.js` (CSS a index.html Vite přepíše sám).
+- **Video fallback:** když se video nenačte (Pages je nemá), přepne se na `public/placeholder.mp4` (10 s, 118 KB) – `ensureVideoEntry` v `App.jsx` + náhled v editoru.
 - `WEBOS.bat` přepsán: Antigravity → Claude Code (Bionic → claude-desktop.exe)
 - Browser pane funkční: Claude vidí a ovládá localhost:5173 přímo
 
@@ -84,8 +86,6 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 
 ## Plánováno (TODO)
 
-- GitHub Pages deploy (GitHub Actions workflow)
-- GitHub Pages video fallback: detekce `github.io` hostname → mini placeholder video
 - Netlify auto-deploy (pro hotové production buildy)
 - Doomsday: vlastní particle nody v GLB (teď sdílí Xelith nody)
 - `App.jsx` má rozbité kódování českých komentářů/UI textů (mojibake, např. „ĂšspornĂ˝ reĹľim“) – opravit re-encodingem

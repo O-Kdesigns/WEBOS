@@ -55,15 +55,12 @@ Když odcházíš od PC:
 6. Za ~2 minuty si v Brave otevřeš github.io/WEBOS a vidíš změny
 ```
 
-### GitHub Pages (TODO — zatím nenastaveno)
+### GitHub Pages (běží)
 
-- GitHub Actions workflow pro auto-deploy na push do main
-- Pages URL: `https://o-kdesigns.github.io/WEBOS/`
-- Videa na Pages nebudou (jen lokálně) — plánován placeholder fallback
-
-### Placeholder video fallback (plánováno)
-
-Pokud build detekuje `window.location.hostname.includes('github.io')`, přepne VideoManager na malé, nízko-rozlišené, krátké loop video z `public/`. Produkční videa zůstávají jen lokálně a na Netlify.
+- URL: `https://o-kdesigns.github.io/WEBOS/`
+- `.github/workflows/pages.yml` nasadí každý push do `main` (~1–2 min), ručně: Actions → Deploy GitHub Pages → Run workflow
+- Videa na Pages nejsou → přehraje se `public/placeholder.mp4` (fallback při chybě načtení videa)
+- Plné produkční verze s videi: `npm run build` lokálně → ruční upload `dist/` na Netlify
 
 ---
 
