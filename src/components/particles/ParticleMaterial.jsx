@@ -5,10 +5,17 @@ import { a } from '@react-spring/three';
 
 import './shaders/VideoRefractionMaterial';
 import './shaders/JellyVideoMaterial';
+import { attachParticleLink } from '../../SolidLink';
 
 export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotationY, pageDistance, transitionProgress }) {
   const isCylinder = settings.isCylinder || settings.scatterSpring !== undefined || (settings.shape === 'cylinder' && !settings.customGeometry);
   const matRef = useRef();
+  // jelly: sdílené uniformy přisvícení od solidu (SolidLink.jsx) musí existovat už při první kompilaci,
+  // three si seznam uniform programu cachuje -> připojit hned při vzniku materiálu, ne až v useFrame
+  const jellyRef = React.useCallback((m) => {
+    matRef.current = m;
+    if (m?.uniforms) attachParticleLink(m.uniforms);
+  }, []);
 
   useFrame((state) => {
     if (!matRef.current) return;
@@ -116,8 +123,8 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
   // Pro projektovĂ© ÄŤĂˇstice v mĂłdu video pouĹľijeme novĂ˝ bohatĂ˝ Jelly materiĂˇl s plnĂ˝m zapojenĂ­m nastavenĂ­
   if (settings.colorMode === 'video' && videoTexture) {
     return (
-      <jellyVideoMaterialImpl 
-        ref={matRef}
+      <jellyVideoMaterialImpl
+        ref={jellyRef}
         tVideo={videoTexture} 
         uColor={new THREE.Color(settings.baseColor || '#6df73b')}
         uDistortion={settings.refractionDistortion ?? 0.6}

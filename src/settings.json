@@ -55,6 +55,33 @@
           "Particles_Xelith_Backround": 2,
           "Particles_Xelith_Obsah0": 1,
           "Particles_Xelith_Obsah1": 1
+        },
+        "solidMaterial": {
+          "enabled": true,
+          "color": "#6f6962",
+          "metalness": 0.4,
+          "roughness": 0.52,
+          "reflections": 0.25,
+          "directLight": 0.22,
+          "layerLines": 0.3,
+          "grain": 0.3,
+          "rim": 0.8
+        },
+        "particleLight": {
+          "enabled": true,
+          "useVideoColor": true,
+          "color": "#ffffff",
+          "intensity": 4,
+          "radius": 0.3,
+          "wrap": 0.5
+        },
+        "solidLight": {
+          "enabled": true,
+          "color": "#ff6a2a",
+          "intensity": 1,
+          "radius": 0.35,
+          "printHeat": 1,
+          "selfGlow": 0
         }
       },
       "videoUrl": "video/reklama xelith.mp4"

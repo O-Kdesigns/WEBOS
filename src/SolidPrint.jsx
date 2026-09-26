@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { portalFx } from './PortalTransition';
+import { patchSolidLook } from './SolidLink';
 
 // 3D tisk solidů při vstupu do projektu (INSIDE).
 // Až particly doletí do tvaru projektu, solidy "vyrostou" odspodu nahoru: vše nad řezem (uPrintY, world Y)
@@ -93,6 +94,8 @@ function patchMaterial(src) {
           outgoingLight = printRamp(clamp(printInner, 0.0, 1.0)) * printInner * uPrintIntensity * 0.8;
         }
         #include <opaque_fragment>`);
+    // vzhled povrchu + světelná vazba s particly (SolidLink.jsx)
+    patchSolidLook(shader);
   };
   mat.customProgramCacheKey = () => 'solidprint' + (keepBack ? 'D' : 'F');
   return mat;

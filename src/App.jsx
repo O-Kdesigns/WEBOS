@@ -14,6 +14,7 @@ import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { AtmosphereDust } from './AtmosphereDust';
 import { TvGlass, useTvGlass } from './TvGlass';
 import { SolidPrintDriver, usePrintableSolid } from './SolidPrint';
+import { SolidLinkDriver } from './SolidLink';
 import { PortalDriver, portalFx } from './PortalTransition';
 import { useAiLive, useAiLiveTicker } from './AiLiveMode';
 import { DarkStudioBackground } from './DarkStudioBackground';
@@ -330,6 +331,8 @@ function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex,
 
   const innerContent = (
     <>
+      {/* světelná vazba particly <-> solidy + vzhled solidů (SolidLink.jsx), stejný rodič = stejný prostor */}
+      <SolidLinkDriver nodes={nodes} settings={settings} videoTexture={videoTexture} transitionProgress={transitionProgress} isSolidNode={isSolidNode} />
       {selected.length > 0 ? selected.map(nodeName => {
         const node = nodes[nodeName];
         if (!node) return null;

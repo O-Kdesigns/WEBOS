@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { shaderMaterial } from '@react-three/drei';
 import { extend } from '@react-three/fiber';
+import { PARTICLE_DECL } from '../../../SolidLink';
 
 export const JellyVideoMaterialImpl = shaderMaterial(
   {
@@ -105,6 +106,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
 
   uniform float uTransitionProgress;
   uniform vec3 uDnaColor;
+  ${PARTICLE_DECL}
 
   void main() {
     vec3 uColorMod = mix(uDnaColor, uColor, smoothstep(0.0, 1.0, uTransitionProgress));
@@ -199,6 +201,9 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec3 finalColor = coreColor + (totalSpecular + rimGlaze) * mix(1.0, 0.4, mixProgress) + sssGlow;
     finalColor = mix(finalColor, finalColor * uColorMod, metal * 0.5);
     
+    // přisvícení od solidu (a žáru 3D tisku), SolidLink.jsx – mimo INSIDE je uSLightAmt 0
+    finalColor += solidLightAt(vWorldPos, normalize((vec4(normal, 0.0) * viewMatrix).xyz)) * (0.35 + videoTex.rgb * 0.65);
+
     gl_FragColor = vec4(finalColor, uOpacity);
   }
   `

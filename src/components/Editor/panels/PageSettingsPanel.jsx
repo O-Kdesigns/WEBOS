@@ -1,5 +1,6 @@
 import React from 'react';
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
+import { SolidLinkPanel } from './SolidLinkPanel';
 
 export function PageSettingsPanel({ page, index, updatePage, deletePage, assets, getFilteredAssets, openSections, toggleSection, updateParticlesSettings, blenderNodes }) {
   return (
@@ -75,6 +76,26 @@ export function PageSettingsPanel({ page, index, updatePage, deletePage, assets,
                   </>
                 )}
               </div>
+
+              {/* Sekce: SOLIDY & SVĚTLO ČÁSTIC (vzhled solidů + světelná vazba, SolidLink.jsx) */}
+              {page.particlesSettings?.hasParticles && (
+                <div className="editor-section">
+                  <h4
+                    style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+                    onClick={() => toggleSection(`page-solidlink-${page.id}`)}
+                  >
+                    <span>💡 Solidy & světlo částic</span>
+                    <span>{openSections[`page-solidlink-${page.id}`] ? '▲' : '▼'}</span>
+                  </h4>
+                  {openSections[`page-solidlink-${page.id}`] && (
+                    <SolidLinkPanel
+                      settings={page.particlesSettings}
+                      onUpdate={(field, value) => updateParticlesSettings(page.id, field, value)}
+                      onReplace={(obj) => updatePage(page.id, 'particlesSettings', { ...page.particlesSettings, ...obj })}
+                    />
+                  )}
+                </div>
+              )}
 
             </div>
           );
