@@ -46,6 +46,7 @@ export function AtmosphereDust({ appConfig, springScrollY, rotationY, pageDistan
     uniforms: {
       uTime: { value: 0 },
       uScroll: { value: 0 },
+      uCamY: { value: 0 },
       uRot: { value: 0 },
       uBox: { value: new THREE.Vector3(10, 8, 10) },
       uSize: { value: 0.035 },
@@ -57,7 +58,7 @@ export function AtmosphereDust({ appConfig, springScrollY, rotationY, pageDistan
       uViewportH: { value: 1000 }
     },
     vertexShader: `
-      uniform float uTime, uScroll, uRot, uSize, uFocus, uFocusRange, uBokeh, uPixelRatio, uViewportH;
+      uniform float uTime, uScroll, uCamY, uRot, uSize, uFocus, uFocusRange, uBokeh, uPixelRatio, uViewportH;
       uniform vec3 uBox;
       attribute vec3 aColor;
       attribute float aSeed;
@@ -68,13 +69,14 @@ export function AtmosphereDust({ appConfig, springScrollY, rotationY, pageDistan
         vec3 p = position * uBox;
         // pomalý drift + paralaxa se scrollem (prach je "hlubší" než DNA)
         p.y += uTime * (0.05 + aSeed * 0.1) + uScroll;
-        p.y = mod(p.y + uBox.y, uBox.y * 2.0) - uBox.y;
+        // wrap kolem kamery (kamera za posledním projektem sjíždí ve world Y dolů -> prach musí jet s ní)
+        p.y = mod(p.y - uCamY + uBox.y, uBox.y * 2.0) - uBox.y;
         p.x += sin(uTime * 0.3 + aSeed * 40.0) * 0.15;
         p.z += cos(uTime * 0.25 + aSeed * 23.0) * 0.15;
         float s = sin(uRot), c = cos(uRot);
         p.xz = mat2(c, -s, s, c) * p.xz;
 
-        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        vec4 mv = modelViewMatrix * vec4(p + vec3(0.0, uCamY, 0.0), 1.0);
         float dist = -mv.z;
         float coc = smoothstep(0.0, uFocusRange, abs(dist - uFocus));
         float grow = 1.0 + coc * uBokeh;
@@ -128,6 +130,7 @@ export function AtmosphereDust({ appConfig, springScrollY, rotationY, pageDistan
     u.uOpacity.value = cfg.opacity ?? 0.8;
     u.uFocusRange.value = appConfig?.cinematic?.focusRange ?? 3.5;
     state.camera.getWorldPosition(camPos.current);
+    u.uCamY.value = camPos.current.y;
     u.uFocus.value = Math.hypot(camPos.current.x, camPos.current.z) + (appConfig?.cinematic?.focusOffset ?? 0);
     u.uPixelRatio.value = state.gl.getPixelRatio();
     u.uViewportH.value = state.size.height / (2 * Math.tan(THREE.MathUtils.degToRad(state.camera.fov ?? 60) / 2));
