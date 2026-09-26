@@ -33,8 +33,13 @@ export function PageSettingsPanel({ page, index, updatePage, deletePage, assets,
                   <div style={{ marginTop: '10px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: '#000', display: 'flex', justifyContent: 'center' }}>
                     <video 
                       src={encodeURI(`/obsah/${page.videoUrl.replace(/^\/?(obsah\/)?/, '')}`)}
-                      controls 
-                      muted 
+                      onError={e => {
+                        // Video chybí (např. GitHub Pages) -> placeholder
+                        const fallback = `${import.meta.env.BASE_URL}placeholder.mp4`;
+                        if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback;
+                      }}
+                      controls
+                      muted
                       style={{ width: '100%', maxHeight: '150px', objectFit: 'contain' }}
                     />
                   </div>

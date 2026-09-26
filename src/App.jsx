@@ -35,6 +35,9 @@ const resolveAssetUrl = (url) => {
   return encodeURI(finalUrl);
 };
 
+// Malé smyčkové video, které se přehraje všude, kde se produkční video nenačte (např. GitHub Pages)
+export const VIDEO_FALLBACK_URL = `${import.meta.env.BASE_URL}placeholder.mp4`;
+
 // --- Video Texture Cache (module-level, persists across renders) ---
 export const videoTextureCache = new Map();
 
@@ -43,6 +46,15 @@ function ensureVideoEntry(url, gl) {
   
   const video = document.createElement('video');
   video.src = url;
+  // Fallback: produkční videa nejsou v gitu (GitHub Pages je nemá) -> při chybě
+  // načtení přepneme na malé placeholder video z public/. Cache klíč zůstává původní URL.
+  const onVideoError = () => {
+    if (video.src.endsWith(VIDEO_FALLBACK_URL)) return;
+    console.warn(`[VideoManager] Video nenalezeno, použit placeholder: ${url}`);
+    video.src = VIDEO_FALLBACK_URL;
+    video.load();
+  };
+  video.addEventListener('error', onVideoError);
   video.crossOrigin = 'anonymous';
   video.loop = true;
   video.muted = true;
