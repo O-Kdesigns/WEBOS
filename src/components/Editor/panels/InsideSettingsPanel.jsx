@@ -37,7 +37,9 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
         <DenseSlider desc="Výška houpání (vlnění) částic letících uvnitř válce." label="Síla levitování" min={0} max={2.0} step={0.01} value={appConfig.particlePhysics?.floatAmplitude ?? 0.1} color="#ec4899" onChange={v => updateParticlePhysics('floatAmplitude', v)} />
         <DenseSlider desc="Frekvence (rychlost) pulzujícího vlnění." label="Rychlost levitování" min={0.1} max={10.0} step={0.1} value={appConfig.particlePhysics?.floatSpeed ?? 1.0} color="#ec4899" onChange={v => updateParticlePhysics('floatSpeed', v)} />
         <DenseSlider desc="Jak rychle a pružně se částice vrací do formace po narušení myší." label="Návrat po rozfouknutí" min={0.01} max={0.5} step={0.01} value={appConfig.particlePhysics?.returnSpeed ?? 0.05} color="#ec4899" onChange={v => updateParticlePhysics('returnSpeed', v)} />
-        
+        <DenseSlider desc="Zpoždění otáčení obsahu za tahem myši (solidy i částice stejně). 0 = hned za prstem." label="Setrvačnost otáčení" min={0} max={1} step={0.01} value={appConfig.particlePhysics?.spinLag ?? 0.5} color="#ec4899" onChange={v => updateParticlePhysics('spinLag', v)} />
+        <DenseSlider desc="Jak moc částice drží se solidy při otáčení. 1 = přesně s nimi, nižší = částice se opožďují (dozvuk)." label="Unášení částic" min={0} max={1} step={0.01} value={appConfig.particlePhysics?.rotationCarry ?? 0.85} color="#ec4899" onChange={v => updateParticlePhysics('rotationCarry', v)} />
+
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Interakce myší (Laser)</div>
         <DenseSlider desc="Síla výbuchu, který rozfoukne částice při přejetí myší." label="Síla odfouknutí myší" min={0.1} max={5.0} step={0.1} value={appConfig.particlePhysics?.mouseForce ?? 1.0} color="#ec4899" onChange={v => updateParticlePhysics('mouseForce', v)} />

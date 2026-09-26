@@ -68,6 +68,11 @@ uniform sampler2D tDnaPosition;
 // The particle mesh renders in world space (inverse group), so project shape targets
 // stored in node-local space must be lifted into world space here.
 uniform mat4 uFinalMat;
+// Pohyb uFinalMat od minulého snímku (rotace INSIDE, gyro myši). Particly se s ním unášejí jako
+// solidy – jinak by cíl dobíhaly po tětivě (zaostávání + při rychlé rotaci stažení ke středu).
+uniform mat4 uDeltaMat;
+uniform float uCarry;         // 0 = jen dobíhají cíl, 1 = unášené přesně jako solidy
+uniform float uDeltaAngle;    // úhel rotace uDeltaMat za snímek (rad)
 // Camera world Y - the "reserve cube" of surplus particles (dna.w < 0) rides with the camera, out of view.
 uniform float uCameraY;
 // "Emerge" (obsah k solidu): particly čekají ve spodní vrstvě a do tvaru je vytahuje řez 3D tisku
@@ -87,6 +92,13 @@ void main() {
     vec4 base = texture2D(tBasePosition, uv);
     vec4 dna = texture2D(tDnaPosition, uv);
     
+    // 0. Unášení s rotací skupiny (jen tvar projektu, ne DNA / rezervní kostka)
+    // zbytek rotace, který particly jen dobíhají, je omezený na 0.2 * uReturnSpeed za snímek:
+    // dozvuk max ~0.2 rad a poloměr drží (> 98 %) i při prudkém švihnutí
+    float carry = max(uCarry, 1.0 - 0.2 * uReturnSpeed / max(uDeltaAngle, 1e-5));
+    float carryW = carry * smoothstep(0.0, 1.0, uTransitionProgress) * step(0.0, dna.w);
+    pos.xyz = mix(pos.xyz, (uDeltaMat * vec4(pos.xyz, 1.0)).xyz, carryW);
+
     // 1. Aplikace fyzikální rychlosti (momentum od myši)
     pos.xyz += vel.xyz;
     
@@ -233,6 +245,9 @@ export function useGPGPU(count, particlesData, gl) {
     posVar.material.uniforms.tBasePosition = { value: basePos };
     posVar.material.uniforms.tDnaPosition = { value: dnaPos };
     posVar.material.uniforms.uFinalMat = { value: new THREE.Matrix4() };
+    posVar.material.uniforms.uDeltaMat = { value: new THREE.Matrix4() };
+    posVar.material.uniforms.uCarry = { value: 0 };
+    posVar.material.uniforms.uDeltaAngle = { value: 0 };
     posVar.material.uniforms.uCameraY = { value: 0 };
     posVar.material.uniforms.uEmerge = { value: 0 };
     posVar.material.uniforms.uPrintY = { value: 1e4 };
@@ -343,6 +358,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     posUniforms.uFloatAmplitude.value = phys.floatAmplitude ?? 0.1;
     // Nové nastavení rychlosti návratu částic
     posUniforms.uReturnSpeed.value = phys.returnSpeed ?? 0.05;
+    // unášení s rotací INSIDE (1 = particly drží se solidy, míň = zbytkový dozvuk)
+    if (posUniforms.uCarry) posUniforms.uCarry.value = phys.rotationCarry ?? 0.85;
     
     if (settings.transitionProgress != null) {
       posUniforms.uTransitionProgress.value = settings.transitionProgress.get ? settings.transitionProgress.get() : settings.transitionProgress;

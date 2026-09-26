@@ -17,6 +17,7 @@ const EMERGE_DEFAULTS = {
   drag: 3.0          // odpor jiskry (víc = prudší dolet do cíle)
 };
 const _corner = new THREE.Vector3();
+const _delta = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _ident = new THREE.Matrix4();
 
 // Deterministic per-particle random in [0,1). Using Math.random() re-rolled DNA sizes/positions every
 // time particlesData was recomputed (project switch) -> the DNA visibly "shimmered". Seeded = identical DNA.
@@ -195,6 +196,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   }, [count, particlesData, dummy, compute, computeUVs, segW, segH]);
 
   const worldGroupRef = useRef();
+  const prevMatRef = useRef({ m: new THREE.Matrix4(), compute: null });
   const inverseGroupRef = useRef();
   
   useFrame(() => {
@@ -204,8 +206,19 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       // for one frame (cube flashed at top/bottom). Refresh it now so the inverse matches this frame.
       worldGroupRef.current.updateWorldMatrix(true, false);
       const mat = worldGroupRef.current.matrixWorld;
-      if (compute.posVar.material.uniforms.uFinalMat) {
-        compute.posVar.material.uniforms.uFinalMat.value.copy(mat);
+      const pu = compute.posVar.material.uniforms;
+      if (pu.uFinalMat) {
+        // delta = F_nyní * F_minule^-1 (particly se s ní unášejí). Skok (přepnutí projektu, nový compute) = žádné unášení.
+        if (pu.uDeltaMat && pu.uDeltaAngle) {
+          const prev = prevMatRef.current;
+          _delta.copy(mat).multiply(_inv.copy(prev.m).invert());
+          const e = _delta.elements;
+          const jump = prev.compute !== compute || Math.hypot(e[12], e[13], e[14]) > 2 || e[0] + e[5] + e[10] < 1.0; // > 2 world j. nebo > 90° za snímek
+          pu.uDeltaMat.value.copy(jump ? _ident : _delta);
+          pu.uDeltaAngle.value = jump ? 0 : Math.acos(Math.min(1, Math.max(-1, (e[0] + e[5] + e[10] - 1) / 2)));
+          prev.m.copy(mat); prev.compute = compute;
+        }
+        pu.uFinalMat.value.copy(mat);
       }
       inverseGroupRef.current.matrix.copy(mat).invert();
       inverseGroupRef.current.matrixAutoUpdate = false;

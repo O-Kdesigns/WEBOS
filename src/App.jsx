@@ -973,7 +973,10 @@ function App() {
       const sensitivity = ((Math.PI * 2) / (window.innerWidth / 1.5)) * (appConfig.scrollSpeed || 1.0);
       if (active) {
         insideRotRef.current += dx * sensitivity;
-        insideApi.start({ insideRotationY: insideRotRef.current, immediate: true });
+        // tah přes pružinu (ne okamžitě) – solidy i particly se zpožďují stejně; 0 = hned za prstem
+        const lag = appConfig.particlePhysics?.spinLag ?? 0.5;
+        const tension = 40 + 560 * (1 - lag) * (1 - lag);
+        insideApi.start({ insideRotationY: insideRotRef.current, immediate: lag <= 0, config: { mass: 1, tension, friction: 2 * Math.sqrt(tension) } });
       } else {
         insideRotRef.current += (dx * sensitivity) + (vx * 20 * Math.sign(dx) * (appConfig.scrollSpeed || 1.0));
         insideApi.start({ insideRotationY: insideRotRef.current, immediate: false, config: { mass: appConfig.physics?.mass ?? 1, tension: appConfig.physics?.tension ?? 170, friction: appConfig.physics?.friction ?? 26 } });
