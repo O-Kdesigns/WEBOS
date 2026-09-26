@@ -54,8 +54,25 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 
 ---
 
+## Particle architektura (DŮLEŽITÉ – čti před změnou particlů)
+
+- **Single particle system:** DNA v ORBITu NENÍ samostatný objekt. Tvoří ji particly **aktivního projektu** (`ProjectContent` v `App.jsx` renderuje jen `pagesData[closestIndex]`). GPGPU (`particles/utils.js`) morphuje `tDnaPosition` → `tBasePosition` podle `transitionProgress` (0 = ORBIT/DNA, 1 = INSIDE/tvar projektu).
+- **Souřadnice:** particle mesh je v `inverseGroup` → renderuje se ve **world space**. DNA cíle jsou world (`dnaMatrix`), tvar projektu je node-local a do world ho převádí `uFinalMat` v GPGPU shaderu.
+- **Rezervní kostka:** projekt má víc particlů než DNA vertexů (DNA 16 463) → přebytek čeká v kostce ±12–16 nad/pod **kamerou** (`uCameraY`, flag = záporné `dna.w`).
+- **Stránka bez particlů** (např. showreel) → fallback `DNA_ONLY_SETTINGS` (DNA z nodu `dna`), jinak by zmizela celá DNA.
+- **GPGPU dispose je odložený** (`pendingDisposeRef` + `flush`) – okamžitý dispose v cleanupu způsoboval GPU texture leak. Neměnit zpět.
+- Node končící na `1` (např. `Particles_Xelith_Obsah1`) je dle `isSolidNode()` **solid**, ne particly.
+- GLB `newworldorder.glb` obsahuje jen Xelith nody – doomsday nemá vlastní particle nody (v `settings.json` používá Xelith nody).
+- Debug: v DEV je `window.__r3f` (R3F store). `__r3f.gl.info.memory` = počet textur/geometrií (kontrola leaků), `__r3f.get().camera` = aktuální kamera.
+- Dev server: `.claude/launch.json` (`webos-dev`, port 5173).
+
+---
+
 ## Plánováno (TODO)
 
 - GitHub Pages deploy (GitHub Actions workflow)
 - GitHub Pages video fallback: detekce `github.io` hostname → mini placeholder video
 - Netlify auto-deploy (pro hotové production buildy)
+- Doomsday: vlastní particle nody v GLB (teď sdílí Xelith nody)
+- `App.jsx` má rozbité kódování českých komentářů/UI textů (mojibake, např. „ĂšspornĂ˝ reĹľim“) – opravit re-encodingem
+- `App.jsx` má 1150+ řádků – porušuje pravidlo 12 (max 500), rozdělit do komponent
