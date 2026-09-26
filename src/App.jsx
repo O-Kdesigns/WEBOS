@@ -12,7 +12,7 @@ import { ParticleObject } from './components/particles/ParticleObject';
 import { MusicPlayer } from './MusicPlayer';
 import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { AtmosphereDust } from './AtmosphereDust';
-import { TvGlass, useTvParts, useTvMaterials } from './TvGlass';
+import { TvGlass, useTvGlass } from './TvGlass';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
@@ -528,15 +528,15 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
 
   const totalPages = Math.max(pagesData.length, 1);
 
-  // skleněné tělo televize (nody TV_* z Blenderu), video zůstává na GlassDesk
-  const tvParts = useTvParts(nodes);
-  const tvMaterials = useTvMaterials(tvParts, fade);
 
   let baseDeskNode = nodes.GlassDesk || nodes['GlassDesk-Xelith'];
   if (!baseDeskNode) {
     const glassKey = Object.keys(nodes).find(k => k.startsWith('GlassDesk'));
     if (glassKey) baseDeskNode = nodes[glassKey];
   }
+
+  // skleněná televize (nody TV_* z Blenderu): sklo s lomem, video je portál uvnitř skla
+  const tv = useTvGlass(nodes, baseDeskNode, fade);
 
   // Rotace UV o 180Â° pĹ™Ă­mo na geometrii - eliminuje potĹ™ebu duplicitnĂ­ VideoTexture pro desky
   const deskGeometry = useMemo(() => {
@@ -577,7 +577,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
               onPointerOver={(e) => document.body.style.cursor = 'pointer'}
               onPointerOut={(e) => document.body.style.cursor = 'auto'}
             >
-            <a.mesh 
+            {!tv.hasVideo && <a.mesh 
               position={deskPos}
               quaternion={deskRot}
               scale={deskScale}
@@ -604,8 +604,8 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
                   opacity={fade}
                 />
               )}
-            </a.mesh>
-            <TvGlass parts={tvParts} materials={tvMaterials} />
+            </a.mesh>}
+            <TvGlass tv={tv} videoTexture={currentDeskTex} />
             </group>
           </group>
         )
