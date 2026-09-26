@@ -238,7 +238,15 @@ function hasSolidPair(nodeName, selected) {
   return selected.includes(solid) && isSolidNode(solid);
 }
 
-function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex, emerge = false }) {
+// stejná sada solidů = stejné pole (jinak by se nastavení particlů měnilo každý render)
+const solidListCache = new Map();
+function stableSolidList(list) {
+  const key = list.map(n => n.uuid).join('|');
+  if (!solidListCache.has(key)) solidListCache.set(key, list);
+  return solidListCache.get(key);
+}
+
+function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex, emerge = false, collisionSolids }) {
   const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
     ? Number(settings.nodeMultipliers[nodeName])
     : 1.0;
@@ -282,13 +290,14 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
     sizeMultiplier: multiplier,
     mouseMultiplier: mouseMultiplier,
     emerge,
+    collisionSolids,
     ...(sphereSegments ? { sphereSegments } : {}),
     transform: {
       position: [0, 0, 0],
       quaternion: [0, 0, 0, 1],
       scale: transforms ? transforms.scale : [1, 1, 1]
     }
-  }), [settings, node.geometry, multiplier, mouseMultiplier, sphereSegments, transforms, emerge]);
+  }), [settings, node.geometry, multiplier, mouseMultiplier, sphereSegments, transforms, emerge, collisionSolids]);
 
   if (!transforms) return null;
 
@@ -340,6 +349,8 @@ function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex,
 
   const settings = page.particlesSettings;
   const selected = settings.selectedNodes || [];
+  // kolize particlů se solidy stránky (SDF, components/particles/SolidCollision.js)
+  const collisionSolids = stableSolidList(selected.filter(isSolidNode).map(n => nodes[n]).filter(Boolean));
 
   const innerContent = (
     <>
@@ -368,6 +379,7 @@ function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex,
               dnaMatrix={nodes.dna?.matrixWorld}
               nodeMatrix={node.matrixWorld}
               emerge={hasSolidPair(nodeName, selected)}
+              collisionSolids={collisionSolids}
             />
           );
       }) : (

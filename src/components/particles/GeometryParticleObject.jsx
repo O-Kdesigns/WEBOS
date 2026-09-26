@@ -1,9 +1,10 @@
-import React, { useRef, useMemo, useLayoutEffect } from 'react';
+import React, { useRef, useMemo, useLayoutEffect, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
 import { ParticleMaterial } from './ParticleMaterial';
 import { printFx } from '../../SolidPrint';
+import { computeSurfacePlanes, COLLISION_DEFAULTS } from './SolidCollision';
 
 // Emerge (obsah k solidu): výchozí hodnoty, config `particleEmerge` je přepíše (DEV: window.__emergeOverride).
 const EMERGE_DEFAULTS = {
@@ -195,6 +196,41 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
   }, [count, particlesData, dummy, compute, computeUVs, segW, segH]);
 
+  // Kolize se solidy stránky: vlastní rovina povrchu na particl (worker, do té doby bez kolizí).
+  // Textura se přepočítá jen při změně tvaru / solidů / počtu particlů (klíč), ne při každém přepnutí projektu.
+  const collisionCfg = useMemo(() => ({ ...COLLISION_DEFAULTS, ...(appConfig?.particleCollision || {}), ...((import.meta.env.DEV && window.__collisionOverride) || {}) }), [appConfig?.particleCollision]);
+  const surfRef = useRef({ key: null, tex: null });
+  useEffect(() => {
+    const solids = settings.collisionSolids || [];
+    if (!compute || !collisionCfg.enabled || !solids.length || !nodeMatrix) {
+      surfRef.current.tex?.dispose();
+      surfRef.current = { key: null, tex: null };
+      return;
+    }
+    const key = [settings.customGeometry?.uuid, count, compute.size, collisionCfg.band, ...solids.map((n) => n.uuid)].join('|');
+    if (surfRef.current.key === key) return;
+    surfRef.current.key = key;
+    const points = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) { points[i * 3] = particlesData[i].x; points[i * 3 + 1] = particlesData[i].y; points[i * 3 + 2] = particlesData[i].z; }
+    const t0 = performance.now();
+    computeSurfacePlanes(solids, nodeMatrix, points, collisionCfg.band).then((planes) => {
+      if (surfRef.current.key !== key) return;
+      const size = compute.size;
+      const data = new Float32Array(size * size * 4);
+      data.set(planes.subarray(0, Math.min(planes.length, data.length)));
+      const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.FloatType);
+      tex.needsUpdate = true;
+      surfRef.current.tex?.dispose();
+      surfRef.current.tex = tex;
+      if (import.meta.env.DEV) {
+        let near = 0;
+        for (let i = 0; i < count; i++) if (planes[i * 4] || planes[i * 4 + 1] || planes[i * 4 + 2]) near++;
+        console.log(`[SolidCollision] ${near}/${count} particlů u solidu, ${Math.round(performance.now() - t0)} ms`);
+      }
+    });
+  }, [compute, count, particlesData, settings.collisionSolids, settings.customGeometry, nodeMatrix, collisionCfg]);
+  useEffect(() => () => { surfRef.current.tex?.dispose(); surfRef.current = { key: null, tex: null }; }, []);
+
   const worldGroupRef = useRef();
   const prevMatRef = useRef({ m: new THREE.Matrix4(), compute: null });
   const inverseGroupRef = useRef();
@@ -222,6 +258,17 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       }
       inverseGroupRef.current.matrix.copy(mat).invert();
       inverseGroupRef.current.matrixAutoUpdate = false;
+    }
+    // kolize se solidy: rovina povrchu je v lokálním prostoru nodu -> shader potřebuje world -> lokální
+    if (compute && !compute.disposed && compute.posVar.material.uniforms.tSurfPlane && worldGroupRef.current) {
+      const u = compute.posVar.material.uniforms;
+      const tex = surfRef.current.tex;
+      u.uSurfOn.value = tex && compute.size * compute.size * 4 === tex.image.data.length ? 1 : 0;
+      u.tSurfPlane.value = tex;
+      u.uFinalInv.value.copy(worldGroupRef.current.matrixWorld).invert();
+      u.uSurfMargin.value = collisionCfg.margin;
+      u.uSurfMaxPen.value = collisionCfg.band / Math.max(1e-6, nodeMatrix.getMaxScaleOnAxis());
+      u.uPrintY.value = printFx.uniforms.uPrintY.value;
     }
     if (compute && !compute.disposed && compute.posVar.material.uniforms.uEmerge) {
       const u = compute.posVar.material.uniforms;

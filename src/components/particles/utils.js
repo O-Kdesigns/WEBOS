@@ -82,6 +82,13 @@ uniform float uPrintY;        // world Y řezu (-1e4 = tisk nezačal, 1e4 = hoto
 uniform float uPrintStart;    // world Y řezu na startu tisku (spodní particly nesmí vyskočit v půlce letu)
 uniform vec4 uEmergeFloor;    // x = world Y horní hrany čekací vrstvy, y = tloušťka, z = rozptyl xz, w = výška oblouku (gravitace)
 uniform vec4 uEmergeFlight;   // x = předstih (world Y), y = náhodnost předstihu, z = síla víření, w = odpor (drag)
+// Kolize se solidy (SolidCollision.js): vlastní rovina povrchu každého particlu v lokálním prostoru nodu
+// (xyz = normála ven, w = offset roviny; nula = particl daleko od solidu, bez kolize).
+uniform sampler2D tSurfPlane;
+uniform float uSurfOn;        // 0 = vypnuto / roviny ještě nejsou
+uniform mat4 uFinalInv;       // world -> lokální prostor nodu (inverze uFinalMat)
+uniform float uSurfMargin;    // přídavek k poloměru particlu (násobek poloměru)
+uniform float uSurfMaxPen;    // max. průnik, který se ještě opravuje (lokální jednotky)
 
 float emergeHash(vec2 p, float k) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + k * 17.137) * 43758.5453); }
 
@@ -111,6 +118,7 @@ void main() {
     float projScale = length(uFinalMat[0].xyz);
 
     float inFlight = 0.0;
+    float landed = 1.0; // emerge: particl už doletěl do tvaru (čekající dole / v letu nekolidují)
     if (uEmerge > 0.5) {
         vec3 P = projTarget;
         float r1 = emergeHash(uv, 1.0), r2 = emergeHash(uv, 2.0), r3 = emergeHash(uv, 3.0), r4 = emergeHash(uv, 4.0);
@@ -134,6 +142,7 @@ void main() {
         arc += vec3(sin(tau * 9.0 + ph), sin(tau * 7.0 + ph * 1.7) * 0.5, cos(tau * 11.0 + ph * 2.3)) * uEmergeFlight.z * env;
         projTarget = arc;
         inFlight = step(0.0001, s) * step(s, 0.9999);
+        landed = step(0.9999, s);
     }
     // Surplus particles (more project vertices than DNA vertices) are flagged with negative dna.w.
     // Their DNA-state target is relative to the camera height so the cube follows the camera.
@@ -165,7 +174,20 @@ void main() {
     // jiskra v letu jede přesně po dráze (lag by oblouk rozmazal)
     returnSpeed = mix(returnSpeed, 0.6, inFlight * step(0.999, tProgress));
     pos.xyz += (targetPos - pos.xyz) * returnSpeed;
-    
+
+    // 4. Kolize se solidy: střed particlu musí být aspoň poloměr (+ margin) nad vlastní rovinou povrchu.
+    //    Jen tam, kde už solid je (pod řezem 3D tisku), a jen doletěné particly (emerge: čekající dole / jiskry v letu ne).
+    if (uSurfOn > 0.5 && landed > 0.5 && pos.y < uPrintY) {
+        vec4 pl = texture2D(tSurfPlane, uv);
+        if (dot(pl.xyz, pl.xyz) > 0.5) {
+            vec3 lp = (uFinalInv * vec4(pos.xyz, 1.0)).xyz;
+            float r = abs(pos.w) * (1.0 + uSurfMargin) / projScale; // poloměr v lokálních jednotkách
+            float pen = r - (dot(lp, pl.xyz) - pl.w);
+            // velký průnik = particl není u své plochy (morph, odlet) -> nechat být
+            if (pen > 0.0 && pen < uSurfMaxPen) pos.xyz += normalize(mat3(uFinalMat) * pl.xyz) * pen * projScale * tProgress;
+        }
+    }
+
     // Uložíme interpolovanou velikost (scale) do w komponenty (vertex shader ji načte)
     // projektový scale je uložen v base.w
     pos.w = mix(dnaScale, base.w * projScale, tProgress);
@@ -254,6 +276,11 @@ export function useGPGPU(count, particlesData, gl) {
     posVar.material.uniforms.uPrintStart = { value: -1e4 };
     posVar.material.uniforms.uEmergeFloor = { value: new THREE.Vector4() };
     posVar.material.uniforms.uEmergeFlight = { value: new THREE.Vector4() };
+    posVar.material.uniforms.tSurfPlane = { value: null };
+    posVar.material.uniforms.uSurfOn = { value: 0 };
+    posVar.material.uniforms.uFinalInv = { value: new THREE.Matrix4() };
+    posVar.material.uniforms.uSurfMargin = { value: 0.3 };
+    posVar.material.uniforms.uSurfMaxPen = { value: 0.15 };
     
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);
