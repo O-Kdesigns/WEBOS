@@ -70,6 +70,15 @@ uniform sampler2D tDnaPosition;
 uniform mat4 uFinalMat;
 // Camera world Y - the "reserve cube" of surplus particles (dna.w < 0) rides with the camera, out of view.
 uniform float uCameraY;
+// "Emerge" (obsah k solidu): particly čekají ve spodní vrstvě a do tvaru je vytahuje řez 3D tisku
+// jako jiskry pouštěné pozpátku. Vše odvozené od výšky řezu (ne od času) -> odtisk = stejná dráha dopředu.
+uniform float uEmerge;        // 0 = vypnuto
+uniform float uPrintY;        // world Y řezu (-1e4 = tisk nezačal, 1e4 = hotovo)
+uniform float uPrintStart;    // world Y řezu na startu tisku (spodní particly nesmí vyskočit v půlce letu)
+uniform vec4 uEmergeFloor;    // x = world Y horní hrany čekací vrstvy, y = tloušťka, z = rozptyl xz, w = výška oblouku (gravitace)
+uniform vec4 uEmergeFlight;   // x = předstih (world Y), y = náhodnost předstihu, z = síla víření, w = odpor (drag)
+
+float emergeHash(vec2 p, float k) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + k * 17.137) * 43758.5453); }
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -89,6 +98,31 @@ void main() {
     vec3 projTarget = (uFinalMat * vec4(projLocal, 1.0)).xyz;
     float projScale = length(uFinalMat[0].xyz);
 
+    float inFlight = 0.0;
+    if (uEmerge > 0.5) {
+        vec3 P = projTarget;
+        float r1 = emergeHash(uv, 1.0), r2 = emergeHash(uv, 2.0), r3 = emergeHash(uv, 3.0), r4 = emergeHash(uv, 4.0);
+        // čekací místo ve spodní vrstvě (pod vlastním cílem, trochu rozházené)
+        vec3 R = vec3(P.x + (r1 - 0.5) * uEmergeFloor.z, uEmergeFloor.x - r2 * uEmergeFloor.y, P.z + (r3 - 0.5) * uEmergeFloor.z);
+        // s: 0 = čeká dole, 1 = na místě. Doletí přesně, když řez projde jeho výškou.
+        float lead = max(1e-3, uEmergeFlight.x * (1.0 - uEmergeFlight.y * r4));
+        float arriveY = max(P.y, uPrintStart + lead);
+        float s = clamp((uPrintY - arriveY + lead) / lead, 0.0, 1.0);
+        // tau = čas jiskry (dopředu): 0 = vystřelena z cíle, 1 = dopadla do vrstvy. Pouštíme pozpátku.
+        float tau = 1.0 - s;
+        // jiskra: výstřel + gravitace, odpor vzduchu (drag) = rychlý start, zpomalování -> pozpátku zrychluje do cíle
+        float k = uEmergeFlight.w;
+        float fd = (1.0 - exp(-k * tau)) / (1.0 - exp(-k));
+        vec3 g = vec3(0.0, -uEmergeFloor.w * (0.6 + r4 * 0.8), 0.0);
+        vec3 D = R - P;
+        vec3 arc = P + (D - 0.5 * g) * fd + 0.5 * g * tau * tau;
+        // víření během letu (na koncích nulové)
+        float env = 4.0 * tau * s;
+        float ph = r1 * 6.2831853;
+        arc += vec3(sin(tau * 9.0 + ph), sin(tau * 7.0 + ph * 1.7) * 0.5, cos(tau * 11.0 + ph * 2.3)) * uEmergeFlight.z * env;
+        projTarget = arc;
+        inFlight = step(0.0001, s) * step(s, 0.9999);
+    }
     // Surplus particles (more project vertices than DNA vertices) are flagged with negative dna.w.
     // Their DNA-state target is relative to the camera height so the cube follows the camera.
     float isReserve = step(dna.w, 0.0);
@@ -116,6 +150,8 @@ void main() {
     // Reserve particles snap to the camera-relative cube while in ORBIT (no lag into view while scrolling),
     // and fly smoothly once the INSIDE morph starts.
     float returnSpeed = mix(uReturnSpeed, 1.0, isReserve * (1.0 - step(0.001, tProgress)));
+    // jiskra v letu jede přesně po dráze (lag by oblouk rozmazal)
+    returnSpeed = mix(returnSpeed, 0.6, inFlight * step(0.999, tProgress));
     pos.xyz += (targetPos - pos.xyz) * returnSpeed;
     
     // Uložíme interpolovanou velikost (scale) do w komponenty (vertex shader ji načte)
@@ -198,6 +234,11 @@ export function useGPGPU(count, particlesData, gl) {
     posVar.material.uniforms.tDnaPosition = { value: dnaPos };
     posVar.material.uniforms.uFinalMat = { value: new THREE.Matrix4() };
     posVar.material.uniforms.uCameraY = { value: 0 };
+    posVar.material.uniforms.uEmerge = { value: 0 };
+    posVar.material.uniforms.uPrintY = { value: 1e4 };
+    posVar.material.uniforms.uPrintStart = { value: -1e4 };
+    posVar.material.uniforms.uEmergeFloor = { value: new THREE.Vector4() };
+    posVar.material.uniforms.uEmergeFlight = { value: new THREE.Vector4() };
     
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);

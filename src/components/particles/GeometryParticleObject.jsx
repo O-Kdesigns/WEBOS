@@ -3,6 +3,20 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
 import { ParticleMaterial } from './ParticleMaterial';
+import { printFx } from '../../SolidPrint';
+
+// Emerge (obsah k solidu): výchozí hodnoty, config `particleEmerge` je přepíše (DEV: window.__emergeOverride).
+const EMERGE_DEFAULTS = {
+  floorGap: 0.12,    // o kolik pod spodkem obsahu začíná čekací vrstva (world)
+  floorDepth: 0.3,   // tloušťka čekací vrstvy
+  spread: 0.35,      // rozházení čekacích míst do stran
+  arc: 1.4,          // výška oblouku jiskry (gravitace)
+  lead: 0.3,         // předstih vyletění před řezem (world Y) = délka letu
+  leadRandom: 0.6,   // náhodnost předstihu 0..1
+  swirl: 0.06,       // víření během letu
+  drag: 3.0          // odpor jiskry (víc = prudší dolet do cíle)
+};
+const _corner = new THREE.Vector3();
 
 // Deterministic per-particle random in [0,1). Using Math.random() re-rolled DNA sizes/positions every
 // time particlesData was recomputed (project switch) -> the DNA visibly "shimmered". Seeded = identical DNA.
@@ -195,6 +209,29 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       }
       inverseGroupRef.current.matrix.copy(mat).invert();
       inverseGroupRef.current.matrixAutoUpdate = false;
+    }
+    if (compute && !compute.disposed && compute.posVar.material.uniforms.uEmerge) {
+      const u = compute.posVar.material.uniforms;
+      const emerge = !!settings.emerge;
+      u.uEmerge.value = emerge ? 1 : 0;
+      if (emerge && worldGroupRef.current) {
+        const cfg = { ...EMERGE_DEFAULTS, ...(appConfig?.particleEmerge || {}), ...((import.meta.env.DEV && window.__emergeOverride) || {}) };
+        // spodek obsahu ve world Y (8 rohů bboxu přes world matici uzlu, bez alokací)
+        const bb = settings.customGeometry.boundingBox;
+        const mat = worldGroupRef.current.matrixWorld;
+        let minY = Infinity;
+        for (let i = 0; i < 8; i++) {
+          _corner.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z).applyMatrix4(mat);
+          if (_corner.y < minY) minY = _corner.y;
+        }
+        const py = printFx.uniforms.uPrintY.value;
+        // start tisku = nejnižší poloha řezu od chvíle, kdy tisk běží (-1e4 = nezačal)
+        if (py < -1e3 || py > 1e3) u.uPrintStart.value = -1e4; // nezačal / tisk vypnutý (vše na místě)
+        else if (u.uPrintStart.value < -1e3 || py < u.uPrintStart.value) u.uPrintStart.value = py;
+        u.uPrintY.value = py;
+        u.uEmergeFloor.value.set(minY - cfg.floorGap, cfg.floorDepth, cfg.spread, cfg.arc);
+        u.uEmergeFlight.value.set(cfg.lead, cfg.leadRandom, cfg.swirl, Math.max(0.01, cfg.drag));
+      }
     }
   });
 

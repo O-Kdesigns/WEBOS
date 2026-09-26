@@ -231,7 +231,14 @@ function SolidObject({ node }) {
   );
 }
 
-function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex }) {
+// Obsah k solidu: particle node "X0", když je vybraný i solid "X1" -> particly do tvaru vytahuje 3D tisk (emerge).
+function hasSolidPair(nodeName, selected) {
+  if (!nodeName.endsWith('0')) return false;
+  const solid = nodeName.slice(0, -1) + '1';
+  return selected.includes(solid) && isSolidNode(solid);
+}
+
+function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex, emerge = false }) {
   const multiplier = (settings.nodeMultipliers && settings.nodeMultipliers[nodeName] !== undefined)
     ? Number(settings.nodeMultipliers[nodeName])
     : 1.0;
@@ -274,13 +281,14 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
     customGeometry: node.geometry,
     sizeMultiplier: multiplier,
     mouseMultiplier: mouseMultiplier,
+    emerge,
     ...(sphereSegments ? { sphereSegments } : {}),
     transform: {
       position: [0, 0, 0],
       quaternion: [0, 0, 0, 1],
       scale: transforms ? transforms.scale : [1, 1, 1]
     }
-  }), [settings, node.geometry, multiplier, mouseMultiplier, sphereSegments, transforms]);
+  }), [settings, node.geometry, multiplier, mouseMultiplier, sphereSegments, transforms, emerge]);
 
   if (!transforms) return null;
 
@@ -359,6 +367,7 @@ function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex,
               dnaGeometry={nodes.dna?.geometry}
               dnaMatrix={nodes.dna?.matrixWorld}
               nodeMatrix={node.matrixWorld}
+              emerge={hasSolidPair(nodeName, selected)}
             />
           );
       }) : (
