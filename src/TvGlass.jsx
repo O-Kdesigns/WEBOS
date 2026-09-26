@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { portalFx } from './PortalTransition';
 
 // Skleněná televize (nody z Blenderu s prefixem "TV_", dítě GlassDesk).
 // Sklo = vlastní shader:
@@ -12,6 +13,8 @@ import * as THREE from 'three';
 //    uvnitř hrany (totální odraz)
 // Ladí se v Blenderu přes custom properties objektu (export extras -> userData):
 //   tvTint, tvRim, tvRimStrength, tvMilk, tvIor, tvDistort, tvFrost, tvScratch, tvBackground, tvRadius, tvVideo
+// Průlet portálem (PortalTransition): aktivní deska nezmizí s ostatními (uKeep), ale u kamery se sklo
+// rozpouští po pixelech podle vzdálenosti (uNear) -> kamera projede sklem bez bliknutí.
 
 const FBO_SCALE = 0.5;
 
@@ -37,7 +40,8 @@ const fragmentShader = `
   uniform sampler2D tScene;
   uniform sampler2D tVideo;
   uniform vec2 uRes;
-  uniform float uTime, uFade, uHasVideo;
+  uniform float uTime, uFade, uHasVideo, uKeep;
+  uniform vec2 uNear;
   uniform vec3 uAxN, uAxA, uAxB, uCenter;
   uniform vec2 uHalf;
   uniform float uHalfT, uRadius;
@@ -151,7 +155,11 @@ const fragmentShader = `
     float frontLine = exp(-abs(sdFront + 0.012) * 140.0);
     col += uRim * uRimStrength * (fres * 1.2 + inner * 0.25 + innerLine * 0.6 + frontLine * 0.25);
 
-    gl_FragColor = vec4(col, uFade);
+    // "měkká near plane": čím blíž kameře, tím průhlednější (střed se otevře první, okraje poslední)
+    float nearFade = smoothstep(uNear.x, uNear.y, distance(cameraPosition, vWP));
+    float alpha = max(uFade, uKeep) * nearFade;
+    if (alpha < 0.003) discard;
+    gl_FragColor = vec4(col, alpha);
     #include <colorspace_fragment>
   }
 `;
@@ -240,7 +248,8 @@ export function useTvGlass(nodes, deskNode, fade) {
       tScene: { value: fbo.texture },
       uRes: { value: new THREE.Vector2(1, 1) },
       uTime: { value: 0 },
-      uFade: { value: 1 }
+      uFade: { value: 1 },
+      uNear: { value: new THREE.Vector2(0.25, 1.1) }
     }
   }), [fbo]);
 
@@ -258,7 +267,17 @@ export function useTvGlass(nodes, deskNode, fade) {
     const f = fade?.get ? fade.get() : 1;
     u.uFade.value = f;
     u.uTime.value = state.clock.elapsedTime;
-    if (f <= 0.001 || shared.meshes.size === 0) return;
+    u.uNear.value.set(portalFx.nearStart, portalFx.nearEnd);
+    // aktivní deska zůstává vidět během průletu (po jeho konci je za kamerou -> skrýt)
+    const keep = portalFx.progress < 1 ? 1 : 0;
+    let anyShown = false;
+    for (const mesh of shared.meshes) {
+      const k = mesh.userData.tvActive ? keep : 0;
+      mesh.material.uniforms.uKeep.value = k;
+      mesh.visible = f > 0.001 || k > 0;
+      if (mesh.visible) anyShown = true;
+    }
+    if (!anyShown) return;
 
     const { frustum, m, buf } = tmp.current;
     const camera = state.camera;
@@ -267,19 +286,19 @@ export function useTvGlass(nodes, deskNode, fade) {
     frustum.setFromProjectionMatrix(m);
     let anyVisible = false;
     for (const mesh of shared.meshes) {
-      if (frustum.intersectsObject(mesh)) { anyVisible = true; break; }
+      if (mesh.visible && frustum.intersectsObject(mesh)) { anyVisible = true; break; }
     }
     if (!anyVisible) return;
 
     gl.getDrawingBufferSize(buf);
     u.uRes.value.copy(buf);
 
-    for (const mesh of shared.meshes) mesh.visible = false;
+    for (const mesh of shared.meshes) { mesh.userData.tvShown = mesh.visible; mesh.visible = false; }
     const prevTarget = gl.getRenderTarget();
     gl.setRenderTarget(fbo);
     gl.render(state.scene, camera);
     gl.setRenderTarget(prevTarget);
-    for (const mesh of shared.meshes) mesh.visible = true;
+    for (const mesh of shared.meshes) mesh.visible = mesh.userData.tvShown;
   });
 
   return useMemo(() => ({ parts, shared, hasVideo: parts.some(p => p.video) }), [parts, shared]);
@@ -293,6 +312,7 @@ function makeMaterial(part, shared) {
       ...shared.uniforms,
       tVideo: { value: null },
       uHasVideo: { value: 0 },
+      uKeep: { value: 0 },
       uAxN: { value: part.axN }, uAxA: { value: part.axA }, uAxB: { value: part.axB },
       uCenter: { value: part.center },
       uHalf: { value: part.half },
@@ -318,7 +338,7 @@ function makeMaterial(part, shared) {
   });
 }
 
-function TvGlassMesh({ part, shared, videoTexture }) {
+function TvGlassMesh({ part, shared, videoTexture, active }) {
   const ref = useRef();
   const material = useMemo(() => makeMaterial(part, shared), [part, shared]);
   useEffect(() => () => material.dispose(), [material]);
@@ -330,9 +350,10 @@ function TvGlassMesh({ part, shared, videoTexture }) {
 
   useEffect(() => {
     const mesh = ref.current;
+    mesh.userData.tvActive = !!active;
     shared.meshes.add(mesh);
     return () => { shared.meshes.delete(mesh); };
-  }, [shared]);
+  }, [shared, active]);
 
   return (
     <mesh
@@ -347,8 +368,8 @@ function TvGlassMesh({ part, shared, videoTexture }) {
   );
 }
 
-export function TvGlass({ tv, videoTexture }) {
+export function TvGlass({ tv, videoTexture, active = false }) {
   return tv.parts.map(p => (
-    <TvGlassMesh key={p.name} part={p} shared={tv.shared} videoTexture={videoTexture} />
+    <TvGlassMesh key={p.name} part={p} shared={tv.shared} videoTexture={videoTexture} active={active} />
   ));
 }

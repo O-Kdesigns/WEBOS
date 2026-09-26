@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { portalFx } from './PortalTransition';
 
 // 3D tisk solidů při vstupu do projektu (INSIDE).
 // Až particly doletí do tvaru projektu, solidy "vyrostou" odspodu nahoru: vše nad řezem (uPrintY, world Y)
@@ -153,7 +154,8 @@ const MASK_FRAG = /* glsl */`
 
 const ease = (t) => { const s = t * t * (3 - 2 * t); return t * 0.4 + s * 0.6; };
 
-export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
+// leaving = uživatel odchází z projektu: nejdřív se odtiskne, pak onUnprinted() (App přepne na ORBIT)
+export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leaving = false, onUnprinted }) {
   const { size, gl } = useThree();
   const baseCfg = appConfig?.solidPrint || {};
   const enabled = baseCfg.enabled ?? true;
@@ -248,6 +250,7 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
       printFx.progress = 1; printFx.rays = 0;
       u.uPrintY.value = 1e4; u.uPrintHeat.value = 0;
       printFx.meshes.forEach(fx.show);
+      if (leaving) onUnprinted?.();
       return;
     }
 
@@ -256,13 +259,14 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
     const duration = Math.max(0.1, cfg.duration ?? 4.5);
     const tp = transitionProgress?.get ? transitionProgress.get() : 0;
     const prev = printFx.progress;
-    if (viewMode === 'INSIDE') {
-      // tisk začne, až se particly ustálí ve tvaru projektu
-      if (tp > (cfg.settle ?? 0.97)) s.wait += dt; else s.wait = 0;
+    if (viewMode === 'INSIDE' && !leaving) {
+      // tisk začne, až kamera doletí portálem a particly se ustálí ve tvaru projektu
+      if (portalFx.progress >= 1 && tp > (cfg.settle ?? 0.97)) s.wait += dt; else s.wait = 0;
       if (s.wait > (cfg.delay ?? 0.25)) printFx.progress = Math.min(1, prev + dt / duration);
     } else {
       s.wait = 0;
-      printFx.progress = Math.max(0, prev - dt * (cfg.exitSpeed ?? 4) / duration);
+      // bez solidů není co odtiskovat -> hned
+      printFx.progress = printFx.meshes.size === 0 ? 0 : Math.max(0, prev - dt * (cfg.exitSpeed ?? 4) / duration);
     }
     // DEV: window.__printHold = 0..1 zmrazí tisk na dané fázi (ladění vzhledu)
     if (import.meta.env.DEV && typeof window.__printHold === 'number') printFx.progress = window.__printHold;
@@ -295,6 +299,7 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
     printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.5);
 
     printFx.meshes.forEach(p > 0 ? fx.show : fx.hide);
+    if (leaving && p <= 0) onUnprinted?.();
   });
 
   return null;

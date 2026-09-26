@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { portalFx } from './PortalTransition';
 import { debugMetrics } from './DebugMonitor';
 import { TextContrastPass } from './TextContrastPass';
 import { getHudTextMask } from './hudTextMask';
@@ -817,8 +818,10 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     const safeDelta = Math.min(Math.max(delta, 0), 0.1);
 
     // Plynulý přechod mezi módy
-    const targetTransition = viewMode === 'INSIDE' ? 1.0 : 0.0;
-    transitionRef.current = THREE.MathUtils.damp(transitionRef.current, targetTransition, 5, safeDelta);
+    // vzhled INSIDE (mlha, bez DOF/bloomu) naběhne až když kamera projíždí sklem desky (PortalTransition),
+    // ne hned po kliknutí -> žádný fade do mlhy před průletem
+    const pf = appConfig?.portal || {};
+    transitionRef.current = THREE.MathUtils.smoothstep(portalFx.progress, pf.insideFrom ?? 0.6, pf.insideTo ?? 0.85);
     mat.uniforms.uInsideTransition.value = transitionRef.current;
 
     // Plynulé sledování myši ve screen-space (0.0 až 1.0)

@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, Suspense, useMemo, useEffect } from 'react';
+﻿import React, { useState, useRef, Suspense, useMemo, useEffect, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Box, Text, Environment, useGLTF, PerspectiveCamera } from '@react-three/drei';
 import { a, useSpring, useTransition } from '@react-spring/three';
@@ -14,6 +14,7 @@ import { VolumetricLightPass, CenterLight } from './VolumetricLight';
 import { AtmosphereDust } from './AtmosphereDust';
 import { TvGlass, useTvGlass } from './TvGlass';
 import { SolidPrintDriver, usePrintableSolid } from './SolidPrint';
+import { PortalDriver, portalFx } from './PortalTransition';
 import { useAiLive, useAiLiveTicker } from './AiLiveMode';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
@@ -523,12 +524,24 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
   );
 }
 
-function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep, pageDistance }) {
+function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep, pageDistance, activeIndex }) {
   const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
 
   const { fade } = useSpring({
     fade: visible ? 1 : 0,
     config: { duration: 1000 }
+  });
+
+  // průlet portálem: aktivní deska vyjede ven ke kameře (a za ni), ostatní zmizí s fade
+  const rootRef = useRef();
+  const pushRef = useRef();
+  const outward = useRef(new THREE.Vector3());
+  useFrame(() => {
+    if (rootRef.current) rootRef.current.visible = fade.get() > 0 || portalFx.progress < 1;
+    if (pushRef.current) {
+      const push = (appConfig.portal?.deskPush ?? 1.6) * portalFx.desk;
+      pushRef.current.position.copy(outward.current).multiplyScalar(push);
+    }
   });
 
   const totalPages = Math.max(pagesData.length, 1);
@@ -557,8 +570,16 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
     return geom;
   }, [baseDeskNode]);
 
+  useMemo(() => {
+    if (!baseDeskNode) return;
+    const p = baseDeskNode.getWorldPosition(new THREE.Vector3());
+    outward.current.set(p.x, 0, p.z);
+    if (outward.current.lengthSq() < 1e-8) outward.current.set(0, 0, 1);
+    outward.current.normalize();
+  }, [baseDeskNode]);
+
   return (
-    <a.group visible={fade.to(v => v > 0)}>
+    <group ref={rootRef}>
       {/* SklenÄ›nĂ© desky pro projekty */}
       {pagesData.map((page, idx) => {
         if (!baseDeskNode) return null;
@@ -578,6 +599,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
             position-y={idx * -yStep}
           >
             <group
+              ref={idx === activeIndex ? pushRef : undefined}
               onClick={() => onSelect(idx)}
               onPointerOver={(e) => document.body.style.cursor = 'pointer'}
               onPointerOut={(e) => document.body.style.cursor = 'auto'}
@@ -610,12 +632,12 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
                 />
               )}
             </a.mesh>}
-            <TvGlass tv={tv} videoTexture={currentDeskTex} />
+            <TvGlass tv={tv} videoTexture={currentDeskTex} active={idx === activeIndex} />
             </group>
           </group>
         )
       })}
-    </a.group>
+    </group>
   );
 }
 
@@ -664,14 +686,14 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
   inAngle = orbitAngle + angleDiff;
 
   // Animujeme pouze pĹ™echod (0 aĹľ 1) mezi ORBIT a INSIDE pohledem
-  const { springZ, springY, baseFovProgress, springBaseAngle } = useSpring({
-    springZ: viewMode === 'ORBIT' ? orbitZ : orbitZ, // ZĹŻstĂˇvĂˇ venku (poĹľadavek uĹľivatele)
+  const { springY, springBaseAngle } = useSpring({
     springY: viewMode === 'ORBIT' ? orbitY : orbitY, // ZĹŻstĂˇvĂˇ venku
-    baseFovProgress: viewMode === 'ORBIT' ? 0 : 1,   
     springBaseAngle: viewMode === 'ORBIT' ? orbitAngle : inAngle,
     config: { duration: 1000 }
   });
 
+  // jízda kamery ORBIT -> Camera_In řídí průlet portálem (portalFx), ne vlastní pružina
+  const dollyRef = useRef();
   const gyroMouse = useRef(new THREE.Vector2(0, 0));
 
   // VypoÄŤĂ­tĂˇme vĂ˝slednĂ© FOV a lehkĂ˝ gyroskop v kaĹľdĂ©m snĂ­mku
@@ -681,6 +703,8 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
     // JemnĂ˝, plynule vyhlazenĂ˝ gyroskop kamery na myĹˇ (subtilnĂ­, nezasahuje do posunu ÄŤĂˇstic)
     gyroMouse.current.x = THREE.MathUtils.damp(gyroMouse.current.x, state.pointer.x, 6.0, safeDelta);
     gyroMouse.current.y = THREE.MathUtils.damp(gyroMouse.current.y, state.pointer.y, 6.0, safeDelta);
+
+    if (dollyRef.current) dollyRef.current.position.z = THREE.MathUtils.lerp(orbitZ, inZ, portalFx.camera);
 
     if (cameraRef.current) {
       const isInside = viewMode === 'INSIDE';
@@ -695,7 +719,8 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
       const currentAspect = state.size.width / state.size.height;
        
       // Interpolace zĂˇkladnĂ­ho FOV (napĹ™. mezi 60 a 45) podle toho, kde se nachĂˇzĂ­me v animaci
-      const currentBaseFov = THREE.MathUtils.lerp(orbitFov, inFov, baseFovProgress.get());
+      // + krátké rozšíření FOV ve špičce rychlosti (pocit zrychlení při průletu sklem)
+      const currentBaseFov = THREE.MathUtils.lerp(orbitFov, inFov, portalFx.camera) + portalFx.kick * (appConfig.portal?.fovKick ?? 14);
        
       // Matematika pro zachovĂˇnĂ­ ĹˇĂ­Ĺ™ky zobrazenĂ­
       const REFERENCE_ASPECT = 16 / 9; 
@@ -715,7 +740,7 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
     <a.group position-y={springScrollY}>
       <a.group rotation-y={rotationY}>
         <a.group rotation-y={springBaseAngle}>
-          <a.group position-z={springZ} position-y={springY}>
+          <a.group ref={dollyRef} position-z={orbitZ} position-y={springY}>
             <AnimatedCamera 
               ref={cameraRef}
               makeDefault 
@@ -791,7 +816,10 @@ function App() {
   const [closestIndex, setClosestIndex] = useState(0);
   const [isPreloaded, setIsPreloaded] = useState(false);
   const currentRotRef = useRef(0);
-  const [viewMode, setViewMode] = useState('ORBIT'); 
+  const [viewMode, setViewMode] = useState('ORBIT');
+  // odchod z projektu: nejdřív odtisk solidů, až pak (onUnprinted) ORBIT = průlet portálem zpět
+  const [leaving, setLeaving] = useState(false);
+  const finishLeaving = useCallback(() => { setLeaving(false); setViewMode('ORBIT'); }, []);
 
   const [detectedDnaHeight360, setDetectedDnaHeight360] = useState(30);
   const dnaHeight360 = appConfig.dnaHeight360 || detectedDnaHeight360;
@@ -1028,6 +1056,7 @@ function App() {
           <CameraSpotLight appConfig={appConfig} />
           
           <RotationController rotationY={rotationY} pageDistance={pageDistance} totalPages={totalPages} setClosestIndex={setClosestIndex} />
+          <PortalDriver viewMode={viewMode} activeIndex={closestIndex} appConfig={appConfig} />
           
           <VideoManager 
             allUrls={allVideoUrls}
@@ -1050,6 +1079,7 @@ function App() {
                   textures={textures}
                   yStep={yStep}
                   pageDistance={pageDistance}
+                  activeIndex={closestIndex}
                   onSelect={(idx) => {
                     const val = currentRotRef.current;
                     const exactIdx = val / pageDistance;
@@ -1094,6 +1124,8 @@ function App() {
                   viewMode={viewMode}
                   transitionProgress={transitionProgress}
                   appConfig={appConfig}
+                  leaving={leaving}
+                  onUnprinted={finishLeaving}
                 />
                 <VolumetricLightPass 
                   appConfig={appConfig} 
@@ -1171,11 +1203,11 @@ function App() {
           <div className="instructions" style={{ color: '#aaa', userSelect: 'none' }}>
             Objevuj (Swipe nebo Scroll). KliknutĂ­m na desku vstup do projektu.
           </div>
-        ) : (
+        ) : !leaving && (
           <div style={{ position: 'absolute', bottom: '40px', left: '50%', transform: 'translateX(-50%)' }}>
-             <button 
+             <button
                 style={{ pointerEvents: 'auto', padding: '10px 20px', fontSize: '1.2rem', cursor: 'pointer', background: 'white', color: 'black', border: 'none', borderRadius: '30px' }}
-                onClick={() => setViewMode('ORBIT')}
+                onClick={() => setLeaving(true)}
              >
                 Opustit projekt
              </button>
