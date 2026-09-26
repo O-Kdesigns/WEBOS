@@ -21,6 +21,7 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 | `GEMINI.md` | 15 výkonnostních pravidel (video, GPU, Zero-Alloc) – **MUSÍ se dodržovat** |
 | `.agents/AGENTS.md` | Architektura scény, CMS, asset pipeline pravidla |
 | `REMOTE_SETUP.md` | Git workflow, push před odchodem, GitHub Pages workflow |
+| `LIGHTING.md` | Všechna světla, falešná světla, samosvit a post-processing podle scénářů (ORBIT / průlet / INSIDE / 3D tisk). **Při změně nebo nálezu světla ho aktualizuj.** |
 | `src/App.jsx` | Hlavní orchestrace scény (~43KB) – VideoManager, videoTextureCache |
 | `vite.config.js` | Plugin pro auto-skenování `public/obsah/` — **NEDOTÝKAT se bez konzultace** |
 
