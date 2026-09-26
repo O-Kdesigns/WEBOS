@@ -111,7 +111,7 @@
     "transitionMinDark": 0
   },
   "powerSaving": {
-    "pauseOnBlur": true,
+    "pauseOnBlur": false,
     "pauseAudioOnBlur": true,
     "showBadge": true
   },
