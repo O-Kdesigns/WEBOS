@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useSpring } from '@react-spring/three';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { withBase } from './assetUrl';
 
 // 1x1 �ern� fallback textura
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
@@ -92,7 +93,7 @@ export function VolumetricVideoBackground({
   const cfg = appConfig.volumetricVideo || {};
   const isEnabled = cfg.enabled ?? true;
 
-  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  const { nodes } = useGLTF(withBase('/obsah/everything/newworldorder.glb'));
   const camIn = nodes?.Camera_In || nodes?.Camera_IN;
   let inY = appConfig.cameraHeight ?? 1.5;
   let inAngle = 0;

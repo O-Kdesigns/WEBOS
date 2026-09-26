@@ -2,17 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useProgress } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import { videoTextureCache } from './App';
+import { resolveAssetUrl } from './assetUrl';
 import './Preloader.css';
 
-const resolveAssetUrl = (url) => {
-  if (!url) return '';
-  let finalUrl = '';
-  if (url.startsWith('/obsah/')) finalUrl = url;
-  else if (url.startsWith('obsah/')) finalUrl = '/' + url;
-  else if (url.startsWith('/')) finalUrl = url;
-  else finalUrl = '/obsah/' + url;
-  return encodeURI(finalUrl);
-};
 
 export function Preloader({ activeVideoUrl, onLoaded }) {
   const { progress: dreiProgress, total: dreiTotal } = useProgress();

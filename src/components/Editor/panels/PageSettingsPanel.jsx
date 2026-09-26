@@ -1,6 +1,7 @@
 import React from 'react';
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
 import { SolidLinkPanel } from './SolidLinkPanel';
+import { resolveAssetUrl, withBase } from '../../../assetUrl';
 
 export function PageSettingsPanel({ page, index, updatePage, deletePage, assets, getFilteredAssets, openSections, toggleSection, updateParticlesSettings, blenderNodes }) {
   return (
@@ -32,10 +33,10 @@ export function PageSettingsPanel({ page, index, updatePage, deletePage, assets,
                 {page.videoUrl && (
                   <div style={{ marginTop: '10px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: '#000', display: 'flex', justifyContent: 'center' }}>
                     <video 
-                      src={encodeURI(`/obsah/${page.videoUrl.replace(/^\/?(obsah\/)?/, '')}`)}
+                      src={resolveAssetUrl(page.videoUrl)}
                       onError={e => {
                         // Video chybí (např. GitHub Pages) -> placeholder
-                        const fallback = `${import.meta.env.BASE_URL}placeholder.mp4`;
+                        const fallback = withBase('/placeholder.mp4');
                         if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback;
                       }}
                       controls

@@ -24,19 +24,11 @@ import { CanvasDebugTracker, DebugMonitorHUD } from './DebugMonitor';
 import { Preloader } from './Preloader';
 import { HUD2D } from './HUD2D';
 import './App.css';
+import { resolveAssetUrl, withBase } from './assetUrl';
 
-const resolveAssetUrl = (url) => {
-  if (!url) return '';
-  let finalUrl = url;
-  if (url.startsWith('/obsah/')) finalUrl = url;
-  else if (url.startsWith('obsah/')) finalUrl = '/' + url;
-  else if (url.startsWith('/')) finalUrl = url;
-  else finalUrl = '/obsah/' + url;
-  return encodeURI(finalUrl);
-};
 
 // Malé smyčkové video, které se přehraje všude, kde se produkční video nenačte (např. GitHub Pages)
-export const VIDEO_FALLBACK_URL = `${import.meta.env.BASE_URL}placeholder.mp4`;
+export const VIDEO_FALLBACK_URL = withBase('/placeholder.mp4');
 
 // --- Video Texture Cache (module-level, persists across renders) ---
 export const videoTextureCache = new Map();
@@ -314,7 +306,7 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
 const DNA_ONLY_SETTINGS = { hasParticles: true, dnaOnly: true, colorMode: 'video', sizeRandomness: 0.5, selectedNodes: [] };
 
 function ProjectContent({ viewMode, page, appConfig, videoTexture, currentIndex, pageDistance, insideRotationY, rotationY, transitionProgress }) {
-  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  const { nodes } = useGLTF(withBase('/obsah/everything/newworldorder.glb'));
 
   if (!page) return null;
 
@@ -465,7 +457,7 @@ function InsideProjectPivot({
 }
 
 export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, pageDistance }) {
-  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  const { nodes } = useGLTF(withBase('/obsah/everything/newworldorder.glb'));
   const groupRef = useRef();
   const prevRot = useRef(rotationY.get());
   const smoothTilt = useRef(0);
@@ -540,7 +532,7 @@ export function GlobalBackground({ appConfig, videoTexture, visible, rotationY, 
 }
 
 function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep, pageDistance, activeIndex }) {
-  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  const { nodes } = useGLTF(withBase('/obsah/everything/newworldorder.glb'));
 
   const { fade } = useSpring({
     fade: visible ? 1 : 0,
@@ -660,7 +652,7 @@ const AnimatedCamera = a(PerspectiveCamera);
 
 // --- KamerovĂ˝ Rig ---
 function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig }) {
-  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  const { nodes } = useGLTF(withBase('/obsah/everything/newworldorder.glb'));
   const cameraRef = useRef();
   
   const camChoose = nodes.Camera_CHoose || nodes.Camera_Choose || nodes.Camera || nodes['Camera.001'];
@@ -798,7 +790,7 @@ function RenderRestorationHandler({ isSuspended }) {
 
 
 function DnaHeightDetector({ setDnaHeight360 }) {
-  const { nodes } = useGLTF('/obsah/everything/newworldorder.glb');
+  const { nodes } = useGLTF(withBase('/obsah/everything/newworldorder.glb'));
   useEffect(() => {
     const deskKeys = Object.keys(nodes).filter(k => k.startsWith('GlassDesk'));
     if (deskKeys.length >= 2) {

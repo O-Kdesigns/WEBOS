@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
 import { useGLTF } from '@react-three/drei';
+import { withBase } from './assetUrl';
 
 export function Grass({ mesh, count = 3000, settings = {} }) {
   if (settings.grassModelType === 'custom' && settings.grassCustomModel) {
@@ -13,7 +14,7 @@ export function Grass({ mesh, count = 3000, settings = {} }) {
 // Společná funkce pro získání materiálu trávy na základě settings
 function getGrassMaterial(settings) {
   if (settings.grassColorMode === 'texture' && settings.grassTexture) {
-    const tex = new THREE.TextureLoader().load(`/obsah/${settings.grassTexture}`);
+    const tex = new THREE.TextureLoader().load(withBase(`/obsah/${settings.grassTexture}`));
     tex.colorSpace = THREE.SRGBColorSpace;
     return new THREE.MeshStandardMaterial({ 
       map: tex,
@@ -48,7 +49,7 @@ function CustomGrass({ mesh, count, settings }) {
   const meshRef = useRef();
   
   // Načteme uživatelský GLTF model
-  const { scene } = useGLTF(`/obsah/${settings.grassCustomModel}`);
+  const { scene } = useGLTF(withBase(`/obsah/${settings.grassCustomModel}`));
   
   // Najdeme první validní Mesh v nahraném modelu
   const customGeometry = useMemo(() => {

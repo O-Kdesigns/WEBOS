@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import defaultTracks from './tracks.json';
 import './MusicPlayer.css';
+import { withBase } from './assetUrl';
 
 const COOL_TITLES = [
   "BXRDV",
@@ -153,7 +154,7 @@ export function MusicPlayer({ tracks, volume = 0.4, isSuspended = false }) {
   useEffect(() => {
     if (!audioRef.current || !currentTrack) return;
     setHasError(false);
-    audioRef.current.src = currentTrack.file;
+    audioRef.current.src = withBase(currentTrack.file);
     audioRef.current.load();
 
     if (userInteractedRef.current || isPlaying) {

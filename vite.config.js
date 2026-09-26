@@ -151,6 +151,8 @@ ${incidents}
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GitHub Pages běží na podcestě /WEBOS/, lokál a Netlify na /
+  base: process.env.GITHUB_PAGES ? '/WEBOS/' : '/',
   plugins: [
     react(),
     portfolioCMSPlugin()

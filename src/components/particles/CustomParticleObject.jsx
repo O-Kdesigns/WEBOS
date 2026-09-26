@@ -4,9 +4,10 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
 import { ParticleMaterial } from './ParticleMaterial';
+import { withBase } from '../../assetUrl';
 
 export function CustomParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance }) {
-  const { scene } = useGLTF(`/obsah/${settings.customModel}`);
+  const { scene } = useGLTF(withBase(`/obsah/${settings.customModel}`));
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const colors = useMemo(getColors, []);

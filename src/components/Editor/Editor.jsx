@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import '../../Editor.css';
 import { useEditorState } from './useEditorState';
+import { withBase } from '../../assetUrl';
 import { OrbitSettingsPanel } from './panels/OrbitSettingsPanel';
 import { InsideSettingsPanel } from './panels/InsideSettingsPanel';
 import { PageSettingsPanel } from './panels/PageSettingsPanel';
@@ -78,7 +79,7 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
       .then(data => setAssets(data));
       
     const loader = new GLTFLoader();
-    loader.load('/obsah/everything/newworldorder.glb?v=' + Date.now(), (gltf) => {
+    loader.load(withBase('/obsah/everything/newworldorder.glb') + '?v=' + Date.now(), (gltf) => {
        const names = [];
        gltf.scene.traverse(child => {
           if (child.name && child.name !== 'Scene') {
