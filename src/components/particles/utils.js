@@ -92,11 +92,11 @@ void main() {
     vec4 base = texture2D(tBasePosition, uv);
     vec4 dna = texture2D(tDnaPosition, uv);
     
-    // 0. Unášení s rotací skupiny (jen tvar projektu, ne DNA / rezervní kostka)
+    // 0. Unášení s rotací skupiny (jen tvar projektu – váha tProgress; platí i pro rezervní particly, v INSIDE jsou součástí tvaru)
     // zbytek rotace, který particly jen dobíhají, je omezený na 0.2 * uReturnSpeed za snímek:
     // dozvuk max ~0.2 rad a poloměr drží (> 98 %) i při prudkém švihnutí
     float carry = max(uCarry, 1.0 - 0.2 * uReturnSpeed / max(uDeltaAngle, 1e-5));
-    float carryW = carry * smoothstep(0.0, 1.0, uTransitionProgress) * step(0.0, dna.w);
+    float carryW = carry * smoothstep(0.0, 1.0, uTransitionProgress);
     pos.xyz = mix(pos.xyz, (uDeltaMat * vec4(pos.xyz, 1.0)).xyz, carryW);
 
     // 1. Aplikace fyzikální rychlosti (momentum od myši)
