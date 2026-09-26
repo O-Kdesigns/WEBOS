@@ -198,28 +198,33 @@ const VolumetricLightShader = {
     uniform float uPrintRayLen;
     uniform vec2 uPrintCenter;
 
-    // Paprsky 3D tisku: pixel sbírá žár z masky směrem OD středu -> světlo teče ze žhavé vrstvy
-    // k bodu uPrintCenter (televize), ven za vrstvu nic nesvítí.
+    // Paprsky 3D tisku: tiskárna svítí z bodu ZA kamerou, paprsek vede z žhavé vrstvy ke kameře.
+    // Na obrazovce to je klasický god ray: pixel sbírá žár z masky směrem K úběžníku uPrintCenter,
+    // takže světlo teče z vrstvy ven (od středu k okrajům) a mezi vrstvou a středem nic nesvítí.
     vec3 printRays(vec2 uv, float dither) {
-      vec2 d = (uv - uPrintCenter) * vec2(uAspect, 1.0);
-      float dl = length(d);
-      vec2 dir = dl > 0.0001 ? d / dl : vec2(0.0, 1.0);
-      vec2 stepUv = dir / vec2(uAspect, 1.0) * (uPrintRayLen / 40.0);
-      vec2 s = uv + stepUv * dither;
+      vec2 toC = (uPrintCenter - uv) * vec2(uAspect, 1.0);
+      float dist = length(toC);
+      if (dist < 0.0001) return vec3(0.0);
+      vec2 dir = toC / dist;
+      float stepLen = uPrintRayLen / 40.0;
+      vec2 stepUv = dir / vec2(uAspect, 1.0) * stepLen;
+      // plný jitter startu (IGN) – jinak z 40 kroků vznikají soustředné pruhy
+      float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + dither);
+      vec2 s = uv + stepUv * jit;
       vec3 acc = vec3(0.0);
       float w = 1.0;
       for (int i = 0; i < 40; i++) {
+        if ((float(i) + jit) * stepLen > dist) break;   // za úběžník (ke kameře) už paprsek nevede
         s += stepUv;
-        acc += texture2D(tPrintMask, clamp(s, vec2(0.0), vec2(1.0))).rgb * w;
+        acc += texture2D(tPrintMask, s).rgb * w;
         w *= 0.955;
       }
-      // pruhování podle úhlu (jednotlivé paprsky místo plochého klínu), pomalu se vlní
-      float ang = atan(d.y, d.x) * 38.0 + uTime * 0.4;
+      // pruhování podle úhlu (jednotlivé paprsky místo plochého vějíře), pomalu se vlní
+      float ang = atan(toC.y, toC.x) * 38.0 + uTime * 0.4;
       float fa = fract(ang), ia = floor(ang);
       float h0 = fract(sin(ia * 91.345) * 47453.5453), h1 = fract(sin((ia + 1.0) * 91.345) * 47453.5453);
       float streak = 0.45 + 0.9 * mix(h0, h1, fa * fa * (3.0 - 2.0 * fa));
-      // u cíle se paprsky měkce slijí, ať nevznikne ostrá špička
-      return acc * (uPrintRays / 40.0) * streak * smoothstep(0.0, 0.14, dl);
+      return acc * (uPrintRays / 40.0) * streak;
     }
 
     varying vec2 vUv;
@@ -923,7 +928,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       mat.uniforms.uLightColor.value.set(vl.color);
     }
 
-    // 0. Maska žhavé vrstvy 3D tisku (jen když se tiskne)
+    // 0. Maska žhavé vrstvy 3D tisku (jen když se tiskne) – dostane stejnou hloubkovou mlhu jako INSIDE
+    const pu = printFx.uniforms;
+    pu.uPrintFog.value.set(mat.uniforms.uFogNear.value, mat.uniforms.uFogFar.value, mat.uniforms.uFogCurve.value,
+      mat.uniforms.uFogDensity.value * masterMult);
+    pu.uPrintFogMax.value = Math.min(1, Math.max(0, mat.uniforms.uFogDensity.value)) * mat.uniforms.uEnableDepthFog.value * masterMult;
     const printMask = printFx.renderMask ? printFx.renderMask(gl, camera) : null;
     mat.uniforms.uPrintRays.value = printMask ? printFx.rays : 0;
     mat.uniforms.tPrintMask.value = printMask || dummyTexture;

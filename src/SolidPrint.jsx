@@ -5,8 +5,9 @@ import * as THREE from 'three';
 // 3D tisk solidů při vstupu do projektu (INSIDE).
 // Až particly doletí do tvaru projektu, solidy "vyrostou" odspodu nahoru: vše nad řezem (uPrintY, world Y)
 // se zahodí, vrstva u řezu žhne (láva -> oranžová -> tmavě rudá) a přes otevřený řez je vidět žhavé jádro.
-// Žhavá vrstva se navíc kreslí do malé masky, ze které VolumetricLight dělá paprsky sbíhající se
-// DOVNITŘ k bodu na obrazovce (televize) – ne ven jako klasické god rays.
+// Žhavá vrstva se navíc kreslí do malé masky (s hloubkovou mlhou INSIDE), ze které VolumetricLight dělá
+// paprsky jako god rays v ORBITu: tiskárna svítí z místa ZA kamerou, paprsky vedou z tištěné vrstvy ke kameře,
+// na obrazovce tedy utíkají od vrstvy ven od úběžníku (printFx.center, výchozí střed obrazu).
 // Sdílené uniformy = jedna hodnota pro všechny solidy, useFrame jen přepisuje čísla (žádné alokace).
 
 const shared = {
@@ -19,7 +20,11 @@ const shared = {
   uPrintLayers: { value: 260 },
   uPrintCool: { value: new THREE.Color('#7a1204') },
   uPrintGlow: { value: new THREE.Color('#ff5a12') },
-  uPrintHot: { value: new THREE.Color('#fff0c8') }
+  uPrintHot: { value: new THREE.Color('#fff0c8') },
+  // hloubková mlha INSIDE (near, far, curve, density) + max – plní VolumetricLight, maska ji musí respektovat,
+  // jinak žhne i vrstva objektů schovaných v mlze (plave v prázdnu)
+  uPrintFog: { value: new THREE.Vector4(0.7, 4.5, 1.2, 1.05) },
+  uPrintFogMax: { value: 0.7 }
 };
 
 export const printFx = {
@@ -27,8 +32,8 @@ export const printFx = {
   meshes: new Set(),
   progress: 0,          // 0 = nic nevytištěno, 1 = hotovo
   rays: 0,              // síla paprsků pro VolumetricLight (0 = vypnuto, maska se nekreslí)
-  rayLength: 0.55,
-  center: new THREE.Vector2(0.5, 0.4),
+  rayLength: 0.9,
+  center: new THREE.Vector2(0.5, 0.5),
   renderMask: null      // (gl, camera) => texture | null, nastaví SolidPrintDriver
 };
 if (import.meta.env.DEV && typeof window !== 'undefined') window.__printFx = printFx;
@@ -119,20 +124,30 @@ export function usePrintableSolid(root) {
 
 const MASK_VERT = /* glsl */`
   varying vec3 vPrintW;
+  varying float vViewZ;
   void main() {
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vPrintW = wp.xyz;
-    gl_Position = projectionMatrix * viewMatrix * wp;
+    vec4 vp = viewMatrix * wp;
+    vViewZ = -vp.z;
+    gl_Position = projectionMatrix * vp;
   }
 `;
 const MASK_FRAG = /* glsl */`
   ${GLSL_COMMON}
+  uniform vec4 uPrintFog;
+  uniform float uPrintFogMax;
+  varying float vViewZ;
   void main() {
     float pd = printDist();
     if (pd > 0.0) discard;
     float h = printHeatAt(pd, gl_FrontFacing ? 1.0 : 2.0);
+    // stejná hloubková mlha jako v INSIDE pasu -> žár vzdálených (v mlze neviditelných) částí nesvítí
+    float nz = clamp((vViewZ - uPrintFog.x) / max(0.001, uPrintFog.y - uPrintFog.x), 0.0, 1.0);
+    float fogA = nz >= 1.0 ? uPrintFogMax : clamp(pow(nz, uPrintFog.z) * uPrintFog.w, 0.0, uPrintFogMax);
+    float vis = 1.0 - fogA;
     // jen horká vrstva; zbytek zapíše černou (a hloubku), aby zakryl žár za sebou
-    gl_FragColor = vec4(printRamp(clamp(h, 0.0, 1.0)) * h * uPrintIntensity, 1.0);
+    gl_FragColor = vec4(printRamp(clamp(h, 0.0, 1.0)) * h * uPrintIntensity * vis, 1.0);
   }
 `;
 
@@ -140,8 +155,8 @@ const ease = (t) => { const s = t * t * (3 - 2 * t); return t * 0.4 + s * 0.6; }
 
 export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
   const { size, gl } = useThree();
-  const cfg = appConfig?.solidPrint || {};
-  const enabled = cfg.enabled ?? true;
+  const baseCfg = appConfig?.solidPrint || {};
+  const enabled = baseCfg.enabled ?? true;
 
   const gpu = useMemo(() => {
     const material = new THREE.ShaderMaterial({
@@ -166,7 +181,7 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
   }, [size.width, size.height, dpr]);
 
   useEffect(() => () => target.dispose(), [target]);
-  useEffect(() => () => { gpu.material.dispose(); gpu.proxies.clear(); }, [gpu]);
+  useEffect(() => () => { gpu.material.dispose(); gpu.scene.clear(); gpu.proxies.clear(); }, [gpu]);
 
   const st = useRef({ wait: 0, yMin: 0, yMax: 1, box: new THREE.Box3(), clear: new THREE.Color() });
 
@@ -183,6 +198,9 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
         gpu.proxies.set(mesh, p);
         gpu.scene.add(p);
       }
+      // proxy visí přímo ve scéně s identitou -> render si matrixWorld přepočítá z matrix,
+      // proto se kopíruje do matrix (samotný matrixWorld by se přepsal na identitu)
+      p.matrix.copy(mesh.matrixWorld);
       p.matrixWorld.copy(mesh.matrixWorld);
     };
     const dropStale = (p, mesh) => {
@@ -194,6 +212,7 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
   useEffect(() => {
     const s = st.current;
     printFx.maskTarget = target;
+    if (import.meta.env.DEV) printFx._gpu = gpu;
     printFx.renderMask = (renderer, camera) => {
       if (printFx.rays <= 0.001 || printFx.meshes.size === 0) return null;
       sync();
@@ -232,6 +251,8 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
       return;
     }
 
+    // DEV: window.__printOverride = {...} nahradí config solidPrint (živé ladění bez reloadu)
+    const cfg = (import.meta.env.DEV && window.__printOverride) || baseCfg;
     const duration = Math.max(0.1, cfg.duration ?? 4.5);
     const tp = transitionProgress?.get ? transitionProgress.get() : 0;
     const prev = printFx.progress;
@@ -268,9 +289,10 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig }) {
     const heat = THREE.MathUtils.smoothstep(p, 0, 0.04) * (1 - THREE.MathUtils.smoothstep(p, 0.85, 1));
     u.uPrintHeat.value = heat;
 
-    printFx.rays = heat * (cfg.raysStrength ?? 3.0);
-    printFx.rayLength = cfg.rayLength ?? 0.55;
-    printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.34);
+    printFx.rays = heat * (cfg.raysStrength ?? 10.0);
+    printFx.rayLength = cfg.rayLength ?? 0.9;
+    // tiskárna je ZA kamerou -> paprsky míří ke kameře = na obrazovce utíkají ven od úběžníku (střed)
+    printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.5);
 
     printFx.meshes.forEach(p > 0 ? fx.show : fx.hide);
   });
