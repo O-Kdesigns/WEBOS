@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRenderer.js';
+import { FLUID_DEFAULTS, getFluid, createFrontPass, REST_TARGET_GLSL } from './ParticleFluid';
 
 // Pomocná funkce pro vygenerování palety
 export const getColors = () => [
@@ -13,12 +14,26 @@ export const getColors = () => [
 ];
 
 // --- GPGPU SHADERS ---
-const fragmentShaderVel = `
+const fragmentShaderVel = REST_TARGET_GLSL + `
 uniform vec3 uMousePos;
 uniform vec3 uMouseDir;
 uniform vec3 uMouseVel;
 uniform float uMouseRadius;
 uniform float uMouseForce;
+// Vodnatá fyzika (ParticleFluid.js): proud z neviditelné mřížky tekutiny v místě particlu na obrazovce.
+uniform float uFluidOn;
+uniform sampler2D tFluid;     // rychlost proudu (buňky mřížky / s)
+uniform vec2 uFluidTexel;     // 1 / rozměr mřížky
+uniform sampler2D tFront;     // 1 / hloubka nejbližšího particlu v buňce obrazovky
+uniform mat4 uMVP;            // lokální prostor meshe -> clip
+uniform vec3 uCamRight;       // osa X kamery v lokálním prostoru meshe (délka = 1 world)
+uniform vec3 uCamUp;
+uniform vec2 uProj;           // projectionMatrix[0][0], [1][1]
+uniform float uDt;
+uniform float uFluidForce;
+uniform float uCoupling;
+uniform float uFriction;
+uniform float uFrontShell;
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -48,8 +63,29 @@ void main() {
         }
     }
     
-    // Tření - rychle zpomalí "cáknutí"
-    vel.xyz *= 0.90;
+    // VODA: particl se přizpůsobuje proudu tekutiny (dojezd, víření, rozrážení). Jen přední vrstva
+    // particlů (do uFrontShell za nejbližším particlem v té části obrazovky), zadní zůstanou.
+    // Proud je v obrazovce -> přepočet na 3D posun podle hloubky: blízké i vzdálené se vizuálně hýbou stejně.
+    float friction = 0.90;
+    if (uFluidOn > 0.5) {
+        friction = uFriction;
+        vec4 c = uMVP * vec4(pos.xyz, 1.0);
+        vec2 suv = c.xy / max(c.w, 1e-4) * 0.5 + 0.5;
+        if (c.w > 0.0 && suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0) {
+            // přední vrstva podle klidového tvaru (viz REST_TARGET_GLSL)
+            vec4 rc = uMVP * vec4(restTarget(uv), 1.0);
+            vec2 ruv = rc.xy / max(rc.w, 1e-4) * 0.5 + 0.5;
+            float frontInv = texture2D(tFront, ruv).x;
+            float behind = frontInv > 0.0 ? rc.w - 1.0 / frontInv : 0.0;
+            float front = 1.0 - smoothstep(uFrontShell * 0.5, uFrontShell, behind);
+            vec2 ndc = texture2D(tFluid, suv).xy * uFluidTexel * 2.0 * uDt; // posun v NDC za snímek
+            vec3 flow = (uCamRight * (ndc.x * c.w / uProj.x) + uCamUp * (ndc.y * c.w / uProj.y)) * uFluidForce;
+            vel.xyz += (flow - vel.xyz) * uCoupling * front;
+        }
+    }
+
+    // Tření - zpomalí "cáknutí"
+    vel.xyz *= friction;
     
     gl_FragColor = vel;
 }
@@ -257,6 +293,12 @@ export function useGPGPU(count, particlesData, gl) {
     velVar.material.uniforms.uMouseVel = { value: new THREE.Vector3(0,0,0) };
     velVar.material.uniforms.uMouseRadius = { value: 2.0 };
     velVar.material.uniforms.uMouseForce = { value: 1.0 };
+    Object.assign(velVar.material.uniforms, {
+      uFluidOn: { value: 0 }, tFluid: { value: null }, uFluidTexel: { value: new THREE.Vector2() }, tFront: { value: null },
+      uMVP: { value: new THREE.Matrix4() }, uCamRight: { value: new THREE.Vector3() }, uCamUp: { value: new THREE.Vector3() },
+      uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
+      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 },
+    });
     
     posVar.material.uniforms.uTime = { value: 0 };
     posVar.material.uniforms.uFloatSpeed = { value: 1.0 };
@@ -282,10 +324,15 @@ export function useGPGPU(count, particlesData, gl) {
     posVar.material.uniforms.uSurfMargin = { value: 0.3 };
     posVar.material.uniforms.uSurfMaxPen = { value: 0.15 };
     
+    // velocity shader počítá klidovou pozici (přední vrstva pro vodu) -> sdílené objekty uniforem cíle
+    const pu = posVar.material.uniforms;
+    const targetUniforms = { tBasePosition: pu.tBasePosition, tDnaPosition: pu.tDnaPosition, uFinalMat: pu.uFinalMat, uTransitionProgress: pu.uTransitionProgress, uCameraY: pu.uCameraY };
+    Object.assign(velVar.material.uniforms, targetUniforms);
+
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);
     
-    const computeObj = { gpuCompute, velVar, posVar, size, disposed: false, writtenData: dataRef.current };
+    const computeObj = { gpuCompute, velVar, posVar, size, targetUniforms, disposed: false, writtenData: dataRef.current };
     setCompute(computeObj);
     if (import.meta.env.DEV) { (window.__gpgpu = window.__gpgpu || new Set()).add(computeObj); }
 
@@ -329,8 +376,14 @@ function disposeCompute(c) {
   // Data textures that are not owned by GPUComputationRenderer
   u.tBasePosition.value?.dispose();
   u.tDnaPosition.value?.dispose();
+  c.front?.dispose();
   // Disposes render targets, initial value textures, materials and the fullscreen quad
   c.gpuCompute.dispose();
+}
+
+function mergeFluidCfg(prev, src) {
+  if (prev && prev.src === src) return prev;
+  return { ...FLUID_DEFAULTS, ...(src || {}), src };
 }
 
 // --- LOGIKA ---
@@ -347,6 +400,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
   const worldCameraPos = useRef(new THREE.Vector3());
   const localCameraPos = useRef(new THREE.Vector3());
   const rayDir = useRef(new THREE.Vector3());
+  const fluidCfgRef = useRef(null);
+  const mvp = useMemo(() => new THREE.Matrix4(), []);
 
   useEffect(() => {
     const handleReset = () => {
@@ -362,7 +417,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     };
   }, [mouseVelocity]);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!meshRef.current || !compute || compute.disposed) return;
     const time = state.clock.getElapsedTime();
     
@@ -418,7 +473,39 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     state.camera.getWorldPosition(worldCameraPos.current);
     localCameraPos.current.copy(worldCameraPos.current).applyMatrix4(invMat.current);
 
-    if (hasIntersection) {
+    // Vodnatá fyzika (ParticleFluid.js) nahrazuje starý štětec; config particlePhysics.fluid.enabled = false -> starý štětec
+    const fluidCfg = fluidCfgRef.current = mergeFluidCfg(fluidCfgRef.current, phys.fluid);
+    let fluidOn = false;
+    if (fluidCfg.enabled) {
+      const fluid = getFluid(state.gl);
+      fluid.update(state, delta, fluidCfg);
+      fluidOn = !!fluid.velocity;
+      if (fluidOn) {
+        const mesh = meshRef.current, cam = state.camera;
+        mvp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).multiply(mesh.matrixWorld);
+        const invScale = 1 / Math.max(1e-6, mesh.matrixWorld.getMaxScaleOnAxis());
+        velUniforms.uCamRight.value.setFromMatrixColumn(cam.matrixWorld, 0).transformDirection(invMat.current).multiplyScalar(invScale);
+        velUniforms.uCamUp.value.setFromMatrixColumn(cam.matrixWorld, 1).transformDirection(invMat.current).multiplyScalar(invScale);
+        velUniforms.uProj.value.set(cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]);
+        velUniforms.uMVP.value.copy(mvp);
+        velUniforms.tFluid.value = fluid.velocity;
+        velUniforms.uFluidTexel.value.copy(fluid.texel);
+        velUniforms.uDt.value = Math.min(Math.max(delta, 1 / 240), 1 / 30);
+        velUniforms.uFluidForce.value = mouseMult;
+        velUniforms.uCoupling.value = fluidCfg.coupling;
+        velUniforms.uFriction.value = fluidCfg.friction;
+        velUniforms.uFrontShell.value = fluidCfg.frontShell;
+        // mapa nejbližších particlů (klidový tvar)
+        if (!compute.front) compute.front = createFrontPass(compute.size, compute.targetUniforms);
+        const fh = Math.max(16, Math.round(fluidCfg.frontRes));
+        compute.front.render(state.gl, mvp,
+          Math.max(16, Math.round(fh * state.size.width / state.size.height)), fh, fluidCfg.frontPointSize);
+        velUniforms.tFront.value = compute.front.texture;
+      }
+    }
+    velUniforms.uFluidOn.value = fluidOn ? 1 : 0;
+
+    if (hasIntersection && !fluidCfg.enabled) {
       meshRef.current.worldToLocal(rawTarget.current);
 
       if (smoothedMouse.current.x === 9999) {

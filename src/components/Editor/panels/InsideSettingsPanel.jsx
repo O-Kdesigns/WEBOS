@@ -1,7 +1,10 @@
 ﻿import React from 'react';
 import { DenseSlider, DenseToggle, DenseColor, DashboardCard } from './OrbitSettingsPanel';
+import { FLUID_DEFAULTS } from '../../particles/ParticleFluid';
 
 export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric, updateInsideFog, updatePhysics, updateParticlePhysics, updateVolumetricVideo, updateVolumetricDepth, updateUi2d, updateUi2dBottomLeft, updateUi2dBottomLeftItem, addUi2dBottomLeftItem, removeUi2dBottomLeftItem, updateUi2dPillButton, openSections, toggleSection, touchSection }) {
+  const fluid = appConfig.particlePhysics?.fluid || {};
+  const updateFluid = (field, value) => updateParticlePhysics('fluid', { ...fluid, [field]: value });
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
       
@@ -41,7 +44,17 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
         <DenseSlider desc="Jak moc částice drží se solidy při otáčení. 1 = přesně s nimi, nižší = částice se opožďují (dozvuk)." label="Unášení částic" min={0} max={1} step={0.01} value={appConfig.particlePhysics?.rotationCarry ?? 0.85} color="#ec4899" onChange={v => updateParticlePhysics('rotationCarry', v)} />
 
         <div style={{ height: '8px' }} />
-        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Interakce myší (Laser)</div>
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Voda (myš)</div>
+        <DenseToggle desc="Vodnatá fyzika: myš rozhrne jen přední particly, proud dojíždí a víří. Vypnuto = starý štětec (Laser níže)." label="Vodnatá fyzika" checked={fluid.enabled ?? FLUID_DEFAULTS.enabled} color="#ec4899" onChange={v => updateFluid('enabled', v)} />
+        <DenseSlider desc="Šířka stopy myši ve vodě (podíl výšky obrazovky)." label="Šířka stopy" min={0.01} max={0.15} step={0.005} value={fluid.splatRadius ?? FLUID_DEFAULTS.splatRadius} color="#ec4899" onChange={v => updateFluid('splatRadius', v)} />
+        <DenseSlider desc="Síla proudu. 1 = voda v centru stopy má rychlost kurzoru." label="Síla proudu" min={0.1} max={3} step={0.05} value={fluid.force ?? FLUID_DEFAULTS.force} color="#ec4899" onChange={v => updateFluid('force', v)} />
+        <DenseSlider desc="Útlum proudu. Menší = delší dojezd vody po zastavení myši." label="Útlum (dojezd)" min={0.1} max={6} step={0.1} value={fluid.dissipation ?? FLUID_DEFAULTS.dissipation} color="#ec4899" onChange={v => updateFluid('dissipation', v)} />
+        <DenseSlider desc="Víření vody (malé víry za stopou)." label="Víření" min={0} max={60} step={1} value={fluid.curl ?? FLUID_DEFAULTS.curl} color="#ec4899" onChange={v => updateFluid('curl', v)} />
+        <DenseSlider desc="Jak rychle se particl nechá strhnout proudem (menší = líné, těžší particly)." label="Strhávání particlů" min={0.02} max={1} step={0.01} value={fluid.coupling ?? FLUID_DEFAULTS.coupling} color="#ec4899" onChange={v => updateFluid('coupling', v)} />
+        <DenseSlider desc="Tloušťka přední vrstvy particlů, kterou voda posouvá (world). Zadní zůstanou." label="Hloubka přední vrstvy" min={0.02} max={1} step={0.01} value={fluid.frontShell ?? FLUID_DEFAULTS.frontShell} color="#ec4899" onChange={v => updateFluid('frontShell', v)} />
+
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Interakce myší (Laser – jen když je voda vypnutá)</div>
         <DenseSlider desc="Síla výbuchu, který rozfoukne částice při přejetí myší." label="Síla odfouknutí myší" min={0.1} max={5.0} step={0.1} value={appConfig.particlePhysics?.mouseForce ?? 1.0} color="#ec4899" onChange={v => updateParticlePhysics('mouseForce', v)} />
         <DenseSlider desc="Dosah kolizní kuličky myši rozrážející částice." label="Průměr stopy (Radius)" min={0.1} max={5.0} step={0.1} value={appConfig.particlePhysics?.mouseRadius ?? 2.0} color="#ec4899" onChange={v => updateParticlePhysics('mouseRadius', v)} />
         <DenseSlider desc="Délka pomyslného průniku laseru z kurzoru skrz scénu." label="Délka průniku (Laser)" min={0.1} max={20.0} step={0.1} value={appConfig.particlePhysics?.laserLength ?? 5.0} color="#ec4899" onChange={v => updateParticlePhysics('laserLength', v)} />
