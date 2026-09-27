@@ -43,8 +43,9 @@ uniform float uHoldDecay;      // 1 / (zpoždění + náběh návratu) – jak r
 // Fyzikální návrat (vodní režim): pružina v rychlosti místo posouvání pozice -> particl si nese svou
 // hybnost, kmity vln i víření a k cíli se stáčí po oblouku. Sdílené uniformy s pozičním shaderem.
 uniform float uPhysReturn;     // 1 = návrat pružinou zde, 0 = starý posun pozice v pozičním shaderu
-uniform float uReturnK;        // tuhost pružiny (1/s²)
-uniform float uReturnDamp;     // tlumení pružiny (1/s)
+uniform float uReturnK;        // dojezdová rychlost = vzdálenost × uReturnK (1/s)
+uniform float uReturnDamp;     // jak rychle se rychlost particlu přizpůsobí dojezdové (1/s)
+uniform float uReturnTurn;     // boční zrychlení stáčení k cíli (world/s²) – menší = širší oblouky
 uniform float uReturnDelay;
 uniform float uReturnRamp;
 uniform float uTime;
@@ -139,15 +140,37 @@ void main() {
 
     // Návrat pružinou: zrychlení k cíli, rychlost se nemaže -> hybnost i víření dobíhají do návratu.
     // vel je posun za snímek -> přírůstek = K * výchylka * dt².
-    float phys = uPhysReturn * step(0.999, uTransitionProgress);
+    // platí v klidu tvaru projektu i v klidu DNA (ne během morphu; rezervní kostka u kamery jede napevno)
+    vec4 dnaP = texture2D(tDnaPosition, uv);
+    float projRest = step(0.999, uTransitionProgress);
+    float dnaRest = (1.0 - step(0.001, uTransitionProgress)) * (1.0 - step(dnaP.w, 0.0));
+    float phys = uPhysReturn * (projRest + dnaRest);
     if (phys > 0.5) {
         vec4 base = texture2D(tBasePosition, uv);
         float offset = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
         vec3 local = base.xyz + vec3(0.0, sin(uTime * uFloatSpeed + offset) * uFloatAmplitude, 0.0);
-        vec3 tgt = (uFinalMat * vec4(local, 1.0)).xyz;
+        vec3 tgt = projRest > 0.5 ? (uFinalMat * vec4(local, 1.0)).xyz : dnaP.xyz;
         float r = returnRampOf(vel.w);
-        vel.xyz += (tgt - pos.xyz) * (uReturnK * r * uDt * uDt);
-        vel.xyz *= exp(-uReturnDamp * r * uDt);
+        // Řízení místo pružiny: particl si drží rychlost a jen postupně stáčí směr k cíli omezeným
+        // bočním zrychlením (uReturnTurn) -> rychlý opisuje široký oblouk, pomalý se otočí hned.
+        // Rychlost se jen pozvolna blíží "dojezdové" (úměrné vzdálenosti) -> nikdo nezastaví a nejede rovně.
+        vec3 toT = tgt - pos.xyz;
+        float dist = length(toT);
+        vec3 want = toT / max(dist, 1e-6);
+        float s = length(vel.xyz);
+        vec3 dir = s > 1e-7 ? vel.xyz / s : want;
+        float cosA = clamp(dot(dir, want), -1.0, 1.0);
+        vec3 side = want - dir * cosA;
+        float sl = length(side);
+        if (sl > 1e-5) side /= sl;
+        // přesně od cíle: stoč se libovolně do strany (dir je tu jistě jednotkový); přesně k cíli / v cíli: netoč
+        else if (cosA < 0.0) side = normalize(cross(dir, abs(dir.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+        else side = vec3(0.0);
+        float turn = min(acos(cosA), uReturnTurn * r * uDt * uDt / max(s, 1e-7));
+        dir = dir * cos(turn) + side * sin(turn);
+        float sWant = dist * uReturnK * uDt;           // dojezdová rychlost (posun za snímek)
+        s += (sWant - s) * (1.0 - exp(-uReturnDamp * r * uDt));
+        vel.xyz = dir * s;
     }
     
     gl_FragColor = vel;
@@ -277,7 +300,8 @@ void main() {
     float sinceHit = (1.0 - vel.w) * holdT;
     float ramp = smoothstep(0.0, 1.0, clamp((sinceHit - uReturnDelay) / max(uReturnRamp, 1e-3), 0.0, 1.0));
     ramp = mix(1.0, ramp * ramp, step(1e-4, holdT)); // ease-in: pomalý start, pak zrychluje
-    ramp *= 1.0 - uPhysReturn * step(0.999, uTransitionProgress); // vodní režim: návrat je pružina v rychlosti
+    // vodní režim: návrat řídí velocity shader (v klidu projektu i DNA, rezervní kostka ne)
+    ramp *= 1.0 - uPhysReturn * clamp(step(0.999, uTransitionProgress) + (1.0 - step(0.001, uTransitionProgress)) * (1.0 - isReserve), 0.0, 1.0);
     float returnSpeed = mix(uReturnSpeed * ramp, 1.0, isReserve * (1.0 - step(0.001, tProgress)));
     // jiskra v letu jede přesně po dráze (lag by oblouk rozmazal)
     returnSpeed = mix(returnSpeed, 0.6, inFlight * step(0.999, tProgress));
@@ -370,7 +394,7 @@ export function useGPGPU(count, particlesData, gl) {
       uMVP: { value: new THREE.Matrix4() }, uCamRight: { value: new THREE.Vector3() }, uCamUp: { value: new THREE.Vector3() },
       uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
       uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
-      uReturnK: { value: 0 }, uReturnDamp: { value: 0 },
+      uReturnK: { value: 0 }, uReturnDamp: { value: 0 }, uReturnTurn: { value: 10 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -602,8 +626,11 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       const rs = Math.min(0.95, Math.max(1e-4, posUniforms.uReturnSpeed.value));
       const omega = Math.min(25, -Math.log(1 - rs) * 60 * 1.5);
       const zeta = Math.max(0.05, phys.returnDamping ?? 0.7);
-      velUniforms.uReturnK.value = omega * omega;
-      velUniforms.uReturnDamp.value = 2 * zeta * omega;
+      velUniforms.uReturnK.value = omega * 0.7;
+      velUniforms.uReturnDamp.value = zeta * omega;
+      // oblouk 0 = ostré otočky, 1 = hodně široké oblouky
+      const arc = Math.min(1, Math.max(0, phys.returnArc ?? 0.5));
+      velUniforms.uReturnTurn.value = omega * omega * 0.08 * Math.pow(40, 1 - 2 * arc);
     }
 
     if (hasIntersection && !fluidCfg.enabled) {
