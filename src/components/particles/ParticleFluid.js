@@ -15,6 +15,8 @@ export const FLUID_DEFAULTS = {
   // 'brush' = starý štětec: proud ve stopě se NASTAVÍ na rychlost kurzoru (force/speedCurve/maxSpeed/wake/splatHardness)
   mode: 'pavel',
   splatForce: 6000,       // [pavel] síla tahu (Pavel 6000): posun kurzoru za snímek × tohle = přidaný proud
+  pavelCurve: 0.5,        // [pavel] odezva na rychlost myši: 1 = lineární (jako Pavel), menší = pomalý tah silnější, rychlý slabší
+  pavelMaxSpeed: 2.5,     // [pavel] strop (výšky obrazovky/s): rychlejší švih už skoro nesílí -> nerozvíří všechno
   pavelRadius: 0.25,      // [pavel] poloměr stopy (Pavel SPLAT_RADIUS 0.25 = rozptyl 0.0025 obrazovky²)
   dyeResolution: 512,     // [pavel] rozlišení barviva pro náhled "2D voda" (Pavel 1024; počítá se jen když je náhled zapnutý)
   dyeFade: 1,             // [pavel] mizení barviva náhledu za s (Pavel DENSITY_DISSIPATION 1)
@@ -363,7 +365,10 @@ class Fluid {
     if (moved && pavel) {
       // Pavel: splat v aktuálním bodě, proud += posun kurzoru × splatForce (posun y / poměr stran jako u Pavla)
       const sa = m.splatAdd.uniforms;
-      let dx = pu - this.prev.x, dy = pv - this.prev.y;
+      // křivka odezvy jako u štětce (vlastní hodnoty): síla ~ cap·tanh(rychlost^křivka / cap) místo lineární
+      const pcap = Math.max(0.1, cfg.pavelMaxSpeed);
+      const pk = Math.min(6, pcap * Math.tanh(Math.pow(sp, Math.max(0.1, cfg.pavelCurve)) / pcap) / sp);
+      let dx = (pu - this.prev.x) * pk, dy = (pv - this.prev.y) * pk;
       if (aspect < 1) dx *= aspect; else dy /= aspect;
       sa.uPoint.value.set(pu, pv);
       sa.uAspect.value = aspect;

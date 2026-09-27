@@ -96,7 +96,7 @@
       "force": 0.4,
       "speedCurve": 0.65,
       "maxSpeed": 0.5,
-      "curl": 22,
+      "curl": 28.5,
       "splatHardness": 1.6,
       "dissipation": 0.1,
       "coupling": 0.3,
