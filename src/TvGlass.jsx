@@ -299,7 +299,17 @@ export function useTvGlass(nodes, deskNode, fade) {
     for (const mesh of shared.meshes) { mesh.userData.tvShown = mesh.visible; mesh.visible = false; }
     const prevTarget = gl.getRenderTarget();
     gl.setRenderTarget(fbo);
-    gl.render(state.scene, camera);
+    try {
+      gl.render(state.scene, camera);
+    } catch (err) {
+      // Vite HMR artifact, ne runtime bug: reprodukuje se jen těsně po hot-reloadu (WebGL program
+      // ještě odkazuje na starý layout uniformů, než ho three.js přerekompiluje) - viz commit message.
+      // Nezpůsobuje viditelnou chybu (jen ten snímek lomu skla se nepřekreslí), proto jen 1x zaloguj.
+      if (import.meta.env.DEV && !window.__tvGlassHmrWarned) {
+        window.__tvGlassHmrWarned = true;
+        console.warn('[TvGlass] render() selhal (pravděpodobně HMR artefakt, ne bug) - další výskyty se už nelogují:', err);
+      }
+    }
     gl.setRenderTarget(prevTarget);
     for (const mesh of shared.meshes) mesh.visible = mesh.userData.tvShown;
   });
