@@ -429,9 +429,9 @@ const VolumetricLightShader = {
       float vl = length(v);
       vec2 fd = vl > 1e-3 ? v / vl : vec2(1.0, 0.0);
       vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);
-      vec2 q = vec2(dot(p, fd) * 3.0, dot(p, vec2(-fd.y, fd.x)) * 11.0);
+      vec2 q = vec2(dot(p, fd) * 2.0, dot(p, vec2(-fd.y, fd.x)) * 6.0);
       float wisp = fbmSmoke(q + vec2(-uTime * 0.6, uTime * 0.05));
-      return d * mix(1.0, smoothstep(0.25, 0.85, wisp) * 1.6, uWaterWisp);
+      return d * mix(1.0, smoothstep(0.1, 1.0, wisp) * 1.5, uWaterWisp);
     }
     // Kolik okolí zakrývají particly (0 = volný výhled na pozadí, 1 = hustý shluk): 8 vzorků hloubky na kruhu
     float particleCover() {
@@ -1241,12 +1241,12 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uDustDecay.value = tl.dustDecay ?? 0.96;
       u.uDustCap.value = tl.dustCap ?? 0.15;
       u.uDustTint.value = tl.dustTint ?? 0.7;
-      u.uFogClear.value = tl.fogClear ?? 1;
+      u.uFogClear.value = tl.fogClear ?? 0.9;
       u.uFogRim.value = tl.fogRim ?? 0.35;
       u.uWaterStreak.value = tl.waterStreak ?? 0.25;
       u.uCoverRadius.value = tl.coverRadius ?? 0.025;
       u.uWaterWisp.value = tl.waterWisp ?? 0.8;
-      u.uDyeRange.value.set(tl.dyeMin ?? 0.01, tl.dyeMax ?? 0.12);
+      u.uDyeRange.value.set(tl.dyeMin ?? 0.015, tl.dyeMax ?? 0.25);
       u.uTvClip.value = tl.waterClip ?? 1.0;
       u.uTvInside.value = tl.enabled === false ? 0 : (tl.insideStrength ?? 1);
       u.uTvInsideFloor.value = tl.insideFloor ?? 0.75;

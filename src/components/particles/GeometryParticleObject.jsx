@@ -263,11 +263,11 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
     if (compute && !compute.disposed && compute.posVar.material.uniforms.tSurfPlane && worldGroupRef.current) {
       const u = compute.posVar.material.uniforms;
       const tex = surfRef.current.tex;
-      u.uSurfOn.value = tex && compute.size * compute.size * 4 === tex.image.data.length ? 1 : 0;
+      u.uSurfOn.value = nodeMatrix && tex && compute.size * compute.size * 4 === tex.image.data.length ? 1 : 0;
       u.tSurfPlane.value = tex;
       u.uFinalInv.value.copy(worldGroupRef.current.matrixWorld).invert();
       u.uSurfMargin.value = collisionCfg.margin;
-      u.uSurfMaxPen.value = collisionCfg.band / Math.max(1e-6, nodeMatrix.getMaxScaleOnAxis());
+      u.uSurfMaxPen.value = collisionCfg.band / Math.max(1e-6, nodeMatrix?.getMaxScaleOnAxis() ?? 1);
       u.uPrintY.value = printFx.uniforms.uPrintY.value;
     }
     if (compute && !compute.disposed && compute.posVar.material.uniforms.uEmerge) {
