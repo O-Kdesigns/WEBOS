@@ -8,6 +8,7 @@ import { getHudTextMask } from './hudTextMask';
 import { printFx } from './SolidPrint';
 import { tvRegistry } from './TvGlass';
 import { getFluid } from './components/particles/ParticleFluid';
+import { PrintSteam } from './PrintSteam';
 
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 dummyTexture.needsUpdate = true;
@@ -113,6 +114,10 @@ const VolumetricLightShader = {
     uPrintLineA: { value: new THREE.Vector2() },
     uPrintLineB: { value: new THREE.Vector2() },
     uPrintLineColor: { value: new THREE.Color(0, 0, 0) },
+    uPrintLineGlow: { value: new THREE.Color(0, 0, 0) },   // žhnoucí linka: barva žáru * heat (0 = linka se nekreslí)
+    uPrintLineHot: { value: new THREE.Color(0, 0, 0) },
+    tSteam: { value: dummyTexture },                       // pára nad linkou (PrintSteam.js)
+    uSteamOn: { value: 0.0 },
 
     // Světlo TV (config tvLight): ORBIT = záře + paprsky kolem aktivní televize, voda z myši do ní vyřezává díry;
     // INSIDE = to samé světlo je vidět jen tam, kde je voda
@@ -261,11 +266,18 @@ const VolumetricLightShader = {
     uniform float uPrintBevel;       // 0..1 zaoblení rohů rámu + změkčení zlomu mezi hranami
     uniform vec2 uPrintLineA, uPrintLineB;   // tisková linka (uv) – řez přes celou šířku solidů
     uniform vec3 uPrintLineColor;            // barva * síla laserů do prázdna (0 = vypnuto)
+    uniform vec3 uPrintLineGlow, uPrintLineHot; // žhnoucí linka (barva * žár)
+    uniform sampler2D tSteam;
+    uniform float uSteamOn;                  // síla páry * žár (0 = vypnuto)
 
     float c2(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
 
+    float h11(float n) { return fract(sin(n * 91.345) * 47453.5453); }
+    float lnoise(float x) { float i = floor(x), f = fract(x); return mix(h11(i), h11(i + 1.0), f * f * (3.0 - 2.0 * f)); }
+
     // Lasery do prázdna: z bodu uPrintCenter na každé místo tiskové linky (analyticky, bez masky).
     // Pixel svítí, když přímka bod->pixel protne linku až ZA pixelem (pixel je mezi bodem a linkou).
+    // Lasery = tenké ostré paprsky v nepravidelných rozestupech (část buněk prázdná, náhodná poloha/šířka/síla).
     vec3 printLineRays(vec2 uv) {
       vec2 asp = vec2(uAspect, 1.0);
       vec2 P = uPrintCenter * asp, A = uPrintLineA * asp, E = (uPrintLineB - uPrintLineA) * asp;
@@ -276,22 +288,70 @@ const VolumetricLightShader = {
       float sl = c2(A - P, d) / den;      // místo na lince 0..1
       float dist = length(d);
       vec3 col = vec3(0.0);
-      if (t >= 1.0 && sl >= 0.0 && sl <= 1.0) {
+      if (dot(uPrintLineColor, uPrintLineColor) > 0.0 && t >= 1.0 && sl >= 0.0 && sl <= 1.0) {
         float edge = smoothstep(0.0, 0.1, sl) * smoothstep(0.0, 0.1, 1.0 - sl);
-        // jednotlivé lasery podél linky (pozvolna běží), ne plochý vějíř
-        float k = sl * 70.0 + uTime * 0.5;
-        float fk = fract(k), ik = floor(k);
-        float r0 = fract(sin(ik * 91.345) * 47453.5453), r1 = fract(sin((ik + 1.0) * 91.345) * 47453.5453);
-        float beam = mix(r0, r1, fk * fk * (3.0 - 2.0 * fk));
-        beam = 0.25 + 0.75 * beam * beam;
-        // k lince sílí, u zdroje zeslábne
+        float k = sl * 46.0 + uTime * 0.12;
+        float ik = floor(k);
+        float fw = max(fwidth(k), 1e-4);  // u zdroje se paprsky sbíhají -> nešířit pod pixel (moaré)
+        float beam = 0.0;
+        for (int j = -1; j <= 1; j++) {
+          float c = ik + float(j);
+          float r = h11(c), r2 = h11(c + 17.3), r3 = h11(c + 41.7);
+          if (r < 0.45) continue;                        // prázdné buňky -> nerovnoměrné mezery
+          float ctr = c + 0.5 + (r2 - 0.5) * 0.85;
+          float w = mix(0.025, 0.1, r3 * r3);
+          float we = max(w, fw * 0.8);
+          float x = (k - ctr) / we;
+          float flick = 0.75 + 0.25 * sin(uTime * (1.0 + 3.0 * r2) + r * 40.0);
+          beam += exp(-x * x) * (w / we) * mix(0.25, 1.0, r3) * flick;
+        }
+        // k lince sílí, u zdroje zeslábne; + velmi slabý opar mezi paprsky
         float along = 1.0 / t;
-        col = uPrintLineColor * edge * beam * (0.35 + 0.65 * along) * smoothstep(0.0, 0.04, dist);
+        col = uPrintLineColor * edge * (beam * 0.8 + 0.03) * (0.25 + 0.75 * along) * smoothstep(0.0, 0.05, dist);
       }
-      // samotná linka tence svítí
-      float sp = clamp(dot(uv * asp - A, E) / dot(E, E), 0.0, 1.0);
-      float ld = length(uv * asp - (A + E * sp));
-      col += uPrintLineColor * exp(-ld * ld / 0.000012) * 1.5;
+      return col;
+    }
+
+    // Žhnoucí linka tisku: tenká, žár se po délce převaluje (horká a chladná místa), mírně se tetelí,
+    // tam kde maska opravdu tiskne je bělejší a silnější. + pára nad ní (PrintSteam.js), nasvícená zespodu.
+    vec3 printLineGlow(vec2 uv) {
+      if (dot(uPrintLineGlow, uPrintLineGlow) <= 0.0) return vec3(0.0);
+      vec2 asp = vec2(uAspect, 1.0);
+      vec2 A = uPrintLineA * asp, E = (uPrintLineB - uPrintLineA) * asp;
+      float sp = dot(uv * asp - A, E) / dot(E, E);
+      vec2 cp = A + E * clamp(sp, 0.0, 1.0);
+      vec2 dv = uv * asp - cp;
+      float ld = length(dv);
+      float hAbove = dv.y;
+      vec3 col = vec3(0.0);
+      if (sp > -0.02 && sp < 1.02) {
+        float fade = smoothstep(-0.02, 0.06, sp) * smoothstep(-0.02, 0.06, 1.0 - sp);
+        float L = length(E);
+        // tetelení: linka se nepatrně vlní
+        float shim = (lnoise(sp * L * 90.0 + uTime * 2.3) - 0.5) * 0.0012;
+        float ly = hAbove - shim;
+        // žár po délce: pomalé převalování + drobná zrna
+        float ember = lnoise(sp * L * 9.0 - uTime * 0.35) * 0.65 + lnoise(sp * L * 55.0 + uTime * 0.9) * 0.35;
+        ember = 0.2 + 1.1 * ember * ember;
+        vec3 m = texture2D(tPrintMask, cp / asp).rgb;
+        float printing = clamp(dot(m, vec3(0.33)) * 2.0, 0.0, 1.5);
+        float heatL = ember * (0.55 + 0.9 * printing);
+        vec3 c = mix(uPrintLineGlow, uPrintLineHot, clamp(heatL - 0.6, 0.0, 1.0) * 0.6);
+        float core = exp(-ly * ly / (0.0008 * 0.0008));
+        float halo = exp(-ly * ly / (0.005 * 0.005)) * 0.12;
+        col += c * (core * 1.4 + halo) * heatL * fade;
+      }
+      if (uSteamOn > 0.0) {
+        vec2 st = texture2D(tSteam, uv).rg;
+        // jemné chomáče navíc (textura páry je malá): vertikálně natažený šum stoupající s párou
+        vec2 wp = vec2(uv.x * uAspect * 38.0, uv.y * 16.0 - uTime * 1.6);
+        float wisp = mix(lnoise(wp.x + lnoise(wp.y) * 3.0), lnoise(wp.x * 2.1 + wp.y * 0.7 + 9.0), 0.4);
+        st *= 0.35 + 1.1 * wisp * wisp;
+        // nasvícená zespodu: u linky jasná, výš hasne
+        float lit = 0.2 + 0.8 * exp(-max(hAbove, 0.0) / 0.07);
+        vec3 sc = uPrintLineGlow * st.r * 0.45 + mix(uPrintLineGlow, uPrintLineHot, 0.3) * st.g * 0.7;
+        col += sc * lit * uSteamOn;
+      }
       return col;
     }
 
@@ -857,6 +917,7 @@ const VolumetricLightShader = {
         finalColor += texture2D(tPrintMask, vUv).rgb * uPrintRays * 0.25;
         finalColor += printRays(vUv, dither);
         finalColor += printLineRays(vUv);
+        finalColor += printLineGlow(vUv);
       }
 
       gl_FragColor = vec4(cinematicFinish(finalColor + tvLight(cineBg), cineBg), baseColor.a);
@@ -994,6 +1055,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
   }, [width, height]);
 
   useEffect(() => () => { blurTargets.a.dispose(); blurTargets.b.dispose(); }, [blurTargets]);
+  const steam = useMemo(() => new PrintSteam(), []);
+  useEffect(() => () => steam.dispose(), [steam]);
 
   const blurPass = useMemo(() => {
     const mat = new THREE.ShaderMaterial({
@@ -1319,6 +1382,24 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uPrintLineA.value.copy(printFx.lineA);
     mat.uniforms.uPrintLineB.value.copy(printFx.lineB);
     mat.uniforms.uPrintLineColor.value.copy(printFx.lineColor);
+    // žhnoucí linka + pára nad ní (jen když se tiskne)
+    const lineOn = !!printMask && printFx.lineOn;
+    mat.uniforms.uPrintLineGlow.value.copy(printFx.glow).multiplyScalar(lineOn ? printFx.heat : 0);
+    mat.uniforms.uPrintLineHot.value.copy(printFx.hot).multiplyScalar(lineOn ? printFx.heat : 0);
+    const stc = printFx.steam;
+    if (lineOn && stc.strength > 0) {
+      const fl = getFluid(gl);
+      mat.uniforms.tSteam.value = steam.step(gl, {
+        a: printFx.lineA, b: printFx.lineB, mask: printMask, fluid: fl.velocity, fluidTexel: mat.uniforms.uFluidTexel.value,
+        dt: Math.min(Math.max(delta, 1 / 240), 1 / 30), time: state.clock.getElapsedTime(), aspect: size.width / Math.max(1, size.height),
+        res: stc.res, rise: stc.rise, lift: 0.02, turb: stc.turb, fade: stc.fade, emit: 5, hot: 1, mouse: stc.mouse,
+      });
+      mat.uniforms.uSteamOn.value = stc.strength * printFx.heat;
+    } else {
+      if (steam.live) steam.clear(gl);
+      mat.uniforms.tSteam.value = dummyTexture;
+      mat.uniforms.uSteamOn.value = 0;
+    }
 
     // 1. Vykreslení hlavní scény včetně hloubkového bufferu do render targetu
     gl.setRenderTarget(sceneTarget);

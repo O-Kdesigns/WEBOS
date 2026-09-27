@@ -41,6 +41,12 @@ export const printFx = {
   lineA: new THREE.Vector2(0.3, 0.5),
   lineB: new THREE.Vector2(0.7, 0.5),
   lineColor: new THREE.Color(0, 0, 0),   // barva * síla laserů do prázdna (0 = vypnuto)
+  lineOn: false,        // linka je promítnutá (tiskne se) -> žhnoucí linka + pára
+  heat: 0,              // žár tisku 0..1 (náběh / dohasnutí)
+  glow: new THREE.Color('#ff5a12'),
+  hot: new THREE.Color('#fff0c8'),
+  // pára nad linkou (PrintSteam.js): strength 0 = vypnuto
+  steam: { strength: 2, rise: 0.15, turb: 1.5, fade: 1.1, mouse: 1, res: 160 },
   frame: false,         // true = paprsky se sbíhají k okrajům rámu (obrazovka zmenšená frameScale), přebíjí center
   frameScale: 1,        // 1 = rám = okraje obrazovky, 0 = smrskne se do středu obrazovky
   bevel: 0.3,           // zaoblení rohů rámu
@@ -314,7 +320,14 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     // jejich hloubky, promítnutý na obrazovku. Lasery do prázdna (raysBed) z center na celou linku počítá VolumetricLight.
     const bed = printFx.frame || s.box.isEmpty() ? 0 : (cfg.raysBed ?? 1);
     printFx.lineColor.copy(u.uPrintGlow.value).multiplyScalar(bed * heat);
-    if (bed > 0 && heat > 0) {
+    printFx.heat = heat;
+    printFx.glow.copy(u.uPrintGlow.value);
+    printFx.hot.copy(u.uPrintHot.value);
+    const stm = printFx.steam;
+    stm.strength = cfg.steam ?? 2; stm.rise = cfg.steamRise ?? 0.15; stm.turb = cfg.steamTurb ?? 1.5;
+    stm.fade = cfg.steamFade ?? 1.1; stm.mouse = cfg.steamMouse ?? 1;
+    printFx.lineOn = !printFx.frame && !s.box.isEmpty() && heat > 0;
+    if (printFx.lineOn) {
       const m = (s.box.max.x - s.box.min.x) * (cfg.raysBedMargin ?? 0.15);
       const z = (s.box.min.z + s.box.max.z) * 0.5;
       s.v.set(s.box.min.x - m, u.uPrintY.value, z).project(state.camera);

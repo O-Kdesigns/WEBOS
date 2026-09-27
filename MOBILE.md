@@ -27,6 +27,7 @@ Stav: ⏳ neověřeno · ⚠️ známý problém · ✅ vyřešeno
 | Lom skla TV | `TvGlass.jsx` – scéna se 1× za snímek renderuje znovu do 1/2 FBO | Druhý render celé scény = skoro dvojnásobná cena, když je sklo ve frustu. | Na mobilu 1/4 FBO nebo statický lom. | ⏳ |
 | Maska žáru 3D tisku | `SolidPrint.jsx` (1/4 rozlišení, DPR max 1.25) | Extra render proxy meshů jen během tisku. | Nejspíš OK. | ⏳ |
 | Světlo TV + maska vody | `VolumetricLight.jsx` `tvLight()`, config `tvLight` | ORBIT: každý pixel postu 24× hloubka + 24× tBlur (mlha z prachu s paprsky) + 1 fetch proudu. INSIDE: barvivo Pavlovy simulace (512 řádků, advekce + splat každý snímek, dokud voda běží), ve vodě 4× barvivo + 9× hloubka (zakrytí particly) + 1 fetch proudu. Maska vody je jen, když voda běží: na dotyku jen při tahu prstem, jinak je světlo celé bez děr a v INSIDE není vidět vůbec. | Na mobilu `dustFog` 0 nebo méně vzorků (12); zvážit trvalou jemnou vodu nebo jiné zobrazení v INSIDE. | ⏳ |
+| Pára nad tiskovou linkou | `PrintSteam.js` (1 průchod za snímek, 160 řádků HalfFloat, 3 fetch masky + 1 proud) + v postu 1 fetch páry | Jen během tisku. Levné. HalfFloat render target (jako voda). | Mobil: `solidPrint.steam` 0 nebo menší `res`. | ⏳ |
 | Průměr videa pro přisvícení solidu | `SolidLink.jsx` (render 1×1 HalfFloat za snímek) | Zanedbatelné. | – | ⏳ |
 
 ## Obecně
