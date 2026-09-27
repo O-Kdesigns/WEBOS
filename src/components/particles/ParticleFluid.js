@@ -14,6 +14,8 @@ export const FLUID_DEFAULTS = {
   resolution: 128,        // výška mřížky tekutiny (šířka podle poměru stran)
   splatRadius: 0.022,     // poloměr stopy myši (podíl výšky obrazovky)
   splatHardness: 2.5,     // ostrost okraje stopy (1 = měkký gauss, víc = plochý střed a ostrá hrana -> ostřejší vlna)
+  wakeRadius: 0.06,       // šířka brázdy (podíl výšky obrazovky): širší měkký proud kolem stopy -> za kurzorem se po stranách stočí víry
+  wake: 0.35,             // síla brázdy (0 = jen úzká stopa bez vírů, 1 = celá brázda má rychlost kurzoru)
   strength: 1.0,          // celková síla vody na particly (proud i vlny) – hlavní "hlasitost" myši
   force: 1.0,             // 1 = proud v centru stopy má rychlost kurzoru (jen úzká stopa přímo pod kurzorem)
   speedCurve: 0.5,        // odezva na rychlost myši: 1 = lineární, menší = pomalý tah silnější a rychlý slabší
@@ -48,15 +50,20 @@ const HEAD = `uniform vec2 uTexel; varying vec2 vUv;
 
 const SPLAT = HEAD + `
 uniform sampler2D uVel; uniform vec2 uA; uniform vec2 uB; uniform vec2 uForce; uniform float uRadius; uniform float uAspect; uniform float uHardness;
+uniform float uWakeRadius; uniform float uWake;
 void main(){
   // stopa = úsečka od minulé pozice kurzoru (bez děr při rychlém tahu)
   vec2 pa = vUv - uA, ba = uB - uA; pa.x *= uAspect; ba.x *= uAspect;
   float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-10), 0.0, 1.0);
   vec2 d = pa - ba * h;
   float w = exp(-pow(dot(d, d) / (uRadius * uRadius), uHardness));
+  // brázda: širší měkký proud kolem stopy. Tlak ho po stranách obrací zpátky -> vír na každé straně za kurzorem
+  // (jako lžička protažená vodou). V úzké stopě by se víry rozmazaly o pár buněk mřížky.
+  float wk = exp(-dot(d, d) / (uWakeRadius * uWakeRadius));
   vec4 v = texture2D(uVel, vUv);
-  // xy: prst ve vodě -> proud má rychlost kurzoru; z: stopa (screen blend, max 1)
-  gl_FragColor = vec4(v.xy + (uForce - v.xy) * w, 1.0 - (1.0 - v.z) * (1.0 - w), 1.0);
+  // xy: prst ve vodě -> proud má rychlost kurzoru; z: stopa = "barvivo" (screen blend, max 1).
+  // Barvivo proud unáší (advekce) -> stočí se do vírů a particly v něm proud cítí.
+  gl_FragColor = vec4(v.xy + (uForce - v.xy) * max(w, uWake * wk), 1.0 - (1.0 - v.z) * (1.0 - max(w, wk)), 1.0);
 }`;
 
 const CURL = HEAD + `
@@ -152,7 +159,7 @@ class Fluid {
     this.scene.add(this.quad);
     const mk = (fs, u) => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: fs, uniforms: { uTexel: { value: new THREE.Vector2() }, ...u }, depthTest: false, depthWrite: false });
     this.m = {
-      splat: mk(SPLAT, { uVel: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uForce: { value: new THREE.Vector2() }, uRadius: { value: 0.04 }, uAspect: { value: 1 }, uHardness: { value: 1 } }),
+      splat: mk(SPLAT, { uVel: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uForce: { value: new THREE.Vector2() }, uRadius: { value: 0.04 }, uAspect: { value: 1 }, uHardness: { value: 1 }, uWakeRadius: { value: 0.06 }, uWake: { value: 0 } }),
       curl: mk(CURL, { uVel: { value: null } }),
       vorticity: mk(VORTICITY, { uVel: { value: null }, uCurl: { value: null }, uCurlStrength: { value: 0 }, uDt: { value: 0 } }),
       divergence: mk(DIVERGENCE, { uVel: { value: null } }),
@@ -288,6 +295,8 @@ class Fluid {
       s.uForce.value.set((pu - this.prev.x) * this.w, (pv - this.prev.y) * this.h).normalize().multiplyScalar(out * this.h * cfg.force);
       s.uRadius.value = cfg.splatRadius;
       s.uHardness.value = Math.max(0.5, cfg.splatHardness);
+      s.uWakeRadius.value = Math.max(cfg.splatRadius, cfg.wakeRadius ?? 0);
+      s.uWake.value = Math.max(0, cfg.wake ?? 0);
       s.uAspect.value = width / height;
       this.pass(m.splat, this.vel[1]); this.swapVel();
     }
