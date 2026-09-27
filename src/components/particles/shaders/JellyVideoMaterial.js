@@ -31,7 +31,8 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     uEscFlash: 0.0,
     uEscFlashTime: 0.6,
     uEscGlow: 0.0,
-    uEscPop: 0.0
+    uEscPop: 0.0,
+    uEscLife: 25.0
   },
   `
   uniform sampler2D tPositions;
@@ -43,6 +44,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   uniform sampler2D tVelocities;
   uniform float uEscFlashTime;
   uniform float uEscPop;
+  uniform float uEscLife;
   varying float vEsc;
   varying float vEscFlash;
   

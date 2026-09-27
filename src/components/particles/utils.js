@@ -62,6 +62,8 @@ uniform float uEscFriction;   // tření volných (za snímek při 60 fps) – v
 uniform float uEscLeash;      // poloměr prostoru kolem domova, ve kterém volné plují
 uniform float uEscMouse;      // násobek síly vody na volné particly
 uniform float uEscScale;      // velikost víření proudu, po kterém plují (1/world)
+uniform float uEscLife;       // s od zlomu, po kterých se volný sám připojí zpět
+uniform float uReturnPull;    // pružina k domovu (1/s²) – brzdí let od domova, ne jen stáčí směr
 
 // síla návratu 0..1 podle "držení" (w): zpoždění, pak pomalý rozjezd (ease-in)
 float returnRampOf(float hold) {
@@ -80,7 +82,8 @@ void main() {
     float dnaRest = (1.0 - step(0.001, uTransitionProgress)) * (1.0 - step(dnaP.w, 0.0));
     // odtržený particl se připojí zpět, jakmile začne morph do projektu (nebo je odtržení vypnuté)
     float esc = step(1.5, vel.w) * dnaRest * uEscOn * uPhysReturn;
-    if (vel.w > 1.5 && esc < 0.5) vel.w = 0.0;
+    // ... nebo sám po uEscLife s (pak ho oblouky návratu dovedou domů)
+    if (vel.w > 1.5 && (esc < 0.5 || vel.w - 2.0 > uEscLife)) { vel.w = 0.0; esc = 0.0; }
     
     // AGENT NOTE (from User): 
     // ALWAYS USE VELOCITY BRUSH. NEVER USE REPULSIVE FORCE.
@@ -209,9 +212,12 @@ void main() {
         float sWant = dist * uReturnK * uDt;           // dojezdová rychlost (posun za snímek)
         s += (sWant - s) * (1.0 - exp(-uReturnDamp * r * uDt));
         vel.xyz = dir * s;
+        // pružina: zrychlení přímo k domovu -> let od domova se brzdí (ne jen stáčí), dráha zůstává obloukem
+        vel.xyz += toT * uReturnPull * r * uDt * uDt;
         // BOD ZLOMU: odfouknutý daleko -> část particlů se utrhne (záblesk, pak volně pluje)
+        // jen když ho právě odfoukla voda (w > 0) – ne při přeletu na nové místo po přepnutí projektu
         float lucky = fract(sin(dot(uv, vec2(63.7264, 10.873)) + uEscSeed * 7.31) * 43758.5453);
-        if (dnaRest * uEscOn > 0.5 && dist > uEscDist && lucky < uEscChance) vel.w = 2.0;
+        if (dnaRest * uEscOn > 0.5 && vel.w > 0.0 && dist > uEscDist && lucky < uEscChance) vel.w = 2.0;
     }
     
     gl_FragColor = vel;
@@ -437,7 +443,7 @@ export function useGPGPU(count, particlesData, gl) {
       uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
       uReturnK: { value: 0 }, uReturnDamp: { value: 0 }, uReturnTurn: { value: 10 },
       uEscOn: { value: 0 }, uEscDist: { value: 0.3 }, uEscChance: { value: 0.1 }, uEscSeed: { value: 0 }, uEscDrift: { value: 0.05 },
-      uEscFriction: { value: 0.99 }, uEscLeash: { value: 1.5 }, uEscMouse: { value: 1 }, uEscScale: { value: 1.5 },
+      uEscFriction: { value: 0.99 }, uEscLeash: { value: 1.5 }, uEscMouse: { value: 1 }, uEscScale: { value: 1.5 }, uEscLife: { value: 25 }, uReturnPull: { value: 0 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -538,17 +544,18 @@ export const ESCAPE_DEFAULTS = {
   enabled: true,
   distance: 0.4,     // world – jak daleko od domova musí být odfouknutý, aby se utrhl (bod zlomu)
   chance: 0.12,      // podíl particlů, které se utrhnout můžou
-  drift: 0.15,       // world/s – rychlost pomalého plutí
+  drift: 0.2,        // world/s – rychlost pomalého plutí
   friction: 0.975,   // za snímek při 60 fps – jak dlouho dojíždí strčení myší
-  leash: 1.5,        // world – jak daleko od domova smí odplout
+  leash: 2.0,        // world – jak daleko od domova smí odplout
   mouse: 1,          // násobek síly vody na volné
-  flowScale: 1.5,    // velikost víření proudu (větší = drobnější víry)
+  flowScale: 2.2,    // velikost víření proudu (větší = drobnější víry -> sousedé se víc rozejdou)
+  life: 25,          // s od zlomu, po kterých se sám připojí zpět
   color: '#ffb347',
   tint: 0.7,         // jak moc převezmou barvu
-  flash: 6,          // HDR jas záblesku v bodě zlomu
+  flash: 1.2,        // jas záblesku v bodě zlomu (přičte se k barvě; ~1 = jen o trochu přes normál)
   flashTime: 0.6,    // s – doznění záblesku
   glow: 0.1,         // trvalá záře volných
-  pop: 0.8,          // zvětšení při záblesku
+  pop: 0.4,          // zvětšení při záblesku
 };
 
 // --- LOGIKA ---
@@ -686,7 +693,9 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       // rychlost návratu (podíl za snímek při 60 fps) -> vlastní frekvence pružiny se stejně dlouhým návratem
       const rs = Math.min(0.95, Math.max(1e-4, posUniforms.uReturnSpeed.value));
       // returnStrength = násobek jen pro vracející se particly (odtržené neovlivní)
-      const omega = Math.min(25, -Math.log(1 - rs) * 60 * 1.5 * Math.max(0.05, phys.returnStrength ?? 1));
+      const omega = Math.min(25, -Math.log(1 - rs) * 60 * 1.5);
+      // returnStrength = pružina k domovu jen pro vracející se (odtržené neovlivní)
+      velUniforms.uReturnPull.value = omega * omega * 0.16 * Math.max(0, phys.returnStrength ?? 1);
       const zeta = Math.max(0.05, phys.returnDamping ?? 0.7);
       velUniforms.uReturnK.value = omega * 0.7;
       velUniforms.uReturnDamp.value = zeta * omega;
@@ -704,6 +713,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     velUniforms.uEscLeash.value = esc.leash;
     velUniforms.uEscMouse.value = esc.mouse;
     velUniforms.uEscScale.value = esc.flowScale;
+    velUniforms.uEscLife.value = Math.min(59, esc.life);
     // při každém odchodu z DNA jiný los -> příště se utrhnou jiné particly
     if (posUniforms.uTransitionProgress.value > 0.001) compute.escLeft = true;
     else if (compute.escLeft) { compute.escLeft = false; velUniforms.uEscSeed.value = (velUniforms.uEscSeed.value + 1) % 1000; }
@@ -746,6 +756,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       mu.uEscFlashTime.value = esc.flashTime;
       mu.uEscGlow.value = esc.glow;
       mu.uEscPop.value = esc.pop;
+      if (mu.uEscLife) mu.uEscLife.value = Math.min(59, esc.life);
     }
     
     if (meshRef.current.material) {

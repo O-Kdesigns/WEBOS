@@ -59,7 +59,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
     // odtržené particly (utils.js ESCAPE_DEFAULTS, plní useParticleLogic)
     Object.assign(shader.uniforms, {
       tVelocities: { value: null }, uEscColor: { value: new THREE.Color('#ffb347') }, uEscTint: { value: 0 },
-      uEscFlash: { value: 0 }, uEscFlashTime: { value: 0.6 }, uEscGlow: { value: 0 }, uEscPop: { value: 0 },
+      uEscFlash: { value: 0 }, uEscFlashTime: { value: 0.6 }, uEscGlow: { value: 0 }, uEscPop: { value: 0 }, uEscLife: { value: 25 },
     });
     
     shader.vertexShader = `
@@ -70,6 +70,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       uniform sampler2D tVelocities;
       uniform float uEscFlashTime;
       uniform float uEscPop;
+      uniform float uEscLife;
       varying float vEsc;
       varying float vEscFlash;
       ${shader.vertexShader}
