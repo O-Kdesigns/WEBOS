@@ -289,8 +289,6 @@
     "fogRim": 0.35,
     "waterStreak": 0.25,
     "coverRadius": 0.025,
-    "swirlSpeedMin": 0.03,
-    "swirlSpeedMax": 0.3,
     "dustLightFrom": "top",
     "dustLightY": 1.15
   },

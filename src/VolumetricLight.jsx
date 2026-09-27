@@ -149,7 +149,6 @@ const VolumetricLightShader = {
     uFogRim: { value: 0.35 },
     uWaterStreak: { value: 0.25 },
     uCoverRadius: { value: 0.025 },
-    uSwirlSpeed: { value: new THREE.Vector2(0.03, 0.3) }, // INSIDE: rychlost proudu (výšky obr./s), kdy víří světlo přes particly
     uDustLightPos: { value: new THREE.Vector2(0.5, 1.15) } // ORBIT: odkud svítí mlha z prachu (nebe nad obrazovkou)
   },
   vertexShader: `
@@ -293,7 +292,6 @@ const VolumetricLightShader = {
     uniform float uFogRim;
     uniform float uWaterStreak;
     uniform float uCoverRadius;
-    uniform vec2 uSwirlSpeed;
     uniform vec2 uDustLightPos;
     uniform float uTvDebug; // DEV: 1 = na obrazovce jen maska vody (zelená) + záře TV (červená)
 
@@ -804,10 +802,9 @@ const VolumetricLightShader = {
         float lit = max(a1 * a1, uTvInsideFloor);
         // okraj rozražené mlhy chytá trochu světla (mlha se rozhrnuje, ne mizí)
         float rim = inWater * (1.0 - inWater) * 4.0 * (1.0 - inCover) * uFogRim;
-        // přes particly víří světlo jen, dokud se voda hýbe; v klidu zůstanou čisté barvy
-        float spd = length(texture2D(tFluid, vUv).xy) * uFluidTexel.y;
-        float swirl = inWater * inCover * smoothstep(uSwirlSpeed.x, uSwirlSpeed.y, spd);
-        sceneColor += uTvColor * lit * (swirl + rim) * uTvInside;
+        // (přes particly/solidy tu vířilo tyrkysové světlo; zakrytí se měří z hloubky, takže barvilo každou
+        //  geometrii ve víru -> pryč, pod vodou mají particly i solidy čisté vlastní barvy)
+        sceneColor += uTvColor * lit * rim * uTvInside;
       }
 
       vec3 finalInside = sceneColor;
@@ -1244,7 +1241,6 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uFogRim.value = tl.fogRim ?? 0.35;
       u.uWaterStreak.value = tl.waterStreak ?? 0.25;
       u.uCoverRadius.value = tl.coverRadius ?? 0.025;
-      u.uSwirlSpeed.value.set(tl.swirlSpeedMin ?? 0.03, tl.swirlSpeedMax ?? 0.3);
       // 'top' = shora jako z nebe (dustLightY nad horní hranou), 'center' = střed obrazovky, 'object' = střed DNA jako P1
       const dlf = tl.dustLightFrom ?? 'top';
       if (dlf === 'object') u.uDustLightPos.value.copy(u.uLightScreenPos.value);
