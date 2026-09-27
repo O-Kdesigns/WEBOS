@@ -305,7 +305,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       <group ref={inverseGroupRef}>
         <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
           <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
-          <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} />
+          <ParticleMaterial settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} />
         </instancedMesh>
       </group>
     </group>

@@ -3,6 +3,7 @@ import { shaderMaterial } from '@react-three/drei';
 import { extend } from '@react-three/fiber';
 import { PARTICLE_DECL } from '../../../SolidLink';
 import { ESC_VERTEX } from './escapeGlsl';
+import { DNA_RAINBOW_GLSL, DNA_PALETTE_MAX } from './dnaRainbow';
 
 export const JellyVideoMaterialImpl = shaderMaterial(
   {
@@ -20,7 +21,8 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     uMaxLight: 0.8,
     uMinDark: 0.05,
     uTransitionProgress: 1.0,
-    uDnaColor: new THREE.Color("#3b82f6"),
+    uDnaPalette: new Array(DNA_PALETTE_MAX).fill(0).map(() => new THREE.Color("#3b82f6")),
+    uDnaCount: 2,
     uTint: 0.35,
     uWobble: 0.5,
     uVideoGain: 1.4,
@@ -39,7 +41,6 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   `
   uniform sampler2D tPositions;
   uniform float uTransitionProgress;
-  uniform vec3 uDnaColor;
   uniform float uTime;
   uniform float uWobble;
   attribute vec2 aComputeUV;
@@ -154,11 +155,17 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   }
 
   uniform float uTransitionProgress;
-  uniform vec3 uDnaColor;
+  ${DNA_RAINBOW_GLSL}
   ${PARTICLE_DECL}
 
   void main() {
-    vec3 uColorMod = mix(uDnaColor, uColor, smoothstep(0.0, 1.0, uTransitionProgress));
+    // stojatá duha v ORBITu: world-space pole (na kameře nezávislé), pomalu tažené v čase,
+    // namíchané z uDnaPalette (2D prach + barvy portfolií, viz ParticleMaterial.jsx)
+    float dnaField = fract(0.5 + uTime * 0.0015
+      + vWorldPos.y * 0.05
+      + snoise(vWorldPos.xz * 0.07 + vec2(uTime * 0.0037, -uTime * 0.0027)) * 0.3
+      + snoise(vWorldPos.xy * 0.05 + vec2(-uTime * 0.0022, uTime * 0.0032) + 11.3) * 0.25);
+    vec3 uColorMod = mix(dnaPaletteBlend(dnaField), uColor, smoothstep(0.0, 1.0, uTransitionProgress));
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(vViewPosition);
     float NdotV = max(dot(normal, viewDir), 0.0);

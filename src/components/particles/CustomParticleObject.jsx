@@ -146,7 +146,7 @@ export function CustomParticleObject({ settings, appConfig, videoTexture, opacit
     <group position={[posX, 0, posZ]}>
       <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
         <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
-        <ParticleMaterial settings={settings} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
+        <ParticleMaterial settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} />
       </instancedMesh>
     </group>
   );
