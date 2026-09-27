@@ -142,6 +142,19 @@ void main(){
   gl_FragColor = vec4(h, c.r, 0.0, 1.0);
 }`;
 
+// Náhled vody na obrazovce (slider "2D voda" vedle AI živého renderu) – jako PavelDoGreat:
+// barva = směr proudu, jas = rychlost, krytí = stopa přesně tak, jak ji cítí particly (smoothstep jako v utils.js).
+const VIEW = HEAD + `
+uniform sampler2D uVel; uniform float uOpacity; uniform float uSpeedNorm;
+vec3 hue(float h){ return clamp(abs(fract(h + vec3(0.0, 2.0, 1.0) / 3.0) * 6.0 - 3.0) - 1.0, 0.0, 1.0); }
+void main(){
+  vec4 v = texture2D(uVel, vUv);
+  float sp = length(v.xy) * uSpeedNorm;
+  float a = smoothstep(0.1, 0.7, v.z);
+  vec3 col = hue(atan(v.y, v.x) / 6.2831853 + 0.5) * (0.25 + 0.75 * clamp(sp, 0.0, 1.0));
+  gl_FragColor = vec4(col, a * uOpacity);
+}`;
+
 function makeTarget(w, h) {
   return new THREE.WebGLRenderTarget(w, h, {
     type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
@@ -167,6 +180,7 @@ class Fluid {
       pressure: mk(PRESSURE, { uP: { value: null }, uDiv: { value: null } }),
       gradient: mk(GRADIENT, { uP: { value: null }, uVel: { value: null } }),
       advect: mk(ADVECT, { uVel: { value: null }, uDt: { value: 0 }, uDissipation: { value: 0 }, uTrailFade: { value: 0 } }),
+      view: mk(VIEW, { uVel: { value: null }, uOpacity: { value: 0 }, uSpeedNorm: { value: 0.01 } }),
       wave: mk(WAVE, { uWave: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uRadius: { value: 0.03 }, uAspect: { value: 1 }, uPush: { value: 0 }, uC2: { value: 0.4 }, uDamp: { value: 0.99 }, uLeak: { value: 1 } }),
     };
     this.w = 0; this.h = 0;
@@ -331,6 +345,20 @@ class Fluid {
     gl.autoClear = prevAutoClear;
     gl.setRenderTarget(prevTarget);
     this.velocity = this.vel[0].texture;
+  }
+
+  // Nakreslí proud přes hotový snímek (volá FluidView po postprocessingu). Uspaná voda = nic.
+  drawView(opacity) {
+    if (!this.velocity || opacity <= 0) return;
+    const gl = this.gl, prev = gl.getRenderTarget(), ac = gl.autoClear, mv = this.m.view;
+    mv.transparent = true;
+    mv.uniforms.uVel.value = this.velocity;
+    mv.uniforms.uOpacity.value = opacity;
+    mv.uniforms.uSpeedNorm.value = 2 / Math.max(1, this.h); // proud 0.5 výšky obrazovky/s = plná barva
+    gl.autoClear = false;
+    this.pass(mv, null);
+    gl.autoClear = ac;
+    gl.setRenderTarget(prev);
   }
 
   dispose() {

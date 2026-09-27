@@ -17,6 +17,7 @@ import { SolidPrintDriver, usePrintableSolid } from './SolidPrint';
 import { SolidLinkDriver } from './SolidLink';
 import { PortalDriver, portalFx } from './PortalTransition';
 import { useAiLive, useAiLiveTicker } from './AiLiveMode';
+import { FluidView, useFluidView } from './FluidView';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
@@ -837,6 +838,7 @@ function App() {
   
   // AI živý render (src/AiLiveMode.js): nepauzuje při ztrátě fokusu a renderuje i v neaktivním tabu
   const [aiLive, setAiLive] = useAiLive();
+  const [fluidView, setFluidView] = useFluidView();
   useAiLiveTicker(aiLive);
   const pauseOnBlur = !aiLive && (appConfig.powerSaving?.pauseOnBlur ?? true);
 
@@ -1073,6 +1075,7 @@ function App() {
           <RenderRestorationHandler isSuspended={isSuspended} />
           <DnaHeightDetector setDnaHeight360={setDetectedDnaHeight360} />
           <CanvasDebugTracker />
+          <FluidView />
           <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
           
           <AtmosphereDust appConfig={appConfig} springScrollY={springScrollY} rotationY={rotationY} pageDistance={pageDistance} />
@@ -1196,6 +1199,16 @@ function App() {
       >
         <input type="checkbox" checked={aiLive} onChange={(e) => setAiLive(e.target.checked)} />
         🤖 AI živý render
+      </label>
+
+      {/* Náhled 2D vody, ze které particly berou proud myši (src/FluidView.jsx). 0 = vypnuto, nic se nekreslí. */}
+      <label
+        style={{ position: 'absolute', top: 10, left: 260, zIndex: 1000, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '5px 10px', borderRadius: '4px', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', userSelect: 'none' }}
+        title="Průhlednost náhledu neviditelné 2D simulace vody (barva = směr proudu). Na 0 se vůbec nekreslí. Pamatuje si to jen tento prohlížeč."
+      >
+        💧 2D voda
+        <input type="range" min={0} max={1} step={0.05} value={fluidView} onChange={(e) => setFluidView(e.target.value)} style={{ width: 90 }} />
+        <span style={{ width: 30, textAlign: 'right' }}>{Math.round(fluidView * 100)}%</span>
       </label>
 
       {isSuspended && (appConfig.powerSaving?.showBadge ?? true) && (
