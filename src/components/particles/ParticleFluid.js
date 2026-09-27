@@ -30,7 +30,8 @@ export const FLUID_DEFAULTS = {
   waveSpeed: 0.35,        // rychlost šíření vlny (c² na krok, max 0.5)
   waveSteps: 2,           // kroků vlny za snímek (rychlejší šíření)
   waveDamping: 1.2,       // útlum vln za s
-  waveForce: 12,          // jak silně vlna tlačí particly (od tahu ven)
+  waveDrift: 40,          // rozrážení: jak daleko vlna particly trvale odsune od tahu ven
+  waveForce: 6,           // jak silně vlna tlačí particly (od tahu ven)
   idleSleep: 5,           // s bez pohybu myši -> simulace se uspí (nejdřív až proud dozní)
 };
 
