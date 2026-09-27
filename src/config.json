@@ -249,13 +249,27 @@
     "atmoX": 0.1,
     "atmoY": 1.05,
     "atmoSize": 1.1,
-    "atmoStrength": 0.6,
+    "atmoStrength": 0,
     "atmo2Color": "#15606b",
     "atmo2X": 0,
     "atmo2Y": -0.05,
     "atmo2Strength": 0.3,
     "grain": 0.06,
     "vignette": 0.5
+  },
+  "tvLight": {
+    "enabled": true,
+    "color": "#2f9a9a",
+    "strength": 2,
+    "size": 3,
+    "rays": 0.9,
+    "facingMin": 0.55,
+    "facingFull": 0.92,
+    "waterClip": 1,
+    "waterMin": 12,
+    "waterMax": 50,
+    "insideStrength": 1,
+    "insideFloor": 0.5
   },
   "atmosphereDust": {
     "enabled": true,

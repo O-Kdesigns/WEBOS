@@ -4,7 +4,7 @@ Mapa všeho, co ve WEBOSu „svítí“: skutečná three.js světla, falešná 
 Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 
 > **Pravidlo pro AI:** když najdeš světlo / světelný efekt, který tu chybí, nebo nějaký změníš či přidáš, **aktualizuj tento soubor ve stejném commitu**.
-> Poslední revize: 2026-09-27 (INSIDE podle Active Theory: DOF v INSIDE, rozmazané video plátno, nový jelly).
+> Poslední revize: 2026-09-27 (modrá záře z levého horního rohu P4 vypnutá -> nové světlo TV P13 s maskou 2D vody).
 
 ---
 
@@ -53,7 +53,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | P1 | **God rays ze středu DNA** (z pozice L3 na obrazovce, z jasných pixelů nad `threshold`) | `volumetricLight` (exposure, decay 0.92, density, weight, threshold 0.4, rayLength 2, maxRadius 0.73) | ORBIT (× `uVisibility` = jak moc kamera míří na L3), zhasínají s `uInsideTransition` |
 | P2 | **Bloom** | `cinematic.bloomStrength` 1.2, `bloomThreshold` 0.35 | ORBIT; v INSIDE × `cinematic.insideBloom` (výchozí 0 = vypnuto) |
 | P3 | **DOF** (ORBIT: ohnisko = osa DNA + `focusOffset`; INSIDE: `insideFocus` 1.9 = solidy) | `cinematic.dofStrength/focusRange/blurRadius`, `insideDof` (0.85), `insideFocus`, `insideFocusRange` (1.1) | ORBIT i INSIDE (prolnutí podle přechodu). Blur 3 průchody + 4 vzorky při skládání (jinak kostičky). |
-| P4 | **Atmosférická záře** – 2 barevné skvrny v screen-space | `cinematic.atmoColor/X/Y/Size/Strength`, `atmo2*` | vždy (při `cinematic.enabled`) |
+| P4 | **Atmosférická záře** – 2 barevné skvrny v screen-space. Skvrna 1 (tyrkysová z levého horního rohu) je **vypnutá** (`atmoStrength` 0, kód zůstává) – její barvu a tvar teď používá P13. | `cinematic.atmoColor/X/Y/Size/Strength`, `atmo2*` | vždy (při `cinematic.enabled`) |
 | P5 | **Zrno + viněta** | `cinematic.grain`, `cinematic.vignette` | vždy |
 | P6 | **Hloubková mlha + kouř** | `insideFog` (masterFogIntensity 70, fogColor, fogNear 0.7 / **fogFar 8**, **fogDensity 1.2**, smoke*, baseFogBrightness 2.5) | INSIDE. Dřív fogFar 4.5 / density 1.5 = vše za ~3.5 j. v plné mlze, vzdálené vrstvy částic nebyly vidět. |
 | P7 | **Světlo myši** (volumetrické světlo + stíny kolem kurzoru, barva `uLightColor` = `volumetricLight.color`) | `insideFog.mouseLightExposure/Radius`, `enableMouseFog` | INSIDE |
@@ -61,6 +61,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | P9 | **Ghost video** (video prosvítá do hloubky) | `volumetricDepth` (ghostStrength **0.12**, startDistance **3.2**, fadeRange) | INSIDE. Dřív 0.35 od 2.16 = ostrý text videa přes zadní solidy. |
 | P10 | **Středové paprsky z videa** | `volumetricDepth.rays*` | **v kódu vypnuté** (`uCenterRaysExposure = 0`) |
 | P11 | **Záře + paprsky tisku** (maska žhavé vrstvy 1/4, paprsky se sbíhají z vrstvy k hranám rámu = obrazovka × `raysFrameScale` (1 okraje, 0 střed), rohy `raysBevel`; `raysFrame:false` = do bodu `raysCenterX/Y` 0.5/0.33; `raysInward:false` = staré, ven od bodu) | `solidPrint.raysStrength` 10, `rayLength` 0.9 | jen během tisku/odtisku |
+| P13 | **Světlo TV + maska 2D vody** (`tvLight()`): ORBIT = tyrkysová záře s pomalu se vlnícími paprsky kolem **aktivní televize** (sklo `TV_Glass`, pozice a velikost se promítají z 3D, takže světlo drží u TV i při posunu kamery). Viditelnost = jak kolmo se kamera dívá na obrazovku TV (`facingMin` → `facingFull`) × zmizení desky × začátek průletu. **Voda z myši** (rychlost proudu `ParticleFluid` mezi `waterMin`/`waterMax` buněk/s) do záře vyřezává díry (`waterClip`). INSIDE = stejná barva jen v místech vody (tvar podle atmo skvrny P4, min. `insideFloor`). | `tvLight` (color #2f9a9a, strength 2, size 3, rays 0.9, waterMin 12, waterMax 50, insideStrength 1, insideFloor 0.5) | ORBIT (TV v záběru) + INSIDE (jen voda) |
 | P12 | **Kontrast HUD textu** (maska pod texty) | `ui2d` / `valueBoost`, `saturationBoost`… | vždy, kde je HUD text |
 
 ---
@@ -71,7 +72,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - **Světla:** L1 HDRI city, L2 kamerový spot, L3 centrální point (uvnitř DNA), L4 horní spot, L5 ambient → osvětlují GLB meshe (desky `GlassDesk` apod., `meshPhysicalMaterial`).
 - **DNA particly (jelly):** scénická světla na ně nepůsobí → F1 key/fill + F2 video uvnitř. Při rotaci se míchá tmavá/světlá (`transitionMaxLight/MinDark`). F3–F5 jsou vypnuté (solidy jsou skryté, `SolidLinkDriver` má amount 0).
 - **Samosvit:** E1 pozadí, E2 prach, E3 skla TV s videem, aura/jádro L3, E7 odtržené particly (záblesk při odfouknutí myší).
-- **Post:** P1 god rays ze středu DNA, P2 bloom, P3 DOF, P4 atmosférické skvrny, P5 zrno + viněta, P12 HUD.
+- **Post:** P1 god rays ze středu DNA, P13 světlo TV (voda v něm dělá díry), P2 bloom, P3 DOF, P4 atmosférické skvrny, P5 zrno + viněta, P12 HUD.
 
 ### 🌀 PRŮLET PORTÁLEM (`portalFx.progress` 0 → 1, 2 s)
 - Vše z ORBITu, kamera jede k `Camera_In` (L2 jede s ní).
@@ -84,7 +85,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - **Solidy** (`MeshStandard` z GLB + `patchSolidLook`): vlastní barva/kov/drsnost, tiskové rýhy, zrno. F3 je přisvítí barvou videa z okolních particlů a přidá lem.
 - **Particly (jelly):** F1 + F2, F4 přisvícení od solidu (oranžové #ff6a2a, síla 1).
 - **Samosvit:** E4 video plátno, E2 prach. E6 je vypnuté.
-- **Post:** P3 DOF (ostré solidy, rozmazané popředí a dálka), P6 mlha + kouř, P7 světlo myši, P8 popředová mlha, P9 ghost video, P4 + P5, P2 jen × `insideBloom` (0), P12.
+- **Post:** P3 DOF (ostré solidy, rozmazané popředí a dálka), P6 mlha + kouř, P7 světlo myši, P8 popředová mlha, P9 ghost video, P13 jen v místech vody, P4 + P5, P2 jen × `insideBloom` (0), P12.
 - F3/F4 běží jen při `printFx.progress > 0` (= solid je aspoň částečně vytištěný). Náběh je přes `smoothstep(transitionProgress, 0.6, 1)`.
 
 ### 🔥 INSIDE — aktivní 3D tisk (a odtisk při odchodu)
@@ -107,6 +108,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - `window.__linkOverride = { solidMaterial, particleLight, solidLight }`, `window.__linkFx` → F3–F6
 - `window.__printOverride = {...}`, `window.__printHold = 0..1`, `window.__printFx` → E5, P11
 - `window.__portalHold = 0..1` → zmrazí průlet (prolnutí ORBIT/INSIDE postu)
+- `window.__tvLightOverride = { strength, debug: 1 }` → P13 živě; `debug: 1` = obrazovka jen maska vody (zelená) + záře TV (červená), `debug: 2/3/4` = surový proud. `window.__tvLight` = pozice/velikost/viditelnost TV
 - `window.__postMat` → materiál postu (uniformy P1–P12 přímo, přepisují se každý snímek z configu)
 - `window.__r3f.get().scene.traverse(o => o.isLight && console.log(o.type, o.intensity))` → výpis skutečných světel (kontrola, jestli nepřibylo nějaké z GLB)
 

@@ -18,6 +18,9 @@ import { portalFx } from './PortalTransition';
 
 const FBO_SCALE = 0.5;
 
+// Všechny meshe skla TV (i neaktivní desky) – post (VolumetricLight) z nich bere pozici aktivní televize pro světlo TV
+export const tvRegistry = new Set();
+
 const vertexShader = `
   varying vec3 vLocal;
   varying vec3 vLN;
@@ -351,9 +354,11 @@ function TvGlassMesh({ part, shared, videoTexture, active }) {
   useEffect(() => {
     const mesh = ref.current;
     mesh.userData.tvActive = !!active;
+    mesh.userData.tvPart = part;
     shared.meshes.add(mesh);
-    return () => { shared.meshes.delete(mesh); };
-  }, [shared, active]);
+    tvRegistry.add(mesh);
+    return () => { shared.meshes.delete(mesh); tvRegistry.delete(mesh); };
+  }, [shared, active, part]);
 
   return (
     <mesh

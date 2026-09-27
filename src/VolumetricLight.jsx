@@ -6,6 +6,8 @@ import { debugMetrics } from './DebugMonitor';
 import { TextContrastPass } from './TextContrastPass';
 import { getHudTextMask } from './hudTextMask';
 import { printFx } from './SolidPrint';
+import { tvRegistry } from './TvGlass';
+import { getFluid } from './components/particles/ParticleFluid';
 
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 dummyTexture.needsUpdate = true;
@@ -107,7 +109,23 @@ const VolumetricLightShader = {
     uPrintInward: { value: 1.0 },
     uPrintFrame: { value: 1.0 },
     uPrintFrameScale: { value: 1.0 },
-    uPrintBevel: { value: 0.3 }
+    uPrintBevel: { value: 0.3 },
+
+    // Světlo TV (config tvLight): ORBIT = záře + paprsky kolem aktivní televize, voda z myši do ní vyřezává díry;
+    // INSIDE = to samé světlo je vidět jen tam, kde je voda
+    tFluid: { value: null },
+    uFluidOn: { value: 0.0 },
+    uWaterRange: { value: new THREE.Vector2(4.0, 40.0) },
+    uTvPos: { value: new THREE.Vector2(0.5, 0.5) },
+    uTvSize: { value: 0.5 },
+    uTvVis: { value: 0.0 },
+    uTvColor: { value: new THREE.Color('#2f9a9a') },
+    uTvStrength: { value: 0.0 },
+    uTvRays: { value: 0.6 },
+    uTvClip: { value: 1.0 },
+    uTvInside: { value: 0.0 },
+    uTvInsideFloor: { value: 0.35 },
+    uTvDebug: { value: 0.0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -214,6 +232,20 @@ const VolumetricLightShader = {
     uniform float uPrintFrame;       // 1 = paprsky se sbíhají k okrajům rámu (zmenšená obrazovka), 0 = k bodu uPrintCenter
     uniform float uPrintFrameScale;  // 1 = rám = okraje obrazovky, 0 = rám se smrskne do středu obrazovky
     uniform float uPrintBevel;       // 0..1 zaoblení rohů rámu + změkčení zlomu mezi hranami
+
+    uniform sampler2D tFluid;
+    uniform float uFluidOn;
+    uniform vec2 uWaterRange;
+    uniform vec2 uTvPos;
+    uniform float uTvSize;
+    uniform float uTvVis;
+    uniform vec3 uTvColor;
+    uniform float uTvStrength;
+    uniform float uTvRays;
+    uniform float uTvClip;
+    uniform float uTvInside;
+    uniform float uTvInsideFloor;
+    uniform float uTvDebug; // DEV: 1 = na obrazovce jen maska vody (zelená) + záře TV (červená)
 
     // vzdálenost od rámu (aspect prostor, střed obrazovky = 0): <0 uvnitř, >0 venku
     float printFrameSd(vec2 p) {
@@ -327,6 +359,34 @@ const VolumetricLightShader = {
       return clamp(n * 0.5 + 0.5, 0.0, 1.0);
     }
 
+    // Světlo TV. Voda = rychlost proudu z ParticleFluid (buňky/s) přes práh uWaterRange -> maska 0..1.
+    // ORBIT: záře kolem televize (paprsky = šum podle úhlu, bez švu), voda v ní dělá díry (clip).
+    // INSIDE: stejná barva, ale jen v místech vody (tvar = atmo skvrna, min. uTvInsideFloor po celé obrazovce).
+    float waterMask() {
+      return uFluidOn > 0.5 ? smoothstep(uWaterRange.x, uWaterRange.y, length(texture2D(tFluid, vUv).xy)) : 0.0;
+    }
+    vec3 tvLight(bool isBg) {
+      float w = waterMask();
+      vec2 asp = vec2(uAspect, 1.0);
+      vec3 L = vec3(0.0);
+      float orbitAmt = uTvVis * uTvStrength * (1.0 - uInsideTransition);
+      if (orbitAmt > 0.001) {
+        vec2 d = (vUv - uTvPos) * asp;
+        float r = length(d);
+        float g = 1.0 - smoothstep(0.0, uTvSize, r);
+        g *= g;
+        vec2 dir = d / max(r, 1e-4);
+        float n = snoise(dir * 2.2 + vec2(uTime * 0.03, -uTime * 0.02)) * 0.6 + snoise(dir * 5.3 - uTime * 0.05) * 0.4;
+        float rays = mix(1.0, clamp(0.55 + n * 0.9, 0.0, 1.6), uTvRays * smoothstep(0.0, uTvSize * 0.35, r));
+        L += uTvColor * g * rays * orbitAmt * (1.0 - uTvClip * w);
+      }
+      if (uInsideTransition > 0.001 && uTvInside > 0.001 && w > 0.001) {
+        float a1 = 1.0 - smoothstep(0.0, uAtmoSize, length((vUv - uAtmoPos) * asp));
+        L += uTvColor * max(a1 * a1, uTvInsideFloor) * w * uTvInside * uInsideTransition;
+      }
+      return L * (isBg ? 1.0 : 0.55);
+    }
+
     // Cinematic dokončení: bloom z rozmazaného bufferu, atmosférická záře, viněta, filmové zrno
     vec3 cinematicFinish(vec3 col, bool isBg) {
       if (uCineEnabled < 0.5) return col;
@@ -350,6 +410,9 @@ const VolumetricLightShader = {
     }
 
     void main() {
+      if (uTvDebug > 3.5) { vec4 fv = texture2D(tFluid, vUv); float sp = length(fv.xy); gl_FragColor = vec4(step(500.0, sp), smoothstep(0.0, 20.0, sp), step(0.5, fv.w), 1.0); return; }
+      if (uTvDebug > 1.5) { vec4 fv = texture2D(tFluid, vUv); gl_FragColor = vec4(abs(fv.xy) / (uTvDebug > 2.5 ? 1e4 : 100.0), fv.z, 1.0); return; }
+      if (uTvDebug > 0.5) { gl_FragColor = vec4(length(tvLight(true)), waterMask(), 0.0, 1.0); return; }
       vec4 baseColor = texture2D(tDiffuse, vUv);
       float cineDepth = texture2D(tDepth, vUv).r;
       bool cineBg = cineDepth >= 0.9999;
@@ -404,7 +467,7 @@ const VolumetricLightShader = {
 
       // If purely in ORBIT mode, return early for speed
       if (uInsideTransition <= 0.001) {
-        gl_FragColor = vec4(cinematicFinish(orbitColor, cineBg), baseColor.a);
+        gl_FragColor = vec4(cinematicFinish(orbitColor + tvLight(cineBg), cineBg), baseColor.a);
         return;
       }
 
@@ -635,7 +698,7 @@ const VolumetricLightShader = {
         finalColor += printRays(vUv, dither);
       }
 
-      gl_FragColor = vec4(cinematicFinish(finalColor, cineBg), baseColor.a);
+      gl_FragColor = vec4(cinematicFinish(finalColor + tvLight(cineBg), cineBg), baseColor.a);
     }
   `
 };
@@ -852,6 +915,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
   const projRef = useRef(new THREE.Vector3());
   const camDirRef = useRef(new THREE.Vector3());
   const toLightRef = useRef(new THREE.Vector3());
+  const tvTmp = useRef({ c: new THREE.Vector3(), n: new THREE.Vector3(), e: new THREE.Vector3(), p: new THREE.Vector3(), vis: 0 });
 
   useFrame((state, delta) => {
     if (!enabled) {
@@ -978,6 +1042,57 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uMaxRadius.value = vl.maxRadius ?? 0.9;
     if (vl.color) {
       mat.uniforms.uLightColor.value.set(vl.color);
+    }
+
+    // Světlo TV: aktivní televize (sklo s videem) -> pozice a velikost na obrazovce, viditelnost podle toho,
+    // jak přímo se kamera na obrazovku TV dívá (kolmo = plně, z boku/zespodu zhasíná). Voda = proud z ParticleFluid.
+    {
+      // DEV: window.__tvLightOverride = { strength: 2, ... } přepíše config živě
+      const tl = { ...(appConfig?.tvLight || {}), ...(import.meta.env.DEV ? window.__tvLightOverride : null) };
+      const u = mat.uniforms, t = tvTmp.current;
+      let tvMesh = null;
+      for (const m of tvRegistry) {
+        if (!m.userData.tvActive) continue;
+        if (!tvMesh || (m.userData.tvPart?.video && !tvMesh.userData.tvPart?.video)) tvMesh = m;
+      }
+      let target = 0;
+      if (tl.enabled !== false && tvMesh && tvMesh.userData.tvPart) {
+        const part = tvMesh.userData.tvPart;
+        tvMesh.updateWorldMatrix(true, false);
+        t.c.copy(part.center).applyMatrix4(tvMesh.matrixWorld);
+        t.n.copy(part.axN).transformDirection(tvMesh.matrixWorld);
+        const radius = Math.max(part.half.x, part.half.y) * tvMesh.matrixWorld.getMaxScaleOnAxis();
+        t.e.copy(camWorldPosRef.current).sub(t.c);
+        const camDist = t.e.length();
+        t.e.divideScalar(Math.max(camDist, 1e-4));
+        const facing = Math.abs(t.n.dot(t.e));
+        camera.getWorldDirection(camDirRef.current);
+        const inFront = -camDirRef.current.dot(t.e);
+        t.p.copy(t.c).project(camera);
+        // poloměr TV na obrazovce (výška obrazovky = 1) přes FOV
+        const fovH = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov || 50) * 0.5);
+        const screenR = radius / Math.max(camDist * fovH, 1e-4);
+        u.uTvPos.value.set((t.p.x + 1) * 0.5, (t.p.y + 1) * 0.5);
+        u.uTvSize.value = Math.max(0.05, screenR * (tl.size ?? 3));
+        const fade = tvMesh.material?.uniforms?.uFade?.value ?? 1;
+        target = THREE.MathUtils.smoothstep(facing, tl.facingMin ?? 0.55, tl.facingFull ?? 0.92)
+          * (inFront > 0.2 ? 1 : 0) * fade
+          * (1 - THREE.MathUtils.smoothstep(portalFx.progress, 0.0, 0.4));
+      }
+      t.vis = THREE.MathUtils.damp(t.vis, target, 6, safeDelta);
+      u.uTvVis.value = t.vis;
+      u.uTvColor.value.set(tl.color ?? '#2f9a9a');
+      u.uTvStrength.value = tl.enabled === false ? 0 : (tl.strength ?? 2);
+      u.uTvRays.value = tl.rays ?? 0.9;
+      u.uTvClip.value = tl.waterClip ?? 1.0;
+      u.uTvInside.value = tl.enabled === false ? 0 : (tl.insideStrength ?? 1);
+      u.uTvInsideFloor.value = tl.insideFloor ?? 0.5;
+      u.uTvDebug.value = +tl.debug || 0;
+      u.uWaterRange.value.set(tl.waterMin ?? 12, tl.waterMax ?? 50);
+      const fl = getFluid(gl);
+      u.tFluid.value = fl.velocity || dummyTexture;
+      u.uFluidOn.value = fl.velocity ? 1 : 0;
+      if (import.meta.env.DEV) window.__tvLight = { pos: [u.uTvPos.value.x, u.uTvPos.value.y], size: u.uTvSize.value, vis: t.vis, facing: target, mesh: tvMesh };
     }
 
     // 0. Maska žhavé vrstvy 3D tisku (jen když se tiskne) – dostane stejnou hloubkovou mlhu jako INSIDE
