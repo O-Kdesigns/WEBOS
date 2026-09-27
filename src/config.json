@@ -87,7 +87,25 @@
     "mouseForce": 0.01,
     "laserLength": 62.1,
     "laserIntensity": 3,
-    "returnSpeed": 0.02
+    "returnSpeed": 0.06,
+    "fluid": {
+      "trailFade": 0.7,
+      "frontShell": 0.47,
+      "waveReach": 0.3,
+      "waveGrowth": 1,
+      "force": 0.4,
+      "speedCurve": 0.65,
+      "maxSpeed": 0.5,
+      "curl": 28.5,
+      "splatHardness": 1.6,
+      "dissipation": 0.1,
+      "coupling": 0.06,
+      "wakeRadius": 0.13,
+      "wake": 1,
+      "splatRadius": 0.01,
+      "strength": 0.4
+    },
+    "returnDamping": 0.4
   },
   "cylinderSettings": {
     "count": 30000,
