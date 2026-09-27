@@ -112,9 +112,9 @@ export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 
     `.replace('#include <emissivemap_fragment>', `
       #include <emissivemap_fragment>
       // stojatá duha v ORBITu (world-space, na kameře nezávislá, pomalu se proměňující) - viz JellyVideoMaterial.js
-      float dnaField = fract(0.5 + uTime * 0.0015 + vWorldPos.y * 0.05
-        + (dnaValueNoise(vWorldPos.xz * 0.07 + vec2(uTime * 0.0037, -uTime * 0.0027)) - 0.5) * 0.6
-        + (dnaValueNoise(vWorldPos.xy * 0.05 + vec2(-uTime * 0.0022, uTime * 0.0032) + 11.3) - 0.5) * 0.5);
+      float dnaField = fract(0.5 + uTime * 0.00225 + vWorldPos.y * 0.058
+        + (dnaValueNoise(vWorldPos.xz * 0.08 + vec2(uTime * 0.00555, -uTime * 0.00405)) - 0.5) * 0.6
+        + (dnaValueNoise(vWorldPos.xy * 0.058 + vec2(-uTime * 0.0033, uTime * 0.0048) + 11.3) - 0.5) * 0.5);
       diffuseColor.rgb = mix(dnaPaletteBlend(dnaField), diffuseColor.rgb, smoothstep(0.0, 1.0, uTransitionProgress));
       diffuseColor.rgb = mix(diffuseColor.rgb, uEscColor, vEsc * uEscTint);
       totalEmissiveRadiance += uEscColor * (vEscFlash * uEscFlash + vEsc * uEscGlow);

@@ -161,10 +161,10 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   void main() {
     // stojatá duha v ORBITu: world-space pole (na kameře nezávislé), pomalu tažené v čase,
     // namíchané z uDnaPalette (2D prach + barvy portfolií, viz ParticleMaterial.jsx)
-    float dnaField = fract(0.5 + uTime * 0.0015
-      + vWorldPos.y * 0.05
-      + snoise(vWorldPos.xz * 0.07 + vec2(uTime * 0.0037, -uTime * 0.0027)) * 0.3
-      + snoise(vWorldPos.xy * 0.05 + vec2(-uTime * 0.0022, uTime * 0.0032) + 11.3) * 0.25);
+    float dnaField = fract(0.5 + uTime * 0.00225
+      + vWorldPos.y * 0.058
+      + snoise(vWorldPos.xz * 0.08 + vec2(uTime * 0.00555, -uTime * 0.00405)) * 0.3
+      + snoise(vWorldPos.xy * 0.058 + vec2(-uTime * 0.0033, uTime * 0.0048) + 11.3) * 0.25);
     vec3 uColorMod = mix(dnaPaletteBlend(dnaField), uColor, smoothstep(0.0, 1.0, uTransitionProgress));
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(vViewPosition);
