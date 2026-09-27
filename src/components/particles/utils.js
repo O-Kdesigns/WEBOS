@@ -40,6 +40,25 @@ uniform float uWaveDrift;
 uniform float uWaveC;          // rychlost vln (výšky obrazovky/s)
 uniform float uWaveCStep;      // posun vlny za krok simulace (buňky)
 uniform float uHoldDecay;      // 1 / (zpoždění + náběh návratu) – jak rychle particl "zapomene" strčení
+// Fyzikální návrat (vodní režim): pružina v rychlosti místo posouvání pozice -> particl si nese svou
+// hybnost, kmity vln i víření a k cíli se stáčí po oblouku. Sdílené uniformy s pozičním shaderem.
+uniform float uPhysReturn;     // 1 = návrat pružinou zde, 0 = starý posun pozice v pozičním shaderu
+uniform float uReturnK;        // tuhost pružiny (1/s²)
+uniform float uReturnDamp;     // tlumení pružiny (1/s)
+uniform float uReturnDelay;
+uniform float uReturnRamp;
+uniform float uTime;
+uniform float uFloatSpeed;
+uniform float uFloatAmplitude;
+
+// síla návratu 0..1 podle "držení" (w): zpoždění, pak pomalý rozjezd (ease-in)
+float returnRampOf(float hold) {
+    float holdT = uReturnDelay + uReturnRamp;
+    if (holdT < 1e-4) return 1.0;
+    float sinceHit = (1.0 - hold) * holdT;
+    float r = smoothstep(0.0, 1.0, clamp((sinceHit - uReturnDelay) / max(uReturnRamp, 1e-3), 0.0, 1.0));
+    return r * r;
+}
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -88,8 +107,9 @@ void main() {
             vec3 fl = texture2D(tFluid, suv).xyz; // xy = proud, z = stopa myši
             vec2 ndc = fl.xy * smoothstep(0.1, 0.7, fl.z) * uFluidTexel * 2.0 * uDt; // posun v NDC za snímek, jen ve stopě
             vec3 flow = (uCamRight * (ndc.x * c.w / uProj.x) + uCamUp * (ndc.y * c.w / uProj.y)) * uFluidForce;
-            // proud strhává, ale klidná voda particl nebrzdí -> po zastavení myši dál klouže (dojezd)
-            float grab = smoothstep(0.0, 1.0, length(flow) / (length(vel.xyz) + 1e-6));
+            // proud strhává jen když je rychlejší než particl; slábnoucí/mizející stopa ho nebrzdí
+            // -> po zastavení myši dál klouže vlastní hybností (dojezd), brzdí ho jen odpor vody
+            float grab = smoothstep(0.8, 1.3, length(flow) / (length(vel.xyz) + 1e-6));
             vel.xyz += (flow - vel.xyz) * uCoupling * front * grab;
             // vlna: zrychlení -grad(výška) -> hřbet od tahu postupně odtlačí particly ven, pak je vrátí
             vec2 wt = uFluidTexel;
@@ -114,8 +134,21 @@ void main() {
     // w = "držení": 1 = právě strčen, lineárně klesá k 0 za (zpoždění + náběh); poziční shader z něj počítá sílu návratu
     vel.w = max(vel.w - uDt * uHoldDecay, disturb);
 
-    // Tření - zpomalí "cáknutí"
-    vel.xyz *= friction;
+    // Tření - zpomalí "cáknutí" (friction = za snímek při 60 fps, přepočet na skutečné dt)
+    vel.xyz *= pow(friction, uDt * 60.0);
+
+    // Návrat pružinou: zrychlení k cíli, rychlost se nemaže -> hybnost i víření dobíhají do návratu.
+    // vel je posun za snímek -> přírůstek = K * výchylka * dt².
+    float phys = uPhysReturn * step(0.999, uTransitionProgress);
+    if (phys > 0.5) {
+        vec4 base = texture2D(tBasePosition, uv);
+        float offset = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
+        vec3 local = base.xyz + vec3(0.0, sin(uTime * uFloatSpeed + offset) * uFloatAmplitude, 0.0);
+        vec3 tgt = (uFinalMat * vec4(local, 1.0)).xyz;
+        float r = returnRampOf(vel.w);
+        vel.xyz += (tgt - pos.xyz) * (uReturnK * r * uDt * uDt);
+        vel.xyz *= exp(-uReturnDamp * r * uDt);
+    }
     
     gl_FragColor = vel;
 }
@@ -128,6 +161,7 @@ uniform float uFloatAmplitude;
 uniform float uReturnSpeed;
 uniform float uReturnDelay;   // s po strčení vodou, než začne návrat k cíli
 uniform float uReturnRamp;    // s, za které se síla návratu rozjede od 0 do plné (ease-in)
+uniform float uPhysReturn;    // 1 = návrat řeší pružina ve velocity shaderu, tady se pozice netáhne
 uniform float uScatter;
 uniform float uTransitionProgress;
 uniform sampler2D tBasePosition;
@@ -243,6 +277,7 @@ void main() {
     float sinceHit = (1.0 - vel.w) * holdT;
     float ramp = smoothstep(0.0, 1.0, clamp((sinceHit - uReturnDelay) / max(uReturnRamp, 1e-3), 0.0, 1.0));
     ramp = mix(1.0, ramp * ramp, step(1e-4, holdT)); // ease-in: pomalý start, pak zrychluje
+    ramp *= 1.0 - uPhysReturn * step(0.999, uTransitionProgress); // vodní režim: návrat je pružina v rychlosti
     float returnSpeed = mix(uReturnSpeed * ramp, 1.0, isReserve * (1.0 - step(0.001, tProgress)));
     // jiskra v letu jede přesně po dráze (lag by oblouk rozmazal)
     returnSpeed = mix(returnSpeed, 0.6, inFlight * step(0.999, tProgress));
@@ -335,6 +370,7 @@ export function useGPGPU(count, particlesData, gl) {
       uMVP: { value: new THREE.Matrix4() }, uCamRight: { value: new THREE.Vector3() }, uCamUp: { value: new THREE.Vector3() },
       uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
       uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
+      uReturnK: { value: 0 }, uReturnDamp: { value: 0 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -367,6 +403,10 @@ export function useGPGPU(count, particlesData, gl) {
     const pu = posVar.material.uniforms;
     const targetUniforms = { tBasePosition: pu.tBasePosition, tDnaPosition: pu.tDnaPosition, uFinalMat: pu.uFinalMat, uTransitionProgress: pu.uTransitionProgress, uCameraY: pu.uCameraY };
     Object.assign(velVar.material.uniforms, targetUniforms);
+    pu.uPhysReturn = { value: 0 };
+    // návrat pružinou (velocity shader) potřebuje stejný cíl i náběh jako poziční shader
+    Object.assign(velVar.material.uniforms, { uPhysReturn: pu.uPhysReturn, uReturnDelay: pu.uReturnDelay, uReturnRamp: pu.uReturnRamp,
+      uTime: pu.uTime, uFloatSpeed: pu.uFloatSpeed, uFloatAmplitude: pu.uFloatAmplitude });
 
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);
@@ -553,6 +593,17 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       }
     }
     velUniforms.uFluidOn.value = fluidOn ? 1 : 0;
+    // vodní režim: návrat jako tlumená pružina v rychlosti (ne během emerge letu ani scatteru – ty jedou po dráze)
+    const emergeBusy = posUniforms.uEmerge.value > 0.5 && posUniforms.uPrintY.value <= 1e3;
+    posUniforms.uPhysReturn.value = fluidOn && !emergeBusy && posUniforms.uScatter.value < 1e-4 ? 1 : 0;
+    {
+      // rychlost návratu (podíl za snímek při 60 fps) -> vlastní frekvence pružiny se stejně dlouhým návratem
+      const rs = Math.min(0.95, Math.max(1e-4, posUniforms.uReturnSpeed.value));
+      const omega = Math.min(25, -Math.log(1 - rs) * 60 * 1.5);
+      const zeta = Math.max(0.05, phys.returnDamping ?? 0.7);
+      velUniforms.uReturnK.value = omega * omega;
+      velUniforms.uReturnDamp.value = 2 * zeta * omega;
+    }
 
     if (hasIntersection && !fluidCfg.enabled) {
       meshRef.current.worldToLocal(rawTarget.current);
