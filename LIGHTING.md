@@ -4,7 +4,7 @@ Mapa všeho, co ve WEBOSu „svítí“: skutečná three.js světla, falešná 
 Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 
 > **Pravidlo pro AI:** když najdeš světlo / světelný efekt, který tu chybí, nebo nějaký změníš či přidáš, **aktualizuj tento soubor ve stejném commitu**.
-> Poslední revize: 2026-09-27 (P13: slabší záře + delší paprsky různé délky; INSIDE voda z barviva Pavlovy simulace se stínováním, odleskem a lomem; P7 světlo myši vypnuté).
+> Poslední revize: 2026-09-27 (P13: ORBIT mlha nasvícená 2D prachem místo záře u TV; INSIDE voda rozráží mlhu nad pozadím a nad particly v ní víří světlo TV; P7 světlo myši vypnuté).
 
 ---
 
@@ -61,7 +61,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | P9 | **Ghost video** (video prosvítá do hloubky) | `volumetricDepth` (ghostStrength **0.12**, startDistance **3.2**, fadeRange) | INSIDE. Dřív 0.35 od 2.16 = ostrý text videa přes zadní solidy. |
 | P10 | **Středové paprsky z videa** | `volumetricDepth.rays*` | **v kódu vypnuté** (`uCenterRaysExposure = 0`) |
 | P11 | **Záře + paprsky tisku** (maska žhavé vrstvy 1/4, paprsky se sbíhají z vrstvy k hranám rámu = obrazovka × `raysFrameScale` (1 okraje, 0 střed), rohy `raysBevel`; `raysFrame:false` = do bodu `raysCenterX/Y` 0.5/0.33; `raysInward:false` = staré, ven od bodu) | `solidPrint.raysStrength` 10, `rayLength` 0.9 | jen během tisku/odtisku |
-| P13 | **Světlo TV + maska 2D vody** (`tvLight()`): ORBIT = tyrkysová záře kolem **aktivní televize** (sklo `TV_Glass`): svítí celá plocha – vzdálenost se měří od promítnutého obdélníku obrazovky (i v perspektivě), k tomu paprsky (`rays`) – úzké svazky, každý jinak dlouhý (nejdelší `rayLength` × velikost záře), jas u TV `glow` a široká měkká záře bez paprsků (`halo`, na ní jsou vidět bokeh particly). Pozice/velikost z 3D, drží u TV i při posunu kamery. Viditelnost = `facingFloor` (i z boku/shora) → 1 při pohledu v úrovni TV (`facingMin` → `facingFull`) × zmizení desky × začátek průletu. **Voda z myši** do záře vyřezává díry (`waterClip`, maska = rychlost proudu `waterMin`/`waterMax` buněk/s). INSIDE = voda z **barviva** Pavlovy simulace (`dyeMin`/`dyeMax`; spirály bez tmavých děr ve středech vírů): tyrkysová barva × stínování podle sklonu hladiny, odlesk shora zleva (`waterShine`), lom obrazu pod vodou (`waterRefract`); přes particly 70 %. | `tvLight` (color #2f9a9a, strength 1, size 1, minSize 0.12, glow 0.6, rays 0.45, rayLength 3.5, halo 0.12, facingFloor 0.55, facingMin 0.4, waterMin 12, waterMax 50, insideStrength 1, insideFloor 0.75, dyeMin 0.01, dyeMax 0.12, waterShine 1, waterRefract 0.012) | ORBIT (TV v záběru) + INSIDE (jen voda) |
+| P13 | **Světlo TV + maska 2D vody**: **ORBIT = mlha nasvícená 2D prachem** (`dustFog()`, E2 AtmosphereDust – body bez hloubky = pozadí): 24 vzorků rozmazaného bufferu (tBlur) od pixelu ke středu světla P1 → každá tečka prachu táhne paprsek od středu ven jako god rays P1 (`dustRays`, `dustRayLength`, `dustDecay`), + místní opar kolem prachu (`dustHaze`); strop jasu `dustCap` (jasné věci – TV, DNA – mlhu nepřepálí, samy se nepočítají, nejsou pozadí), barva z velké části tyrkysová (`dustTint`). Voda z myši do mlhy vyřezává díry (`waterClip`, maska = rychlost proudu `waterMin`/`waterMax`). Stará záře kolem aktivní TV je vypnutá (`tvAnchor` 0, kód zůstává). **INSIDE** = voda z **barviva** Pavlovy simulace (`dyeMin`/`dyeMax`), rozmazaná po proudu (`waterStreak`) a rozdělená do pramínků natažených podél toku (`waterWisp`). Podle toho, kolik okolí zakrývají particly (8 vzorků hloubky, `coverRadius`): nad volným pozadím voda **rozráží mlhu** (hloubkovou i popředovou, `fogClear`, okraj díry chytí trochu tyrkysové `fogRim`), nad shlukem particlů v ní **víří tyrkysové světlo** (× atmo skvrna, min. `insideFloor`). | `tvLight` (color #2f9a9a, strength 1, dustFog 1, dustRays 6, dustHaze 0.25, dustRayLength 0.35, dustDecay 0.96, dustCap 0.15, dustTint 0.7, tvAnchor 0, waterClip 1, waterMin 12, waterMax 50, insideStrength 1, insideFloor 0.75, dyeMin 0.01, dyeMax 0.12, fogClear 1, fogRim 0.35, waterStreak 0.25, coverRadius 0.025, waterWisp 0.8; staré TV: size, glow, rays, rayLength, halo, facing*) | ORBIT (vždy) + INSIDE (jen voda) |
 | P12 | **Kontrast HUD textu** (maska pod texty) | `ui2d` / `valueBoost`, `saturationBoost`… | vždy, kde je HUD text |
 
 ---
@@ -72,7 +72,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - **Světla:** L1 HDRI city, L2 kamerový spot, L3 centrální point (uvnitř DNA), L4 horní spot, L5 ambient → osvětlují GLB meshe (desky `GlassDesk` apod., `meshPhysicalMaterial`).
 - **DNA particly (jelly):** scénická světla na ně nepůsobí → F1 key/fill + F2 video uvnitř. Při rotaci se míchá tmavá/světlá (`transitionMaxLight/MinDark`). F3–F5 jsou vypnuté (solidy jsou skryté, `SolidLinkDriver` má amount 0).
 - **Samosvit:** E1 pozadí, E2 prach, E3 skla TV s videem, aura/jádro L3, E7 odtržené particly (záblesk při odfouknutí myší).
-- **Post:** P1 god rays ze středu DNA, P13 světlo TV (voda v něm dělá díry), P2 bloom, P3 DOF, P4 atmosférické skvrny, P5 zrno + viněta, P12 HUD.
+- **Post:** P1 god rays ze středu DNA, P13 mlha nasvícená prachem (voda v ní dělá díry), P2 bloom, P3 DOF, P4 atmosférické skvrny, P5 zrno + viněta, P12 HUD.
 
 ### 🌀 PRŮLET PORTÁLEM (`portalFx.progress` 0 → 1, 2 s)
 - Vše z ORBITu, kamera jede k `Camera_In` (L2 jede s ní).
@@ -85,7 +85,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - **Solidy** (`MeshStandard` z GLB + `patchSolidLook`): vlastní barva/kov/drsnost, tiskové rýhy, zrno. F3 je přisvítí barvou videa z okolních particlů a přidá lem.
 - **Particly (jelly):** F1 + F2, F4 přisvícení od solidu (oranžové #ff6a2a, síla 1).
 - **Samosvit:** E4 video plátno, E2 prach. E6 je vypnuté.
-- **Post:** P3 DOF (ostré solidy, rozmazané popředí a dálka), P6 mlha + kouř, (P7 světlo myši vypnuté), P8 popředová mlha, P9 ghost video, P13 jen v místech vody, P4 + P5, P2 jen × `insideBloom` (0), P12.
+- **Post:** P3 DOF (ostré solidy, rozmazané popředí a dálka), P6 mlha + kouř, (P7 světlo myši vypnuté), P8 popředová mlha, P9 ghost video, P13 jen v místech vody (nad pozadím rozráží mlhu, nad particly víří světlo), P4 + P5, P2 jen × `insideBloom` (0), P12.
 - F3/F4 běží jen při `printFx.progress > 0` (= solid je aspoň částečně vytištěný). Náběh je přes `smoothstep(transitionProgress, 0.6, 1)`.
 
 ### 🔥 INSIDE — aktivní 3D tisk (a odtisk při odchodu)
@@ -108,7 +108,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - `window.__linkOverride = { solidMaterial, particleLight, solidLight }`, `window.__linkFx` → F3–F6
 - `window.__printOverride = {...}`, `window.__printHold = 0..1`, `window.__printFx` → E5, P11
 - `window.__portalHold = 0..1` → zmrazí průlet (prolnutí ORBIT/INSIDE postu)
-- `window.__tvLightOverride = { strength, debug: 1 }` → P13 živě; `debug: 1` = obrazovka jen maska vody (zelená) + záře TV (červená), `debug: 2/3/4` = surový proud. `window.__tvLight` = pozice/velikost/viditelnost TV
+- `window.__tvLightOverride = { strength, debug: 1 }` → P13 živě; `debug: 1` = obrazovka jen maska vody (zelená) + záře TV (červená), `debug: 2/3/4` = surový proud, `debug: 7` = mlha z prachu ×4, `8` = tBlur, `9` = INSIDE voda (červená) + zakrytí particly (zelená) + barvivo (modrá). `window.__tvLight` = pozice/velikost/viditelnost TV
 - `window.__postMat` → materiál postu (uniformy P1–P12 přímo, přepisují se každý snímek z configu)
 - `window.__r3f.get().scene.traverse(o => o.isLight && console.log(o.type, o.intensity))` → výpis skutečných světel (kontrola, jestli nepřibylo nějaké z GLB)
 

@@ -277,8 +277,19 @@
     "insideFloor": 0.75,
     "dyeMin": 0.01,
     "dyeMax": 0.12,
-    "waterShine": 1,
-    "waterRefract": 0.012
+    "tvAnchor": 0,
+    "dustFog": 1,
+    "dustRays": 6,
+    "dustHaze": 0.25,
+    "dustRayLength": 0.35,
+    "dustDecay": 0.96,
+    "dustCap": 0.15,
+    "dustTint": 0.7,
+    "fogClear": 1,
+    "fogRim": 0.35,
+    "waterStreak": 0.25,
+    "coverRadius": 0.025,
+    "waterWisp": 0.8
   },
   "atmosphereDust": {
     "enabled": true,
