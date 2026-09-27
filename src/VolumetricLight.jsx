@@ -110,7 +110,9 @@ const VolumetricLightShader = {
     uPrintFrame: { value: 1.0 },
     uPrintFrameScale: { value: 1.0 },
     uPrintBevel: { value: 0.3 },
-    uPrintThrough: { value: 0.35 },
+    uPrintLineA: { value: new THREE.Vector2() },
+    uPrintLineB: { value: new THREE.Vector2() },
+    uPrintLineColor: { value: new THREE.Color(0, 0, 0) },
 
     // Světlo TV (config tvLight): ORBIT = záře + paprsky kolem aktivní televize, voda z myši do ní vyřezává díry;
     // INSIDE = to samé světlo je vidět jen tam, kde je voda
@@ -257,7 +259,41 @@ const VolumetricLightShader = {
     uniform float uPrintFrame;       // 1 = paprsky se sbíhají k okrajům rámu (zmenšená obrazovka), 0 = k bodu uPrintCenter
     uniform float uPrintFrameScale;  // 1 = rám = okraje obrazovky, 0 = rám se smrskne do středu obrazovky
     uniform float uPrintBevel;       // 0..1 zaoblení rohů rámu + změkčení zlomu mezi hranami
-    uniform float uPrintThrough;     // >0: paprsky bodem uPrintCenter projdou a pokračují ještě tak daleko (křížení)
+    uniform vec2 uPrintLineA, uPrintLineB;   // tisková linka (uv) – řez přes celou šířku solidů
+    uniform vec3 uPrintLineColor;            // barva * síla laserů do prázdna (0 = vypnuto)
+
+    float c2(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
+
+    // Lasery do prázdna: z bodu uPrintCenter na každé místo tiskové linky (analyticky, bez masky).
+    // Pixel svítí, když přímka bod->pixel protne linku až ZA pixelem (pixel je mezi bodem a linkou).
+    vec3 printLineRays(vec2 uv) {
+      vec2 asp = vec2(uAspect, 1.0);
+      vec2 P = uPrintCenter * asp, A = uPrintLineA * asp, E = (uPrintLineB - uPrintLineA) * asp;
+      vec2 d = uv * asp - P;
+      float den = c2(d, E);
+      if (abs(den) < 1e-6) return vec3(0.0);
+      float t = c2(A - P, E) / den;       // pixel je v t = 1, linka v t
+      float sl = c2(A - P, d) / den;      // místo na lince 0..1
+      float dist = length(d);
+      vec3 col = vec3(0.0);
+      if (t >= 1.0 && sl >= 0.0 && sl <= 1.0) {
+        float edge = smoothstep(0.0, 0.1, sl) * smoothstep(0.0, 0.1, 1.0 - sl);
+        // jednotlivé lasery podél linky (pozvolna běží), ne plochý vějíř
+        float k = sl * 70.0 + uTime * 0.5;
+        float fk = fract(k), ik = floor(k);
+        float r0 = fract(sin(ik * 91.345) * 47453.5453), r1 = fract(sin((ik + 1.0) * 91.345) * 47453.5453);
+        float beam = mix(r0, r1, fk * fk * (3.0 - 2.0 * fk));
+        beam = 0.25 + 0.75 * beam * beam;
+        // k lince sílí, u zdroje zeslábne
+        float along = 1.0 / t;
+        col = uPrintLineColor * edge * beam * (0.35 + 0.65 * along) * smoothstep(0.0, 0.04, dist);
+      }
+      // samotná linka tence svítí
+      float sp = clamp(dot(uv * asp - A, E) / dot(E, E), 0.0, 1.0);
+      float ld = length(uv * asp - (A + E * sp));
+      col += uPrintLineColor * exp(-ld * ld / 0.000012) * 1.5;
+      return col;
+    }
 
     uniform sampler2D tFluid;
     uniform float uFluidOn;
@@ -346,38 +382,16 @@ const VolumetricLightShader = {
         if (uPrintInward < 0.5 && (float(i) + jit) * stepLen > dist) break;   // za úběžník (ke kameře) už paprsek nevede
         s += stepUv;
         acc += texture2D(tPrintMask, s).rgb * w;
-        w *= 0.955;
+        w *= mix(0.955, 0.975, uPrintInward);
       }
       // pruhování podle úhlu (jednotlivé paprsky místo plochého vějíře), pomalu se vlní
       float ang = atan(streakP.y, streakP.x) * 38.0 + uTime * 0.4;
       float fa = fract(ang), ia = floor(ang);
       float h0 = fract(sin(ia * 91.345) * 47453.5453), h1 = fract(sin((ia + 1.0) * 91.345) * 47453.5453);
       float streak = 0.45 + 0.9 * mix(h0, h1, fa * fa * (3.0 - 2.0 * fa));
-      // u bodu sbíhání paprsky zeslábnou, jinak se tam slije přepálená skvrna (při křížení jen těsně)
-      float crossing = (uPrintFrame < 0.5 && uPrintInward > 0.5 && uPrintThrough > 0.001) ? 1.0 : 0.0;
-      float nearFade = mix(1.0, smoothstep(0.0, mix(0.07, 0.025, crossing), dist), uPrintInward);
-      vec3 res = acc * streak;
-      if (crossing > 0.5 && dist < uPrintThrough) {
-        // křížení: pixel ZA bodem dostane světlo vrstvy z protější strany – paprsek prošel bodem a letí dál.
-        // Sbírá se od bodu dál směrem od pixelu; váha navazuje na útlum podle vzdálenosti pixel–bod.
-        vec2 thrUv = -stepUv;                 // směr od pixelu přes bod
-        vec2 t = uPrintCenter + thrUv * jit;
-        vec3 acc2 = vec3(0.0);
-        float w2 = pow(0.955, dist / stepLen);
-        for (int i = 0; i < 32; i++) {
-          t += thrUv;
-          acc2 += texture2D(tPrintMask, t).rgb * w2;
-          w2 *= 0.955;
-        }
-        // pruh stejné čáry = úhel strany, odkud světlo přišlo (opačný k pixelu)
-        float ang2 = atan(toC.y, toC.x) * 38.0 + uTime * 0.4;
-        float fb = fract(ang2), ib = floor(ang2);
-        float g0 = fract(sin(ib * 91.345) * 47453.5453), g1 = fract(sin((ib + 1.0) * 91.345) * 47453.5453);
-        float streak2 = 0.45 + 0.9 * mix(g0, g1, fb * fb * (3.0 - 2.0 * fb));
-        float tail = 1.0 - smoothstep(0.0, uPrintThrough, dist);
-        res += acc2 * streak2 * tail * tail;
-      }
-      return res * (uPrintRays / 40.0) * nearFade;
+      // u zdroje (bodu) paprsky zeslábnou, jinak se tam slije přepálená skvrna
+      float nearFade = mix(1.0, smoothstep(0.0, 0.04, dist), uPrintInward);
+      return acc * (uPrintRays / 40.0) * streak * nearFade;
     }
 
     varying vec2 vUv;
@@ -842,6 +856,7 @@ const VolumetricLightShader = {
         // žhavá vrstva prosvítí i přes mlhu INSIDE + paprsky k televizi
         finalColor += texture2D(tPrintMask, vUv).rgb * uPrintRays * 0.25;
         finalColor += printRays(vUv, dither);
+        finalColor += printLineRays(vUv);
       }
 
       gl_FragColor = vec4(cinematicFinish(finalColor + tvLight(cineBg), cineBg), baseColor.a);
@@ -1301,7 +1316,9 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uPrintFrame.value = printFx.frame ? 1 : 0;
     mat.uniforms.uPrintFrameScale.value = printFx.frameScale;
     mat.uniforms.uPrintBevel.value = printFx.bevel;
-    mat.uniforms.uPrintThrough.value = printFx.through;
+    mat.uniforms.uPrintLineA.value.copy(printFx.lineA);
+    mat.uniforms.uPrintLineB.value.copy(printFx.lineB);
+    mat.uniforms.uPrintLineColor.value.copy(printFx.lineColor);
 
     // 1. Vykreslení hlavní scény včetně hloubkového bufferu do render targetu
     gl.setRenderTarget(sceneTarget);

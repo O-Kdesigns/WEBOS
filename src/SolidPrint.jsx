@@ -35,9 +35,12 @@ export const printFx = {
   progress: 0,          // 0 = nic nevytištěno, 1 = hotovo
   rays: 0,              // síla paprsků pro VolumetricLight (0 = vypnuto, maska se nekreslí)
   rayLength: 0.9,
-  center: new THREE.Vector2(0.5, 0.33),
+  center: new THREE.Vector2(0.5, 0.25),
   inward: true,         // true = paprsky se sbíhají z vrstvy do bodu center (kamera), false = utíkají od něj ven
-  through: 0.35,        // o kolik (výšky obrazovky) paprsky za bodem center ještě pokračují -> křížení; 0 = končí v bodě
+  // tisková linka na obrazovce (uv): řez přes celou šířku solidů; lasery z center na ni míří i do prázdna
+  lineA: new THREE.Vector2(0.3, 0.5),
+  lineB: new THREE.Vector2(0.7, 0.5),
+  lineColor: new THREE.Color(0, 0, 0),   // barva * síla laserů do prázdna (0 = vypnuto)
   frame: false,         // true = paprsky se sbíhají k okrajům rámu (obrazovka zmenšená frameScale), přebíjí center
   frameScale: 1,        // 1 = rám = okraje obrazovky, 0 = smrskne se do středu obrazovky
   bevel: 0.3,           // zaoblení rohů rámu
@@ -193,7 +196,7 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
   useEffect(() => () => target.dispose(), [target]);
   useEffect(() => () => { gpu.material.dispose(); gpu.scene.clear(); gpu.proxies.clear(); }, [gpu]);
 
-  const st = useRef({ wait: 0, yMin: 0, yMax: 1, box: new THREE.Box3(), clear: new THREE.Color() });
+  const st = useRef({ wait: 0, yMin: 0, yMax: 1, box: new THREE.Box3(), clear: new THREE.Color(), v: new THREE.Vector3() });
 
   // proxy meshe v masce sdílí geometrii se solidem (nevlastní ji -> nedisposovat)
   const sync = useMemo(() => {
@@ -306,11 +309,21 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     // paprsky vedou z tištěné vrstvy do bodu center (výchozí dole uprostřed, 1/3 výšky od spodku = "z kamery");
     // raysInward:false = staré god rays, tiskárna ZA kamerou, paprsky utíkají od center ven
     printFx.inward = cfg.raysInward ?? true;
-    printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.33);
+    printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.25);
+    // tisková linka: řez ve výšce uPrintY přes celou šířku solidů (+ raysBedMargin na každou stranu), uprostřed
+    // jejich hloubky, promítnutý na obrazovku. Lasery do prázdna (raysBed) z center na celou linku počítá VolumetricLight.
+    const bed = printFx.frame || s.box.isEmpty() ? 0 : (cfg.raysBed ?? 1);
+    printFx.lineColor.copy(u.uPrintGlow.value).multiplyScalar(bed * heat);
+    if (bed > 0 && heat > 0) {
+      const m = (s.box.max.x - s.box.min.x) * (cfg.raysBedMargin ?? 0.15);
+      const z = (s.box.min.z + s.box.max.z) * 0.5;
+      s.v.set(s.box.min.x - m, u.uPrintY.value, z).project(state.camera);
+      printFx.lineA.set(s.v.x * 0.5 + 0.5, s.v.y * 0.5 + 0.5);
+      s.v.set(s.box.max.x + m, u.uPrintY.value, z).project(state.camera);
+      printFx.lineB.set(s.v.x * 0.5 + 0.5, s.v.y * 0.5 + 0.5);
+    }
     // raysFrame (experiment, vypnuto): paprsky se sbíhají k okrajům obrazovky zmenšené na raysFrameScale, rohy zaoblené raysBevel
     printFx.frame = (cfg.raysFrame ?? false) && printFx.inward;
-    // raysThrough: paprsky bodem projdou a pokračují ještě kus za něj (křížení čar); 0 = končí v bodě
-    printFx.through = cfg.raysThrough ?? 0.35;
     printFx.frameScale = cfg.raysFrameScale ?? 1;
     printFx.bevel = cfg.raysBevel ?? 0.3;
 
