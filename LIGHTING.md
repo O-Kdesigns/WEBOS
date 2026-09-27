@@ -44,6 +44,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | E4 | **Video plátno INSIDE** | `VolumetricVideoBackground.jsx` | `volumetricVideo` (brightness 2.5, contrast 1.09, **scale 2.6, zDistance 3.2, blur 0.03, vignetteSoftness 0.8**) | Velké rozmazané světlo daleko za obsahem. Dřív to byl malý ostrý obdélník (scale 0.9, z 1.5) přímo za solidy = „divné světlo uprostřed“. |
 | E5 | **Žhavá vrstva tisku** | `SolidPrint.jsx` | `solidPrint` (`coolColor`, `glowColor` #ff5a12, `hotColor`, `intensity`, `band`) – emise na řezu solidu + žhavé jádro přes řez (back-faces) |
 | E6 | **Vlastní záře solidu** | `SolidLink.jsx` `uLookGlow` | `solidLight.selfGlow` (Xelith 0 = vypnuto) |
+| E7 | **Odtržené particly DNA** | `particles/shaders/escapeGlsl.js` + jelly / `ParticleMaterial` (emissive) | `particlePhysics.escape`: `color` (#ffb347), `tint` 0.7 přebarvení, `flash` 6 = HDR záblesk v bodě zlomu (každý particl ve svůj čas, doznění `flashTime` 0.6 s, `pop` zvětšení), `glow` 0.1 trvalá záře. Záblesk chytá bloom **i god rays P1** (práh jasu 0.4) → krátké paprsky; trvalá záře 0.35 dělala trvalé oranžové paprsky, proto 0.1. |
 
 ### 1d. Post-processing (`VolumetricLightPass` v `VolumetricLight.jsx`, jeden fullscreen shader + blur řetězec 1/4)
 
@@ -69,7 +70,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 ### 🧬 ORBIT (DNA šroubovice, desky, výběr projektu)
 - **Světla:** L1 HDRI city, L2 kamerový spot, L3 centrální point (uvnitř DNA), L4 horní spot, L5 ambient → osvětlují GLB meshe (desky `GlassDesk` apod., `meshPhysicalMaterial`).
 - **DNA particly (jelly):** scénická světla na ně nepůsobí → F1 key/fill + F2 video uvnitř. Při rotaci se míchá tmavá/světlá (`transitionMaxLight/MinDark`). F3–F5 jsou vypnuté (solidy jsou skryté, `SolidLinkDriver` má amount 0).
-- **Samosvit:** E1 pozadí, E2 prach, E3 skla TV s videem, aura/jádro L3.
+- **Samosvit:** E1 pozadí, E2 prach, E3 skla TV s videem, aura/jádro L3, E7 odtržené particly (záblesk při odfouknutí myší).
 - **Post:** P1 god rays ze středu DNA, P2 bloom, P3 DOF, P4 atmosférické skvrny, P5 zrno + viněta, P12 HUD.
 
 ### 🌀 PRŮLET PORTÁLEM (`portalFx.progress` 0 → 1, 2 s)

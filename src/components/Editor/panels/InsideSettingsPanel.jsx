@@ -1,10 +1,13 @@
 ﻿import React from 'react';
 import { DenseSlider, DenseToggle, DenseColor, DashboardCard } from './OrbitSettingsPanel';
 import { FLUID_DEFAULTS } from '../../particles/ParticleFluid';
+import { ESCAPE_DEFAULTS } from '../../particles/utils';
 
 export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric, updateInsideFog, updatePhysics, updateParticlePhysics, updateVolumetricVideo, updateVolumetricDepth, updateUi2d, updateUi2dBottomLeft, updateUi2dBottomLeftItem, addUi2dBottomLeftItem, removeUi2dBottomLeftItem, updateUi2dPillButton, openSections, toggleSection, touchSection }) {
   const fluid = appConfig.particlePhysics?.fluid || {};
   const updateFluid = (field, value) => updateParticlePhysics('fluid', { ...fluid, [field]: value });
+  const esc = { ...ESCAPE_DEFAULTS, ...(appConfig.particlePhysics?.escape || {}) };
+  const updateEscape = (field, value) => updateParticlePhysics('escape', { ...(appConfig.particlePhysics?.escape || {}), [field]: value });
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
       
@@ -44,8 +47,26 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
         <DenseSlider desc="Za jak dlouho se návrat rozjede z nuly na plnou sílu (s). Pomalý start, pak zrychluje. 0 = hned plnou silou." label="Náběh návratu" min={0} max={3} step={0.05} value={appConfig.particlePhysics?.returnRamp ?? 0.8} color="#ec4899" onChange={v => updateParticlePhysics('returnRamp', v)} />
         <DenseSlider desc="Jak rychle particl při návratu ztratí svou rychlost. Míň = dlouho si drží tempo a letí přes cíl, víc = rychle se srovná na klidný dojezd." label="Tlumení návratu" min={0.2} max={1.5} step={0.05} value={appConfig.particlePhysics?.returnDamping ?? 0.7} color="#ec4899" onChange={v => updateParticlePhysics('returnDamping', v)} />
         <DenseSlider desc="Jak široký oblouk particl opíše, než se stočí zpátky k cíli. 0 = otočí se skoro na místě, 1 = velké líné oblouky. Rychlejší particly vždy berou širší oblouk." label="Oblouk návratu" min={0} max={1} step={0.01} value={appConfig.particlePhysics?.returnArc ?? 0.5} color="#ec4899" onChange={v => updateParticlePhysics('returnArc', v)} />
+        <DenseSlider desc="Násobek síly návratu JEN pro particly, které se vracejí domů (odtržené neovlivní). Míň = vracejí se líněji, dál doletí a déle krouží. Platí pro volný návrat v klidu (DNA i projekt), ne pro morph." label="Síla návratu (vracející)" min={0.1} max={2} step={0.05} value={appConfig.particlePhysics?.returnStrength ?? 1} color="#ec4899" onChange={v => updateParticlePhysics('returnStrength', v)} />
         <DenseSlider desc="Zpoždění otáčení obsahu za tahem myši (solidy i částice stejně). 0 = hned za prstem." label="Setrvačnost otáčení" min={0} max={1} step={0.01} value={appConfig.particlePhysics?.spinLag ?? 0.5} color="#ec4899" onChange={v => updateParticlePhysics('spinLag', v)} />
         <DenseSlider desc="Jak moc částice drží se solidy při otáčení. 1 = přesně s nimi, nižší = částice se opožďují (dozvuk)." label="Unášení částic" min={0} max={1} step={0.01} value={appConfig.particlePhysics?.rotationCarry ?? 0.85} color="#ec4899" onChange={v => updateParticlePhysics('rotationCarry', v)} />
+
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Odtržené particly (jen DNA)</div>
+        <DenseToggle desc="Část particlů odfouknutých daleko od DNA se utrhne, zazáří a dál volně pluje prostorem (myš na ně působí dál). Po vstupu do projektu a návratu se zase připojí." label="Odtrhávání" checked={esc.enabled} color="#ec4899" onChange={v => updateEscape('enabled', v)} />
+        <DenseSlider desc="Bod zlomu: jak daleko od svého místa (world) musí particl odletět, aby se mohl utrhnout. Míň = utrhnou se i po slabém tahu." label="Vzdálenost zlomu" min={0.05} max={1} step={0.01} value={esc.distance} color="#ec4899" onChange={v => updateEscape('distance', v)} />
+        <DenseSlider desc="Kolik z odfouknutých particlů se utrhne (0 = žádný, 1 = všechny za bodem zlomu)." label="Podíl odtržených" min={0} max={1} step={0.01} value={esc.chance} color="#ec4899" onChange={v => updateEscape('chance', v)} />
+        <DenseSlider desc="Rychlost pomalého plutí volných particlů (world/s)." label="Rychlost plutí" min={0} max={0.5} step={0.005} value={esc.drift} color="#ec4899" onChange={v => updateEscape('drift', v)} />
+        <DenseSlider desc="Jak dlouho volný particl dojíždí po strčení myší (za snímek). 1 = vesmír bez odporu, míň = brzdí." label="Setrvačnost volných" min={0.9} max={1} step={0.001} value={esc.friction} color="#ec4899" onChange={v => updateEscape('friction', v)} />
+        <DenseSlider desc="Jak daleko od DNA smí volné particly odplout (world). Dál je měkce stočí zpátky do okolí." label="Dosah plutí" min={0.2} max={5} step={0.05} value={esc.leash} color="#ec4899" onChange={v => updateEscape('leash', v)} />
+        <DenseSlider desc="Násobek síly myši (vody) na volné particly. Vracejících se to netýká." label="Síla myši na volné" min={0} max={3} step={0.05} value={esc.mouse} color="#ec4899" onChange={v => updateEscape('mouse', v)} />
+        <DenseSlider desc="Velikost vírů, po kterých plují. Víc = drobnější, neklidnější dráhy." label="Drobnost proudu" min={0.2} max={6} step={0.1} value={esc.flowScale} color="#ec4899" onChange={v => updateEscape('flowScale', v)} />
+        <DenseColor desc="Barva, kterou odtržené particly převezmou a kterou zazáří." label="Barva odtržených" value={esc.color} onChange={v => updateEscape('color', v)} />
+        <DenseSlider desc="Jak moc převezmou barvu (0 = původní barva, jen záblesk)." label="Přebarvení" min={0} max={1} step={0.01} value={esc.tint} color="#ec4899" onChange={v => updateEscape('tint', v)} />
+        <DenseSlider desc="Jas záblesku v bodě zlomu (nad 1 = HDR, chytá bloom)." label="Záblesk zlomu" min={0} max={20} step={0.1} value={esc.flash} color="#ec4899" onChange={v => updateEscape('flash', v)} />
+        <DenseSlider desc="Za jak dlouho záblesk dozní (s)." label="Doznění záblesku" min={0.05} max={3} step={0.05} value={esc.flashTime} color="#ec4899" onChange={v => updateEscape('flashTime', v)} />
+        <DenseSlider desc="Trvalá záře volných particlů po záblesku." label="Záře volných" min={0} max={3} step={0.05} value={esc.glow} color="#ec4899" onChange={v => updateEscape('glow', v)} />
+        <DenseSlider desc="Jak moc se particl v záblesku zvětší (0 = vůbec)." label="Zvětšení při zlomu" min={0} max={3} step={0.05} value={esc.pop} color="#ec4899" onChange={v => updateEscape('pop', v)} />
 
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Voda (myš)</div>

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { shaderMaterial } from '@react-three/drei';
 import { extend } from '@react-three/fiber';
 import { PARTICLE_DECL } from '../../../SolidLink';
+import { ESC_VERTEX } from './escapeGlsl';
 
 export const JellyVideoMaterialImpl = shaderMaterial(
   {
@@ -22,7 +23,15 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     uDnaColor: new THREE.Color("#3b82f6"),
     uTint: 0.35,
     uWobble: 0.5,
-    uVideoGain: 1.4
+    uVideoGain: 1.4,
+    // odtržené particly (utils.js ESCAPE_DEFAULTS, plní useParticleLogic)
+    tVelocities: null,
+    uEscColor: new THREE.Color("#ffb347"),
+    uEscTint: 0.0,
+    uEscFlash: 0.0,
+    uEscFlashTime: 0.6,
+    uEscGlow: 0.0,
+    uEscPop: 0.0
   },
   `
   uniform sampler2D tPositions;
@@ -31,6 +40,11 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   uniform float uTime;
   uniform float uWobble;
   attribute vec2 aComputeUV;
+  uniform sampler2D tVelocities;
+  uniform float uEscFlashTime;
+  uniform float uEscPop;
+  varying float vEsc;
+  varying float vEscFlash;
   
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -46,6 +60,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec4 computedData = texture2D(tPositions, aComputeUV);
     vec3 computedPos = computedData.xyz;
     float computedScale = computedData.w;
+    ${ESC_VERTEX}
 
     // náhoda na particl (stabilní, z UV v compute textuře)
     vRand = fract(sin(vec3(dot(aComputeUV, vec2(127.1, 311.7)), dot(aComputeUV, vec2(269.5, 183.3)), dot(aComputeUV, vec2(419.2, 371.9)))) * 43758.5453);
@@ -97,6 +112,12 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   varying vec3 vRand;
   uniform float uTint;
   uniform float uVideoGain;
+  uniform vec3 uEscColor;
+  uniform float uEscTint;
+  uniform float uEscFlash;
+  uniform float uEscGlow;
+  varying float vEsc;
+  varying float vEscFlash;
 
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
@@ -241,6 +262,12 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     
     // přisvícení od solidu (a žáru 3D tisku), SolidLink.jsx – mimo INSIDE je uSLightAmt 0
     finalColor += solidLightAt(vWorldPos, normalize((vec4(normal, 0.0) * viewMatrix).xyz)) * (0.35 + videoTex.rgb * 0.65);
+
+    // odtržený: převezme barvu a slabě září, v bodě zlomu HDR záblesk (bloom)
+    // přebarvení drží stínování kuličky (jas původní barvy × nová barva), ať nesvítí plošně
+    float escLum = dot(finalColor, vec3(0.299, 0.587, 0.114));
+    finalColor = mix(finalColor, escLum * uEscColor * 1.6, vEsc * uEscTint)
+               + uEscColor * (vEscFlash * uEscFlash + vEsc * uEscGlow);
 
     gl_FragColor = vec4(finalColor, uOpacity);
   }

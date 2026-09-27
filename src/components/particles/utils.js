@@ -51,6 +51,17 @@ uniform float uReturnRamp;
 uniform float uTime;
 uniform float uFloatSpeed;
 uniform float uFloatAmplitude;
+// Odtržení (jen v klidu DNA): particl odfouknutý dál než uEscDist se (s pravděpodobností uEscChance) přestane
+// vracet a volně pluje prostorem. vel.w >= 2 = odtržený, vel.w - 2 = s od zlomu (záblesk v materiálu).
+uniform float uEscOn;
+uniform float uEscDist;       // world vzdálenost od domova = bod zlomu
+uniform float uEscChance;     // podíl particlů, které se můžou odtrhnout
+uniform float uEscSeed;       // mění se při každém návratu do DNA -> pokaždé se odtrhnou jiné
+uniform float uEscDrift;      // cestovní rychlost volného particlu (world/s)
+uniform float uEscFriction;   // tření volných (za snímek při 60 fps) – vesmír = skoro žádné
+uniform float uEscLeash;      // poloměr prostoru kolem domova, ve kterém volné plují
+uniform float uEscMouse;      // násobek síly vody na volné particly
+uniform float uEscScale;      // velikost víření proudu, po kterém plují (1/world)
 
 // síla návratu 0..1 podle "držení" (w): zpoždění, pak pomalý rozjezd (ease-in)
 float returnRampOf(float hold) {
@@ -65,6 +76,11 @@ void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
     vec4 pos = texture2D(texturePosition, uv);
     vec4 vel = texture2D(textureVelocity, uv);
+    vec4 dnaP = texture2D(tDnaPosition, uv);
+    float dnaRest = (1.0 - step(0.001, uTransitionProgress)) * (1.0 - step(dnaP.w, 0.0));
+    // odtržený particl se připojí zpět, jakmile začne morph do projektu (nebo je odtržení vypnuté)
+    float esc = step(1.5, vel.w) * dnaRest * uEscOn * uPhysReturn;
+    if (vel.w > 1.5 && esc < 0.5) vel.w = 0.0;
     
     // AGENT NOTE (from User): 
     // ALWAYS USE VELOCITY BRUSH. NEVER USE REPULSIVE FORCE.
@@ -105,6 +121,8 @@ void main() {
             float frontInv = texture2D(tFront, ruv).x;
             float behind = frontInv > 0.0 ? rc.w - 1.0 / frontInv : 0.0;
             float front = 1.0 - smoothstep(uFrontShell * 0.5, uFrontShell, behind);
+            // volný particl není ve tvaru -> přední vrstva pro něj neplatí, voda ho tlačí vždy (vlastní síla)
+            front = mix(front, uEscMouse, esc);
             vec3 fl = texture2D(tFluid, suv).xyz; // xy = proud, z = stopa myši
             vec2 ndc = fl.xy * smoothstep(0.1, 0.7, fl.z) * uFluidTexel * 2.0 * uDt; // posun v NDC za snímek, jen ve stopě
             vec3 flow = (uCamRight * (ndc.x * c.w / uProj.x) + uCamUp * (ndc.y * c.w / uProj.y)) * uFluidForce;
@@ -133,19 +151,37 @@ void main() {
         }
     }
     // w = "držení": 1 = právě strčen, lineárně klesá k 0 za (zpoždění + náběh); poziční shader z něj počítá sílu návratu
-    vel.w = max(vel.w - uDt * uHoldDecay, disturb);
+    // odtržený: w = 2 + čas od zlomu (strop 60 s)
+    vel.w = esc > 0.5 ? min(vel.w + uDt, 62.0) : max(vel.w - uDt * uHoldDecay, disturb);
 
     // Tření - zpomalí "cáknutí" (friction = za snímek při 60 fps, přepočet na skutečné dt)
-    vel.xyz *= pow(friction, uDt * 60.0);
+    // (volné mají vlastní tření níže – brzdí jen odchylku od plutí)
+    if (esc < 0.5) vel.xyz *= pow(friction, uDt * 60.0);
 
     // Návrat pružinou: zrychlení k cíli, rychlost se nemaže -> hybnost i víření dobíhají do návratu.
     // vel je posun za snímek -> přírůstek = K * výchylka * dt².
     // platí v klidu tvaru projektu i v klidu DNA (ne během morphu; rezervní kostka u kamery jede napevno)
-    vec4 dnaP = texture2D(tDnaPosition, uv);
     float projRest = step(0.999, uTransitionProgress);
-    float dnaRest = (1.0 - step(0.001, uTransitionProgress)) * (1.0 - step(dnaP.w, 0.0));
     float phys = uPhysReturn * (projRest + dnaRest);
-    if (phys > 0.5) {
+    if (esc > 0.5) {
+        // VOLNÝ: pluje pomalým vířivým proudem prostorem, drží se v okolí domova (měkké vodítko),
+        // rychlost se jen pomalu blíží cestovní -> strčení myší dojíždí dlouho (vesmír)
+        vec3 toH = dnaP.xyz - pos.xyz;
+        float dh = length(toH);
+        float ph = fract(sin(dot(uv, vec2(39.3468, 11.1353))) * 24634.6345) * 6.2831853;
+        vec3 q = pos.xyz * uEscScale + vec3(0.0, uTime * 0.07, 0.0);
+        vec3 flow = vec3(sin(q.y * 1.7 + ph) + sin(q.z * 2.3 + uTime * 0.11),
+                         sin(q.z * 1.9 + ph * 0.7) + sin(q.x * 2.1 - uTime * 0.09),
+                         sin(q.x * 1.3 + ph * 1.3) + sin(q.y * 2.7 + uTime * 0.13));
+        float fl = length(flow);
+        vec3 want = fl > 1e-4 ? flow / fl : vec3(0.0, 1.0, 0.0);
+        if (dh > 1e-4) want += toH / dh * smoothstep(uEscLeash * 0.6, uEscLeash, dh) * 2.5;
+        float wl = length(want);
+        want = wl > 1e-4 ? want / wl : vec3(0.0, 1.0, 0.0);
+        // za hranicí dosahu pluje domů rychleji (měkce, úměrně přesahu)
+        vec3 cruise = want * (uEscDrift + max(dh - uEscLeash, 0.0) * 0.3) * uDt;
+        vel.xyz = cruise + (vel.xyz - cruise) * pow(uEscFriction, uDt * 60.0);
+    } else if (phys > 0.5) {
         vec4 base = texture2D(tBasePosition, uv);
         float offset = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
         vec3 local = base.xyz + vec3(0.0, sin(uTime * uFloatSpeed + offset) * uFloatAmplitude, 0.0);
@@ -166,11 +202,16 @@ void main() {
         // přesně od cíle: stoč se libovolně do strany (dir je tu jistě jednotkový); přesně k cíli / v cíli: netoč
         else if (cosA < 0.0) side = normalize(cross(dir, abs(dir.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
         else side = vec3(0.0);
-        float turn = min(acos(cosA), uReturnTurn * r * uDt * uDt / max(s, 1e-7));
+        // stáčení aspoň 1.3× "oběžné" (v²/vzdálenost) -> dráha se vždy stáčí dovnitř, nikdy nezůstane kroužit
+        float turnA = max(uReturnTurn * uDt * uDt / max(s, 1e-7), 1.3 * s / max(dist, 1e-4));
+        float turn = min(acos(cosA), turnA * r);
         dir = dir * cos(turn) + side * sin(turn);
         float sWant = dist * uReturnK * uDt;           // dojezdová rychlost (posun za snímek)
         s += (sWant - s) * (1.0 - exp(-uReturnDamp * r * uDt));
         vel.xyz = dir * s;
+        // BOD ZLOMU: odfouknutý daleko -> část particlů se utrhne (záblesk, pak volně pluje)
+        float lucky = fract(sin(dot(uv, vec2(63.7264, 10.873)) + uEscSeed * 7.31) * 43758.5453);
+        if (dnaRest * uEscOn > 0.5 && dist > uEscDist && lucky < uEscChance) vel.w = 2.0;
     }
     
     gl_FragColor = vel;
@@ -395,6 +436,8 @@ export function useGPGPU(count, particlesData, gl) {
       uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
       uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
       uReturnK: { value: 0 }, uReturnDamp: { value: 0 }, uReturnTurn: { value: 10 },
+      uEscOn: { value: 0 }, uEscDist: { value: 0.3 }, uEscChance: { value: 0.1 }, uEscSeed: { value: 0 }, uEscDrift: { value: 0.05 },
+      uEscFriction: { value: 0.99 }, uEscLeash: { value: 1.5 }, uEscMouse: { value: 1 }, uEscScale: { value: 1.5 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -489,6 +532,24 @@ function mergeFluidCfg(prev, src) {
   if (prev && prev.src === src && prev.ov === ov) return prev;
   return { ...FLUID_DEFAULTS, ...(src || {}), ...(ov || {}), src, ov };
 }
+
+// Odtržené particly (config particlePhysics.escape, editor Uvnitř → Odtržené particly)
+export const ESCAPE_DEFAULTS = {
+  enabled: true,
+  distance: 0.4,     // world – jak daleko od domova musí být odfouknutý, aby se utrhl (bod zlomu)
+  chance: 0.12,      // podíl particlů, které se utrhnout můžou
+  drift: 0.15,       // world/s – rychlost pomalého plutí
+  friction: 0.975,   // za snímek při 60 fps – jak dlouho dojíždí strčení myší
+  leash: 1.5,        // world – jak daleko od domova smí odplout
+  mouse: 1,          // násobek síly vody na volné
+  flowScale: 1.5,    // velikost víření proudu (větší = drobnější víry)
+  color: '#ffb347',
+  tint: 0.7,         // jak moc převezmou barvu
+  flash: 6,          // HDR jas záblesku v bodě zlomu
+  flashTime: 0.6,    // s – doznění záblesku
+  glow: 0.1,         // trvalá záře volných
+  pop: 0.8,          // zvětšení při záblesku
+};
 
 // --- LOGIKA ---
 export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
@@ -624,7 +685,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     {
       // rychlost návratu (podíl za snímek při 60 fps) -> vlastní frekvence pružiny se stejně dlouhým návratem
       const rs = Math.min(0.95, Math.max(1e-4, posUniforms.uReturnSpeed.value));
-      const omega = Math.min(25, -Math.log(1 - rs) * 60 * 1.5);
+      // returnStrength = násobek jen pro vracející se particly (odtržené neovlivní)
+      const omega = Math.min(25, -Math.log(1 - rs) * 60 * 1.5 * Math.max(0.05, phys.returnStrength ?? 1));
       const zeta = Math.max(0.05, phys.returnDamping ?? 0.7);
       velUniforms.uReturnK.value = omega * 0.7;
       velUniforms.uReturnDamp.value = zeta * omega;
@@ -632,6 +694,19 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       const arc = Math.min(1, Math.max(0, phys.returnArc ?? 0.5));
       velUniforms.uReturnTurn.value = omega * omega * 0.08 * Math.pow(40, 1 - 2 * arc);
     }
+    // odtržené particly (jen v klidu DNA)
+    const esc = { ...ESCAPE_DEFAULTS, ...(phys.escape || {}) };
+    velUniforms.uEscOn.value = esc.enabled ? 1 : 0;
+    velUniforms.uEscDist.value = esc.distance;
+    velUniforms.uEscChance.value = esc.chance;
+    velUniforms.uEscDrift.value = esc.drift;
+    velUniforms.uEscFriction.value = esc.friction;
+    velUniforms.uEscLeash.value = esc.leash;
+    velUniforms.uEscMouse.value = esc.mouse;
+    velUniforms.uEscScale.value = esc.flowScale;
+    // při každém odchodu z DNA jiný los -> příště se utrhnou jiné particly
+    if (posUniforms.uTransitionProgress.value > 0.001) compute.escLeft = true;
+    else if (compute.escLeft) { compute.escLeft = false; velUniforms.uEscSeed.value = (velUniforms.uEscSeed.value + 1) % 1000; }
 
     if (hasIntersection && !fluidCfg.enabled) {
       meshRef.current.worldToLocal(rawTarget.current);
@@ -661,6 +736,17 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     compute.gpuCompute.compute();
     
     const tex = compute.gpuCompute.getCurrentRenderTarget(compute.posVar).texture;
+    // vzhled odtržených (barva + záblesk) – materiál čte stav z textury rychlostí
+    const mu = meshRef.current.material?.uniforms?.tVelocities ? meshRef.current.material.uniforms : meshRef.current.material?.userData?.shader?.uniforms;
+    if (mu?.tVelocities) {
+      mu.tVelocities.value = compute.gpuCompute.getCurrentRenderTarget(compute.velVar).texture;
+      mu.uEscColor.value.set(esc.color);
+      mu.uEscTint.value = esc.tint;
+      mu.uEscFlash.value = esc.flash;
+      mu.uEscFlashTime.value = esc.flashTime;
+      mu.uEscGlow.value = esc.glow;
+      mu.uEscPop.value = esc.pop;
+    }
     
     if (meshRef.current.material) {
         if (meshRef.current.material.uniforms && meshRef.current.material.uniforms.tPositions) {

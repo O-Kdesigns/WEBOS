@@ -6,6 +6,7 @@ import { a } from '@react-spring/three';
 import './shaders/VideoRefractionMaterial';
 import './shaders/JellyVideoMaterial';
 import { attachParticleLink } from '../../SolidLink';
+import { ESC_VERTEX } from './shaders/escapeGlsl';
 
 export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotationY, pageDistance, transitionProgress }) {
   const isCylinder = settings.isCylinder || settings.scatterSpring !== undefined || (settings.shape === 'cylinder' && !settings.customGeometry);
@@ -55,14 +56,37 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
     shader.uniforms.tPositions = { value: null };
     shader.uniforms.uTransitionProgress = { value: 1.0 };
     shader.uniforms.uDnaColor = { value: new THREE.Color('#3b82f6') }; // DNA base color
+    // odtržené particly (utils.js ESCAPE_DEFAULTS, plní useParticleLogic)
+    Object.assign(shader.uniforms, {
+      tVelocities: { value: null }, uEscColor: { value: new THREE.Color('#ffb347') }, uEscTint: { value: 0 },
+      uEscFlash: { value: 0 }, uEscFlashTime: { value: 0.6 }, uEscGlow: { value: 0 }, uEscPop: { value: 0 },
+    });
     
     shader.vertexShader = `
       uniform sampler2D tPositions;
       uniform float uTransitionProgress;
       uniform vec3 uDnaColor;
       attribute vec2 aComputeUV;
+      uniform sampler2D tVelocities;
+      uniform float uEscFlashTime;
+      uniform float uEscPop;
+      varying float vEsc;
+      varying float vEscFlash;
       ${shader.vertexShader}
     `;
+    shader.fragmentShader = `
+      uniform vec3 uEscColor;
+      uniform float uEscTint;
+      uniform float uEscFlash;
+      uniform float uEscGlow;
+      varying float vEsc;
+      varying float vEscFlash;
+      ${shader.fragmentShader}
+    `.replace('#include <emissivemap_fragment>', `
+      #include <emissivemap_fragment>
+      diffuseColor.rgb = mix(diffuseColor.rgb, uEscColor, vEsc * uEscTint);
+      totalEmissiveRadiance += uEscColor * (vEscFlash * uEscFlash + vEsc * uEscGlow);
+    `);
     
     // ZmÄ›nĂ­me i barvu vertexĹŻ (morph z DNA barvy do pĹŻvodnĂ­ barvy projektu)
     shader.vertexShader = shader.vertexShader.replace(
@@ -81,6 +105,7 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
       vec4 computedData = texture2D(tPositions, aComputeUV);
       vec3 computedPos = computedData.xyz;
       float computedScale = computedData.w;
+      ${ESC_VERTEX}
       
       vec3 transformed = position * computedScale;
       transformed += computedPos;
