@@ -367,7 +367,10 @@ class Fluid {
       const sa = m.splatAdd.uniforms;
       // křivka odezvy jako u štětce (vlastní hodnoty): síla ~ cap·tanh(rychlost^křivka / cap) místo lineární
       const pcap = Math.max(0.1, cfg.pavelMaxSpeed);
-      const pk = Math.min(6, pcap * Math.tanh(Math.pow(sp, Math.max(0.1, cfg.pavelCurve)) / pcap) / sp);
+      // zesílení z vyhlazené rychlosti, ale ne větší než podle okamžité: na začátku tahu je vyhlazená ~0
+      // -> zesílení (∝ rychlost^-0.5) by vyletělo až na strop a první směrový signál by odfoukl všechno
+      const gs = Math.max(sp, rawSp);
+      const pk = Math.min(6, pcap * Math.tanh(Math.pow(gs, Math.max(0.1, cfg.pavelCurve)) / pcap) / gs);
       let dx = (pu - this.prev.x) * pk, dy = (pv - this.prev.y) * pk;
       if (aspect < 1) dx *= aspect; else dy /= aspect;
       sa.uPoint.value.set(pu, pv);

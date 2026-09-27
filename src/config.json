@@ -103,7 +103,8 @@
       "wakeRadius": 0.13,
       "wake": 1,
       "splatRadius": 0.01,
-      "strength": 1
+      "strength": 1,
+      "splatForce": 1500
     },
     "returnDamping": 0.4
   },
