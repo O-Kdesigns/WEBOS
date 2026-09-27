@@ -99,11 +99,11 @@
       "curl": 28.5,
       "splatHardness": 1.6,
       "dissipation": 0.1,
-      "coupling": 0.06,
+      "coupling": 0.3,
       "wakeRadius": 0.13,
       "wake": 1,
       "splatRadius": 0.01,
-      "strength": 0.4
+      "strength": 1
     },
     "returnDamping": 0.4
   },
