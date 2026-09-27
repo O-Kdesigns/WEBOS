@@ -33,6 +33,7 @@ export const FLUID_DEFAULTS = {
   trailFade: 1.2,         // mizení stopy za s (proud posouvá particly jen ve stopě; menší = stopa i posun vydrží déle)
   dissipation: 0.35,      // útlum proudu za s (menší = delší dojezd)
   pressureIterations: 24, // víc = čistší, soudržnější proud
+  maxFlow: 3,             // strop rychlosti proudu (výšky obrazovky/s) – pojistka proti rozjetí simulace do celé plochy
   coupling: 0.14,         // jak rychle se particl přizpůsobí proudu (za snímek; menší = těžší, líná voda)
   friction: 0.965,        // útlum vlastní rychlosti particlu za snímek (větší = delší klouzání)
   frontShell: 0.12,       // tloušťka přední vrstvy particlů, kterou proud unáší (world)
@@ -118,6 +119,13 @@ const DIVERGENCE = HEAD + `
 uniform sampler2D uVel;
 void main(){
   float L = S(uVel, vec2(-1, 0)).x, R = S(uVel, vec2(1, 0)).x, T = S(uVel, vec2(0, 1)).y, B = S(uVel, vec2(0, -1)).y;
+  // stěny na okrajích obrazovky (jako Pavel): za okrajem proud odrazí -> tlak nepustí proud ven ani celou vodu
+  // do jednoho směru. Bez toho (clamp) zůstala hybnost tahů v celé ploše jako "gravitace" na jednu stranu.
+  vec2 C = texture2D(uVel, vUv).xy;
+  if (vUv.x - uTexel.x < 0.0) L = -C.x;
+  if (vUv.x + uTexel.x > 1.0) R = -C.x;
+  if (vUv.y + uTexel.y > 1.0) T = -C.y;
+  if (vUv.y - uTexel.y < 0.0) B = -C.y;
   gl_FragColor = vec4(0.5 * (R - L + T - B), 0.0, 0.0, 1.0);
 }`;
 
@@ -141,11 +149,13 @@ void main(){
 }`;
 
 const ADVECT = HEAD + `
-uniform sampler2D uVel; uniform float uDt; uniform float uDissipation; uniform float uTrailFade;
+uniform sampler2D uVel; uniform float uDt; uniform float uDissipation; uniform float uTrailFade; uniform float uMaxFlow;
 void main(){
   vec2 coord = vUv - uDt * texture2D(uVel, vUv).xy * uTexel;
   vec4 v = texture2D(uVel, coord);
-  gl_FragColor = vec4(v.xy / (1.0 + uDissipation * uDt), v.z * exp(-uTrailFade * uDt), 1.0);
+  vec2 f = v.xy / (1.0 + uDissipation * uDt);
+  f *= min(1.0, uMaxFlow / max(length(f), 1e-4)); // strop: jinak se vzácně rozjel proud přes celou plochu (1000+ buněk/s)
+  gl_FragColor = vec4(f, v.z * exp(-uTrailFade * uDt), 1.0);
 }`;
 
 // Vlny na hladině (rovnice vln na výškové mapě, jako ripple/brázda za lodí v hrách): tah myši je jako loď (před sebou zvedne vodu, za sebou důlek),
@@ -219,7 +229,7 @@ class Fluid {
       scale: mk(SCALE, { uSrc: { value: null }, uValue: { value: 0 } }),
       pressure: mk(PRESSURE, { uP: { value: null }, uDiv: { value: null } }),
       gradient: mk(GRADIENT, { uP: { value: null }, uVel: { value: null } }),
-      advect: mk(ADVECT, { uVel: { value: null }, uDt: { value: 0 }, uDissipation: { value: 0 }, uTrailFade: { value: 0 } }),
+      advect: mk(ADVECT, { uVel: { value: null }, uDt: { value: 0 }, uDissipation: { value: 0 }, uTrailFade: { value: 0 }, uMaxFlow: { value: 384 } }),
       view: mk(VIEW, { uVel: { value: null }, uDye: { value: null }, uUseDye: { value: 0 }, uDyeTexel: { value: new THREE.Vector2() }, uOpacity: { value: 0 }, uSpeedNorm: { value: 0.01 } }),
       splatAdd: mk(SPLAT_ADD, { uTarget: { value: null }, uPoint: { value: new THREE.Vector2() }, uColor: { value: new THREE.Vector3() }, uRadius: { value: 0.0025 }, uAspect: { value: 1 }, uMask: { value: 0 } }),
       advectDye: mk(ADVECT_DYE, { uVel: { value: null }, uSrc: { value: null }, uVelTexel: { value: new THREE.Vector2() }, uDt: { value: 0 }, uDissipation: { value: 1 } }),
@@ -428,6 +438,7 @@ class Fluid {
 
     const a = m.advect.uniforms;
     a.uVel.value = this.vel[0].texture; a.uDt.value = dt; a.uDissipation.value = cfg.dissipation; a.uTrailFade.value = cfg.trailFade;
+    a.uMaxFlow.value = Math.max(0.1, cfg.maxFlow ?? 3) * this.h;
     this.pass(m.advect, this.vel[1]); this.swapVel();
 
     if (dyeOn) {
