@@ -130,7 +130,15 @@ const VolumetricLightShader = {
     uTvAxB: { value: new THREE.Vector2(0.0, 0.1) },   // půl výšky TV na obrazovce
     uTvInv: { value: new THREE.Vector4(10, 0, 0, 10) }, // inverze [A B] -> lokální souřadnice obdélníku TV
     uTvHalo: { value: 0.35 },
-    uFluidTexel: { value: new THREE.Vector2(1 / 228, 1 / 128) }
+    uFluidTexel: { value: new THREE.Vector2(1 / 228, 1 / 128) },
+    tDye: { value: null },                              // barvivo Pavlovy vody (vířící kouř) -> INSIDE voda
+    uDyeOn: { value: 0.0 },
+    uDyeTexel: { value: new THREE.Vector2(1 / 900, 1 / 512) },
+    uDyeRange: { value: new THREE.Vector2(0.01, 0.12) },
+    uTvRayLen: { value: 3.5 },
+    uTvGlow: { value: 0.6 },
+    uWaterShine: { value: 1.0 },
+    uWaterRefract: { value: 0.012 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -255,6 +263,14 @@ const VolumetricLightShader = {
     uniform vec4 uTvInv;
     uniform float uTvHalo;
     uniform vec2 uFluidTexel;
+    uniform sampler2D tDye;
+    uniform float uDyeOn;
+    uniform vec2 uDyeTexel;
+    uniform vec2 uDyeRange;
+    uniform float uTvRayLen;
+    uniform float uTvGlow;
+    uniform float uWaterShine;
+    uniform float uWaterRefract;
     uniform float uTvDebug; // DEV: 1 = na obrazovce jen maska vody (zelená) + záře TV (červená)
 
     // vzdálenost od rámu (aspect prostor, střed obrazovky = 0): <0 uvnitř, >0 venku
@@ -372,18 +388,24 @@ const VolumetricLightShader = {
     // Světlo TV. Voda = rychlost proudu z ParticleFluid (buňky/s) přes práh uWaterRange -> maska 0..1.
     // ORBIT: záře kolem televize (paprsky = šum podle úhlu, bez švu), voda v ní dělá díry (clip).
     // INSIDE: stejná barva, ale jen v místech vody (tvar = atmo skvrna, min. uTvInsideFloor po celé obrazovce).
-    // Rychlost je ve středech vírů nulová -> ostré tmavé díry. Proto: průměr 5 vzorků (~2.5 buňky) + advekovaná stopa (z).
+    // ORBIT díry: rychlost proudu (ostré, živé tvary).
     float waterMask() {
-      if (uFluidOn < 0.5) return 0.0;
-      vec2 o = uFluidTexel * 2.5;
-      vec4 c = texture2D(tFluid, vUv);
-      float sp = length(c.xy) * 0.4
-        + (length(texture2D(tFluid, vUv + o).xy) + length(texture2D(tFluid, vUv - o).xy)
-         + length(texture2D(tFluid, vUv + vec2(o.x, -o.y)).xy) + length(texture2D(tFluid, vUv + vec2(-o.x, o.y)).xy)) * 0.15;
-      return max(smoothstep(uWaterRange.x, uWaterRange.y, sp), smoothstep(0.1, 0.8, c.z));
+      return uFluidOn > 0.5 ? smoothstep(uWaterRange.x, uWaterRange.y, length(texture2D(tFluid, vUv).xy)) : 0.0;
+    }
+    // INSIDE voda: barvivo Pavlovy simulace (spirály bez děr ve středech vírů). Jas barviva -> maska,
+    // jeho gradient -> normála hladiny (stínování, odlesk, lom obrazu pod vodou).
+    float dyeAt(vec2 uv) { vec3 c = texture2D(tDye, uv).rgb; return smoothstep(uDyeRange.x, uDyeRange.y, max(c.r, max(c.g, c.b))); }
+    vec3 waterSurface(out float w) {
+      w = 0.0;
+      if (uDyeOn < 0.5 || uFluidOn < 0.5) return vec3(0.0, 0.0, 1.0);
+      w = dyeAt(vUv);
+      vec2 e = uDyeTexel * 1.5;
+      float dx = dyeAt(vUv + vec2(e.x, 0.0)) - dyeAt(vUv - vec2(e.x, 0.0));
+      float dy = dyeAt(vUv + vec2(0.0, e.y)) - dyeAt(vUv - vec2(0.0, e.y));
+      return normalize(vec3(-dx, -dy, 0.35));
     }
     vec3 tvLight(bool isBg) {
-      float w = waterMask();
+      float w = uTvClip > 0.001 && uInsideTransition < 0.999 ? waterMask() : 0.0;
       vec2 asp = vec2(uAspect, 1.0);
       vec3 L = vec3(0.0);
       float orbitAmt = uTvVis * uTvStrength * (1.0 - uInsideTransition);
@@ -400,14 +422,29 @@ const VolumetricLightShader = {
         h *= h;
         float r = length(d);
         vec2 dir = d / max(r, 1e-4);
+        // paprsky: úzké svazky (šum po obvodu), každý jinak dlouhý – nejdelší ~uTvRayLen × velikost záře
         float n = snoise(dir * 2.2 + vec2(uTime * 0.03, -uTime * 0.02)) * 0.6 + snoise(dir * 5.3 - uTime * 0.05) * 0.4;
-        float rays = mix(1.0, clamp(0.55 + n * 0.9, 0.0, 1.6), uTvRays * smoothstep(0.0, uTvSize * 0.3, dist));
-        L += uTvColor * (g * rays + h * uTvHalo) * orbitAmt * (1.0 - uTvClip * w) * (isBg ? 1.0 : 0.55);
+        float beam = pow(clamp(0.5 + n * 0.75, 0.0, 1.0), 2.2);
+        float len = uTvSize * uTvRayLen * (0.35 + 0.65 * (snoise(dir * 3.7 + vec2(-uTime * 0.02, 7.1)) * 0.5 + 0.5));
+        float rf = 1.0 - smoothstep(0.0, len, dist);
+        float rays = beam * rf * rf * smoothstep(0.0, uTvSize * 0.15, dist) * uTvRays * 2.0;
+        L += uTvColor * (g * uTvGlow + h * uTvHalo + rays) * orbitAmt * (1.0 - uTvClip * w) * (isBg ? 1.0 : 0.55);
       }
       // INSIDE: světlo ve vodě leží jako mlha PŘED vším (i přes particly), ne jen v mezerách pozadí
-      if (uInsideTransition > 0.001 && uTvInside > 0.001 && w > 0.001) {
-        float a1 = 1.0 - smoothstep(0.0, uAtmoSize, length((vUv - uAtmoPos) * asp));
-        L += uTvColor * max(a1 * a1, uTvInsideFloor) * w * uTvInside * uInsideTransition * (isBg ? 1.0 : 0.85);
+      if (uInsideTransition > 0.001 && uTvInside > 0.001) {
+        float wd;
+        vec3 nrm = waterSurface(wd);
+        if (wd > 0.001) {
+          float a1 = 1.0 - smoothstep(0.0, uAtmoSize, length((vUv - uAtmoPos) * asp));
+          float lit = max(a1 * a1, uTvInsideFloor);
+          // hladina: stín podle sklonu (jako Pavel), odlesk světla shora zleva, lom obrazu pod vodou
+          float shade = clamp(nrm.z + 0.45, 0.55, 1.0);
+          float spec = pow(max(dot(nrm, normalize(vec3(-0.45, 0.55, 0.7))), 0.0), 18.0) * uWaterShine;
+          vec2 off = nrm.xy * uWaterRefract * wd;
+          vec3 refr = texture2D(tDiffuse, vUv + off).rgb - texture2D(tDiffuse, vUv).rgb;
+          L += (uTvColor * lit * shade * (isBg ? 1.0 : 0.7) + refr + (uTvColor * 0.6 + 0.4) * spec * lit)
+             * wd * uTvInside * uInsideTransition;
+        }
       }
       return L;
     }
@@ -437,6 +474,7 @@ const VolumetricLightShader = {
     void main() {
       if (uTvDebug > 3.5) { vec4 fv = texture2D(tFluid, vUv); float sp = length(fv.xy); gl_FragColor = vec4(step(500.0, sp), smoothstep(0.0, 20.0, sp), step(0.5, fv.w), 1.0); return; }
       if (uTvDebug > 1.5) { vec4 fv = texture2D(tFluid, vUv); gl_FragColor = vec4(abs(fv.xy) / (uTvDebug > 2.5 ? 1e4 : 100.0), fv.z, 1.0); return; }
+      if (uTvDebug > 4.5) { float wd; vec3 nn = waterSurface(wd); gl_FragColor = vec4(texture2D(tDye, vUv).rgb * 5.0, 1.0); if (uTvDebug > 5.5) gl_FragColor = vec4(nn * 0.5 + 0.5, 1.0) * wd; return; }
       if (uTvDebug > 0.5) { gl_FragColor = vec4(length(tvLight(true)), waterMask(), 0.0, 1.0); return; }
       vec4 baseColor = texture2D(tDiffuse, vUv);
       float cineDepth = texture2D(tDepth, vUv).r;
@@ -1132,16 +1170,26 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uTvColor.value.set(tl.color ?? '#2f9a9a');
       u.uTvStrength.value = tl.enabled === false ? 0 : (tl.strength ?? 1);
       u.uTvRays.value = tl.rays ?? 0.45;
-      u.uTvHalo.value = tl.halo ?? 0.25;
+      u.uTvHalo.value = tl.halo ?? 0.12;
+      u.uTvRayLen.value = tl.rayLength ?? 3.5;
+      u.uTvGlow.value = tl.glow ?? 0.6;
+      u.uWaterShine.value = tl.waterShine ?? 1;
+      u.uWaterRefract.value = tl.waterRefract ?? 0.012;
+      u.uDyeRange.value.set(tl.dyeMin ?? 0.01, tl.dyeMax ?? 0.12);
       u.uTvClip.value = tl.waterClip ?? 1.0;
       u.uTvInside.value = tl.enabled === false ? 0 : (tl.insideStrength ?? 1);
-      u.uTvInsideFloor.value = tl.insideFloor ?? 0.5;
+      u.uTvInsideFloor.value = tl.insideFloor ?? 0.75;
       u.uTvDebug.value = +tl.debug || 0;
       u.uWaterRange.value.set(tl.waterMin ?? 12, tl.waterMax ?? 50);
       const fl = getFluid(gl);
       u.tFluid.value = fl.velocity || dummyTexture;
       u.uFluidOn.value = fl.velocity ? 1 : 0;
       if (fl.vel?.[0]) u.uFluidTexel.value.set(1 / fl.vel[0].width, 1 / fl.vel[0].height);
+      // barvivo počítá ParticleFluid, jen když ho někdo kreslí (viewAt) -> INSIDE si o něj řekne
+      if (u.uInsideTransition.value > 0.001) fl.viewAt = performance.now() / 1000;
+      u.tDye.value = fl.dyeLive && fl.dye ? fl.dye[0].texture : dummyTexture;
+      u.uDyeOn.value = fl.dyeLive && fl.dye ? 1 : 0;
+      if (fl.dyeTexel) u.uDyeTexel.value.copy(fl.dyeTexel);
       if (import.meta.env.DEV) window.__tvLight = { pos: [u.uTvPos.value.x, u.uTvPos.value.y], size: u.uTvSize.value, vis: t.vis, facing: target, mesh: tvMesh };
     }
 

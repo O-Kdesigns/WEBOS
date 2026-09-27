@@ -263,7 +263,9 @@
     "strength": 1,
     "size": 1,
     "rays": 0.45,
-    "halo": 0.25,
+    "rayLength": 3.5,
+    "glow": 0.6,
+    "halo": 0.12,
     "minSize": 0.12,
     "facingFloor": 0.55,
     "facingMin": 0.4,
@@ -272,7 +274,11 @@
     "waterMin": 12,
     "waterMax": 50,
     "insideStrength": 1,
-    "insideFloor": 0.5
+    "insideFloor": 0.75,
+    "dyeMin": 0.01,
+    "dyeMax": 0.12,
+    "waterShine": 1,
+    "waterRefract": 0.012
   },
   "atmosphereDust": {
     "enabled": true,
