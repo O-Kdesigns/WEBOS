@@ -110,6 +110,9 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
 
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Paprsky 3D tisku</div>
+        <DenseSlider desc="Paprsky jdou z tisku do bodu dole uprostřed a za ním pokračují ještě takový kus (výšky obrazovky) – čáry se kříží. 0 = končí v bodě." label="Přesah za bod (křížení)" min={0} max={0.8} step={0.01} value={appConfig.solidPrint?.raysThrough ?? 0.35} color="#ec4899" onChange={v => updateSolidPrint('raysThrough', v)} />
+        <DenseSlider desc="Výška bodu křížení: 0 = spodek obrazovky, 1 = vršek." label="Bod křížení (Y)" min={0} max={1} step={0.01} value={appConfig.solidPrint?.raysCenterY ?? 0.33} color="#ec4899" onChange={v => updateSolidPrint('raysCenterY', v)} />
+        <DenseToggle desc="Experiment: paprsky k okrajům rámu místo do bodu (zatím nefunguje hezky)." label="Rám místo bodu (experiment)" checked={appConfig.solidPrint?.raysFrame ?? false} color="#ec4899" onChange={v => updateSolidPrint('raysFrame', v)} />
         <DenseSlider desc="Kam se paprsky tisku sbíhají: 1 = přesně k okrajům obrazovky, 0 = rám se smrskne do jednoho bodu ve středu." label="Rám paprsků (Scale)" min={0} max={1} step={0.01} value={appConfig.solidPrint?.raysFrameScale ?? 1} color="#ec4899" onChange={v => updateSolidPrint('raysFrameScale', v)} />
         <DenseSlider desc="Zaoblení rohů rámu – změkčí zlom paprsků mezi hranami." label="Bevel hran" min={0} max={1} step={0.01} value={appConfig.solidPrint?.raysBevel ?? 0.3} color="#ec4899" onChange={v => updateSolidPrint('raysBevel', v)} />
       </DashboardCard>

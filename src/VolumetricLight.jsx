@@ -110,6 +110,7 @@ const VolumetricLightShader = {
     uPrintFrame: { value: 1.0 },
     uPrintFrameScale: { value: 1.0 },
     uPrintBevel: { value: 0.3 },
+    uPrintThrough: { value: 0.35 },
 
     // Světlo TV (config tvLight): ORBIT = záře + paprsky kolem aktivní televize, voda z myši do ní vyřezává díry;
     // INSIDE = to samé světlo je vidět jen tam, kde je voda
@@ -256,6 +257,7 @@ const VolumetricLightShader = {
     uniform float uPrintFrame;       // 1 = paprsky se sbíhají k okrajům rámu (zmenšená obrazovka), 0 = k bodu uPrintCenter
     uniform float uPrintFrameScale;  // 1 = rám = okraje obrazovky, 0 = rám se smrskne do středu obrazovky
     uniform float uPrintBevel;       // 0..1 zaoblení rohů rámu + změkčení zlomu mezi hranami
+    uniform float uPrintThrough;     // >0: paprsky bodem uPrintCenter projdou a pokračují ještě tak daleko (křížení)
 
     uniform sampler2D tFluid;
     uniform float uFluidOn;
@@ -351,9 +353,31 @@ const VolumetricLightShader = {
       float fa = fract(ang), ia = floor(ang);
       float h0 = fract(sin(ia * 91.345) * 47453.5453), h1 = fract(sin((ia + 1.0) * 91.345) * 47453.5453);
       float streak = 0.45 + 0.9 * mix(h0, h1, fa * fa * (3.0 - 2.0 * fa));
-      // u bodu sbíhání paprsky zeslábnou, jinak se tam slije přepálená skvrna
-      float nearFade = mix(1.0, smoothstep(0.0, 0.07, dist), uPrintInward);
-      return acc * (uPrintRays / 40.0) * streak * nearFade;
+      // u bodu sbíhání paprsky zeslábnou, jinak se tam slije přepálená skvrna (při křížení jen těsně)
+      float crossing = (uPrintFrame < 0.5 && uPrintInward > 0.5 && uPrintThrough > 0.001) ? 1.0 : 0.0;
+      float nearFade = mix(1.0, smoothstep(0.0, mix(0.07, 0.025, crossing), dist), uPrintInward);
+      vec3 res = acc * streak;
+      if (crossing > 0.5 && dist < uPrintThrough) {
+        // křížení: pixel ZA bodem dostane světlo vrstvy z protější strany – paprsek prošel bodem a letí dál.
+        // Sbírá se od bodu dál směrem od pixelu; váha navazuje na útlum podle vzdálenosti pixel–bod.
+        vec2 thrUv = -stepUv;                 // směr od pixelu přes bod
+        vec2 t = uPrintCenter + thrUv * jit;
+        vec3 acc2 = vec3(0.0);
+        float w2 = pow(0.955, dist / stepLen);
+        for (int i = 0; i < 32; i++) {
+          t += thrUv;
+          acc2 += texture2D(tPrintMask, t).rgb * w2;
+          w2 *= 0.955;
+        }
+        // pruh stejné čáry = úhel strany, odkud světlo přišlo (opačný k pixelu)
+        float ang2 = atan(toC.y, toC.x) * 38.0 + uTime * 0.4;
+        float fb = fract(ang2), ib = floor(ang2);
+        float g0 = fract(sin(ib * 91.345) * 47453.5453), g1 = fract(sin((ib + 1.0) * 91.345) * 47453.5453);
+        float streak2 = 0.45 + 0.9 * mix(g0, g1, fb * fb * (3.0 - 2.0 * fb));
+        float tail = 1.0 - smoothstep(0.0, uPrintThrough, dist);
+        res += acc2 * streak2 * tail * tail;
+      }
+      return res * (uPrintRays / 40.0) * nearFade;
     }
 
     varying vec2 vUv;
@@ -1277,6 +1301,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uPrintFrame.value = printFx.frame ? 1 : 0;
     mat.uniforms.uPrintFrameScale.value = printFx.frameScale;
     mat.uniforms.uPrintBevel.value = printFx.bevel;
+    mat.uniforms.uPrintThrough.value = printFx.through;
 
     // 1. Vykreslení hlavní scény včetně hloubkového bufferu do render targetu
     gl.setRenderTarget(sceneTarget);

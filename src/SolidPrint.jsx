@@ -37,7 +37,8 @@ export const printFx = {
   rayLength: 0.9,
   center: new THREE.Vector2(0.5, 0.33),
   inward: true,         // true = paprsky se sbíhají z vrstvy do bodu center (kamera), false = utíkají od něj ven
-  frame: true,          // true = paprsky se sbíhají k okrajům rámu (obrazovka zmenšená frameScale), přebíjí center
+  through: 0.35,        // o kolik (výšky obrazovky) paprsky za bodem center ještě pokračují -> křížení; 0 = končí v bodě
+  frame: false,         // true = paprsky se sbíhají k okrajům rámu (obrazovka zmenšená frameScale), přebíjí center
   frameScale: 1,        // 1 = rám = okraje obrazovky, 0 = smrskne se do středu obrazovky
   bevel: 0.3,           // zaoblení rohů rámu
   renderMask: null      // (gl, camera) => texture | null, nastaví SolidPrintDriver
@@ -306,8 +307,10 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     // raysInward:false = staré god rays, tiskárna ZA kamerou, paprsky utíkají od center ven
     printFx.inward = cfg.raysInward ?? true;
     printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.33);
-    // raysFrame (výchozí): paprsky se sbíhají k okrajům obrazovky zmenšené na raysFrameScale, rohy zaoblené raysBevel
-    printFx.frame = (cfg.raysFrame ?? true) && printFx.inward;
+    // raysFrame (experiment, vypnuto): paprsky se sbíhají k okrajům obrazovky zmenšené na raysFrameScale, rohy zaoblené raysBevel
+    printFx.frame = (cfg.raysFrame ?? false) && printFx.inward;
+    // raysThrough: paprsky bodem projdou a pokračují ještě kus za něj (křížení čar); 0 = končí v bodě
+    printFx.through = cfg.raysThrough ?? 0.35;
     printFx.frameScale = cfg.raysFrameScale ?? 1;
     printFx.bevel = cfg.raysBevel ?? 0.3;
 
