@@ -80,6 +80,8 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, pageTitle, 
           <DenseSlider desc="Absorpce světla a sytost želatinového jádra." label="Hloubka sytosti (Thickness)" min={0} max={5.0} step={0.1} color={c} value={settings.thickness ?? 1.2} onChange={v => onUpdate('thickness', v)} />
           <DenseSlider desc="0 = video ve svých barvách, 1 = celé přebarvené barvou želé." label="Tónování videa (síla)" min={0} max={1.0} step={0.05} color={c} value={settings.videoTint ?? 0.35} onChange={v => onUpdate('videoTint', v)} />
           <DenseSlider desc="Jas videa uvnitř kuliček." label="Jas videa v želé" min={0.2} max={4.0} step={0.05} color={c} value={settings.videoGain ?? 1.4} onChange={v => onUpdate('videoGain', v)} />
+          <DenseSlider desc="Od jakého jasu se záře z videa začne tlumit. Pod prahem beze změny, nad ním se měkce stlačí, ať se svítící kuličky nepřepálí. 3 = vypnuto." label="Práh záře" min={0.2} max={3.0} step={0.05} color={c} value={settings.glowThreshold ?? 3.0} onChange={v => onUpdate('glowThreshold', v)} />
+          <DenseSlider desc="O kolik nejvýš může záře přerůst práh (strop nad prahem)." label="Rezerva nad prahem" min={0.02} max={2.0} step={0.02} color={c} value={settings.glowHeadroom ?? 0.5} onChange={v => onUpdate('glowHeadroom', v)} />
           <DenseSlider desc="Jak moc se kuličky přelévají (dýchají) – 0 = tuhé koule." label="Želé vlnění" min={0} max={1.5} step={0.05} color={c} value={settings.jellyWobble ?? 0.5} onChange={v => onUpdate('jellyWobble', v)} />
         </>
       )}

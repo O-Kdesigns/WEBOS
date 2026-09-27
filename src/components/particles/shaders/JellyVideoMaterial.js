@@ -24,6 +24,8 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     uTint: 0.35,
     uWobble: 0.5,
     uVideoGain: 1.4,
+    uGlowKnee: 3.0,
+    uGlowRoll: 0.5,
     // odtržené particly (utils.js ESCAPE_DEFAULTS, plní useParticleLogic)
     tVelocities: null,
     uEscColor: new THREE.Color("#ffb347"),
@@ -114,6 +116,8 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   varying vec3 vRand;
   uniform float uTint;
   uniform float uVideoGain;
+  uniform float uGlowKnee;
+  uniform float uGlowRoll;
   uniform vec3 uEscColor;
   uniform float uEscTint;
   uniform float uEscFlash;
@@ -259,7 +263,15 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec3 sssGlow = sss * tint * (videoTex.rgb + 0.1) * trans * (1.0 - mixProgress * 0.8);
     
     // 9. Výsledný složený vzhled
-    vec3 finalColor = coreColor + (totalSpecular + rimGlaze + causticGlow) * mix(1.0, 0.4, mixProgress) + sssGlow;
+    // práh záře: světlo z videa pod prahem beze změny, nad ním se měkce stlačí (max +uGlowRoll)
+    // -> kuličky, co už pěkně svítí, se při jasnějším videu nepřepálí. uGlowKnee >= 3 = vypnuto
+    vec3 vidLight = coreColor + causticGlow * mix(1.0, 0.4, mixProgress) + sssGlow;
+    float vPeak = max(max(vidLight.r, vidLight.g), vidLight.b);
+    if (uGlowKnee < 2.99 && vPeak > uGlowKnee) {
+      float over = vPeak - uGlowKnee;
+      vidLight *= (uGlowKnee + over / (1.0 + over / max(uGlowRoll, 0.01))) / vPeak;
+    }
+    vec3 finalColor = vidLight + (totalSpecular + rimGlaze) * mix(1.0, 0.4, mixProgress);
     finalColor = mix(finalColor, finalColor * uColorMod, metal * 0.5);
     
     // přisvícení od solidu (a žáru 3D tisku), SolidLink.jsx – mimo INSIDE je uSLightAmt 0
