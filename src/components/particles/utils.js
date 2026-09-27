@@ -39,6 +39,7 @@ uniform float uWaveForce;
 uniform float uWaveDrift;
 uniform float uWaveC;          // rychlost vln (výšky obrazovky/s)
 uniform float uWaveCStep;      // posun vlny za krok simulace (buňky)
+uniform float uHoldDecay;      // 1 / (zpoždění + náběh návratu) – jak rychle particl "zapomene" strčení
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -72,6 +73,7 @@ void main() {
     // particlů (do uFrontShell za nejbližším particlem v té části obrazovky), zadní zůstanou.
     // Proud je v obrazovce -> přepočet na 3D posun podle hloubky: blízké i vzdálené se vizuálně hýbou stejně.
     float friction = 0.90;
+    float disturb = 0.0; // jak silně voda particl tento snímek tlačí (0..1) -> odloží návrat k cíli
     if (uFluidOn > 0.5) {
         friction = uFriction;
         vec4 c = uMVP * vec4(pos.xyz, 1.0);
@@ -104,8 +106,13 @@ void main() {
             vec2 drift = flux / (fl2 + 1e-7) * sqrt(fl2 / max(uWaveCStep, 1e-3)) * (uWaveC + 0.7) * 2.0; // NDC/s
             vec2 wndc = (drift * uWaveDrift - grad * uWaveForce * uWaveC * uFluidTexel) * uDt;
             vel.xyz += (uCamRight * (wndc.x * c.w / uProj.x) + uCamUp * (wndc.y * c.w / uProj.y)) * uFluidForce * front;
+            // tlak v obrazovce (NDC/s): proud + vlna; slabé doběhy vln návrat neodkládají
+            float pushNdc = (length(ndc) + length(wndc)) / max(uDt, 1e-4) * uFluidForce * front;
+            disturb = smoothstep(0.02, 0.2, pushNdc);
         }
     }
+    // w = "držení": 1 = právě strčen, lineárně klesá k 0 za (zpoždění + náběh); poziční shader z něj počítá sílu návratu
+    vel.w = max(vel.w - uDt * uHoldDecay, disturb);
 
     // Tření - zpomalí "cáknutí"
     vel.xyz *= friction;
@@ -119,6 +126,8 @@ uniform float uTime;
 uniform float uFloatSpeed;
 uniform float uFloatAmplitude;
 uniform float uReturnSpeed;
+uniform float uReturnDelay;   // s po strčení vodou, než začne návrat k cíli
+uniform float uReturnRamp;    // s, za které se síla návratu rozjede od 0 do plné (ease-in)
 uniform float uScatter;
 uniform float uTransitionProgress;
 uniform sampler2D tBasePosition;
@@ -229,7 +238,12 @@ void main() {
     // 3. Hladký návrat k cíli
     // Reserve particles snap to the camera-relative cube while in ORBIT (no lag into view while scrolling),
     // and fly smoothly once the INSIDE morph starts.
-    float returnSpeed = mix(uReturnSpeed, 1.0, isReserve * (1.0 - step(0.001, tProgress)));
+    // po strčení vodou: zpoždění, pak pomalý rozjezd návratu (ease-in) místo okamžitého nejsilnějšího tahu
+    float holdT = uReturnDelay + uReturnRamp;
+    float sinceHit = (1.0 - vel.w) * holdT;
+    float ramp = smoothstep(0.0, 1.0, clamp((sinceHit - uReturnDelay) / max(uReturnRamp, 1e-3), 0.0, 1.0));
+    ramp = mix(1.0, ramp * ramp, step(1e-4, holdT)); // ease-in: pomalý start, pak zrychluje
+    float returnSpeed = mix(uReturnSpeed * ramp, 1.0, isReserve * (1.0 - step(0.001, tProgress)));
     // jiskra v letu jede přesně po dráze (lag by oblouk rozmazal)
     returnSpeed = mix(returnSpeed, 0.6, inFlight * step(0.999, tProgress));
     pos.xyz += (targetPos - pos.xyz) * returnSpeed;
@@ -320,13 +334,15 @@ export function useGPGPU(count, particlesData, gl) {
       uFluidOn: { value: 0 }, tFluid: { value: null }, uFluidTexel: { value: new THREE.Vector2() }, tFront: { value: null },
       uMVP: { value: new THREE.Matrix4() }, uCamRight: { value: new THREE.Vector3() }, uCamUp: { value: new THREE.Vector3() },
       uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
-      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 },
+      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
     posVar.material.uniforms.uFloatSpeed = { value: 1.0 };
     posVar.material.uniforms.uFloatAmplitude = { value: 0.1 };
     posVar.material.uniforms.uReturnSpeed = { value: 0.05 };
+    posVar.material.uniforms.uReturnDelay = { value: 0 };
+    posVar.material.uniforms.uReturnRamp = { value: 0 };
     posVar.material.uniforms.uScatter = { value: 0.0 };
     posVar.material.uniforms.uTransitionProgress = { value: 1.0 }; // Default k 1.0 pro safety
     posVar.material.uniforms.tBasePosition = { value: basePos };
@@ -464,6 +480,10 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     posUniforms.uFloatAmplitude.value = phys.floatAmplitude ?? 0.1;
     // Nové nastavení rychlosti návratu částic
     posUniforms.uReturnSpeed.value = phys.returnSpeed ?? 0.05;
+    posUniforms.uReturnDelay.value = Math.max(0, phys.returnDelay ?? 0.15);
+    posUniforms.uReturnRamp.value = Math.max(0, phys.returnRamp ?? 0.8);
+    velUniforms.uHoldDecay.value = 1 / Math.max(1e-3, posUniforms.uReturnDelay.value + posUniforms.uReturnRamp.value);
+    velUniforms.uDt.value = Math.min(Math.max(delta, 1 / 240), 1 / 30);
     // unášení s rotací INSIDE (1 = particly drží se solidy, míň = zbytkový dozvuk)
     if (posUniforms.uCarry) posUniforms.uCarry.value = phys.rotationCarry ?? 0.85;
     
