@@ -60,7 +60,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | P8 | **Popředová mlha + viněta mlhy** | `insideFog.foregroundFog`, `vignette*`, `edgeFade` | INSIDE |
 | P9 | **Ghost video** (video prosvítá do hloubky) | `volumetricDepth` (ghostStrength **0.12**, startDistance **3.2**, fadeRange) | INSIDE. Dřív 0.35 od 2.16 = ostrý text videa přes zadní solidy. |
 | P10 | **Středové paprsky z videa** | `volumetricDepth.rays*` | **v kódu vypnuté** (`uCenterRaysExposure = 0`) |
-| P11 | **Záře + paprsky tisku** (maska žhavé vrstvy 1/4, paprsky ke kameře od `raysCenterX/Y`) | `solidPrint.raysStrength` 10, `rayLength` 0.9 | jen během tisku/odtisku |
+| P11 | **Záře + paprsky tisku** (maska žhavé vrstvy 1/4, paprsky se sbíhají z vrstvy do bodu `raysCenterX/Y` 0.5/0.33 = „z kamery“; `raysInward:false` = staré, ven od bodu) | `solidPrint.raysStrength` 10, `rayLength` 0.9 | jen během tisku/odtisku |
 | P12 | **Kontrast HUD textu** (maska pod texty) | `ui2d` / `valueBoost`, `saturationBoost`… | vždy, kde je HUD text |
 
 ---

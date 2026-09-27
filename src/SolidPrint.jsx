@@ -35,7 +35,8 @@ export const printFx = {
   progress: 0,          // 0 = nic nevytištěno, 1 = hotovo
   rays: 0,              // síla paprsků pro VolumetricLight (0 = vypnuto, maska se nekreslí)
   rayLength: 0.9,
-  center: new THREE.Vector2(0.5, 0.5),
+  center: new THREE.Vector2(0.5, 0.33),
+  inward: true,         // true = paprsky se sbíhají z vrstvy do bodu center (kamera), false = utíkají od něj ven
   renderMask: null      // (gl, camera) => texture | null, nastaví SolidPrintDriver
 };
 if (import.meta.env.DEV && typeof window !== 'undefined') window.__printFx = printFx;
@@ -298,8 +299,10 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
 
     printFx.rays = heat * (cfg.raysStrength ?? 10.0);
     printFx.rayLength = cfg.rayLength ?? 0.9;
-    // tiskárna je ZA kamerou -> paprsky míří ke kameře = na obrazovce utíkají ven od úběžníku (střed)
-    printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.5);
+    // paprsky vedou z tištěné vrstvy do bodu center (výchozí dole uprostřed, 1/3 výšky od spodku = "z kamery");
+    // raysInward:false = staré god rays, tiskárna ZA kamerou, paprsky utíkají od center ven
+    printFx.inward = cfg.raysInward ?? true;
+    printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.33);
 
     printFx.meshes.forEach(p > 0 ? fx.show : fx.hide);
     if (leaving && p <= 0) onUnprinted?.();

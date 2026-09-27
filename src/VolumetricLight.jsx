@@ -103,7 +103,8 @@ const VolumetricLightShader = {
     tPrintMask: { value: dummyTexture },
     uPrintRays: { value: 0.0 },
     uPrintRayLen: { value: 0.55 },
-    uPrintCenter: { value: new THREE.Vector2(0.5, 0.4) }
+    uPrintCenter: { value: new THREE.Vector2(0.5, 0.4) },
+    uPrintInward: { value: 1.0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -206,6 +207,7 @@ const VolumetricLightShader = {
     uniform float uPrintRays;
     uniform float uPrintRayLen;
     uniform vec2 uPrintCenter;
+    uniform float uPrintInward;
 
     // Paprsky 3D tisku: tiskárna svítí z bodu ZA kamerou, paprsek vede z žhavé vrstvy ke kameře.
     // Na obrazovce to je klasický god ray: pixel sbírá žár z masky směrem K úběžníku uPrintCenter,
@@ -214,7 +216,8 @@ const VolumetricLightShader = {
       vec2 toC = (uPrintCenter - uv) * vec2(uAspect, 1.0);
       float dist = length(toC);
       if (dist < 0.0001) return vec3(0.0);
-      vec2 dir = toC / dist;
+      // uPrintInward = 1: paprsek vede z vrstvy DO bodu (pixel sbírá žár směrem OD bodu, paprsky se sbíhají)
+      vec2 dir = toC / dist * (1.0 - 2.0 * uPrintInward);
       float stepLen = uPrintRayLen / 40.0;
       vec2 stepUv = dir / vec2(uAspect, 1.0) * stepLen;
       // plný jitter startu (IGN) – jinak z 40 kroků vznikají soustředné pruhy
@@ -223,7 +226,7 @@ const VolumetricLightShader = {
       vec3 acc = vec3(0.0);
       float w = 1.0;
       for (int i = 0; i < 40; i++) {
-        if ((float(i) + jit) * stepLen > dist) break;   // za úběžník (ke kameře) už paprsek nevede
+        if (uPrintInward < 0.5 && (float(i) + jit) * stepLen > dist) break;   // za úběžník (ke kameře) už paprsek nevede
         s += stepUv;
         acc += texture2D(tPrintMask, s).rgb * w;
         w *= 0.955;
@@ -233,7 +236,9 @@ const VolumetricLightShader = {
       float fa = fract(ang), ia = floor(ang);
       float h0 = fract(sin(ia * 91.345) * 47453.5453), h1 = fract(sin((ia + 1.0) * 91.345) * 47453.5453);
       float streak = 0.45 + 0.9 * mix(h0, h1, fa * fa * (3.0 - 2.0 * fa));
-      return acc * (uPrintRays / 40.0) * streak;
+      // u bodu sbíhání paprsky zeslábnou, jinak se tam slije přepálená skvrna
+      float nearFade = mix(1.0, smoothstep(0.0, 0.07, dist), uPrintInward);
+      return acc * (uPrintRays / 40.0) * streak * nearFade;
     }
 
     varying vec2 vUv;
@@ -950,6 +955,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.tPrintMask.value = printMask || dummyTexture;
     mat.uniforms.uPrintRayLen.value = printFx.rayLength;
     mat.uniforms.uPrintCenter.value.copy(printFx.center);
+    mat.uniforms.uPrintInward.value = printFx.inward ? 1 : 0;
 
     // 1. Vykreslení hlavní scény včetně hloubkového bufferu do render targetu
     gl.setRenderTarget(sceneTarget);
