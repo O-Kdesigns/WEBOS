@@ -59,9 +59,9 @@
         },
         "nodeQuality": {
           "Particles_Xelith_Backround": 2,
-          "Particles_Xelith_Obsah0": 1,
-          "Particles_Xelith_Obsah1": 1,
-          "Particles_Xelith_Hloubka": 1,
+          "Particles_Xelith_Obsah0": 2,
+          "Particles_Xelith_Obsah1": 2,
+          "Particles_Xelith_Hloubka": 2,
           "Particles_Xelith_Popredi": 3
         },
         "solidMaterial": {
@@ -118,7 +118,12 @@
         ],
         "baseSize": 0.01,
         "sizeRandomness": 0.5,
-        "colorMode": "video"
+        "colorMode": "video",
+        "nodeQuality": {
+          "Particles_Xelith_Backround": 2,
+          "Particles_Xelith_Obsah0": 2,
+          "Particles_Xelith_Obsah1": 2
+        }
       },
       "videoUrl": "video/doomsday.mp4"
     },
