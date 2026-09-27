@@ -3,8 +3,6 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { portalFx } from './PortalTransition';
 import { debugMetrics } from './DebugMonitor';
-import { TextContrastPass } from './TextContrastPass';
-import { getHudTextMask } from './hudTextMask';
 import { printFx } from './SolidPrint';
 import { tvRegistry } from './TvGlass';
 import { getFluid } from './components/particles/ParticleFluid';
@@ -1124,15 +1122,6 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     };
   }, [material]);
 
-  const textContrastPass = useMemo(() => {
-    return new TextContrastPass({
-      valueBoost: 1.0,
-      whiteShift: 1.0,
-      intensity: 1.0,
-      enableMask: 1.0
-    });
-  }, []);
-
   const testPlateHelper = useMemo(() => {
     const geo = new THREE.PlaneGeometry(2, 2);
     const mat = new THREE.MeshBasicMaterial({ color: '#0055ff', depthTest: false, depthWrite: false });
@@ -1145,11 +1134,10 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
 
   useEffect(() => {
     return () => {
-      textContrastPass.dispose();
       testPlateHelper.material.dispose();
       testPlateHelper.mesh.geometry.dispose();
     };
-  }, [textContrastPass, testPlateHelper]);
+  }, [testPlateHelper]);
 
   const vl = appConfig?.volumetricLight || {};
   const fog = appConfig?.insideFog || {};
@@ -1530,31 +1518,6 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.tDepth.value = sceneTarget.depthTexture;
     gl.render(quadScene, quadCamera);
 
-    // 3. TextContrastPass - HSV transformace a oříznutí přesně na písmena textu v rohu obrazovky
-    if (appConfig?.ui2d?.enabled !== false && appConfig?.ui2d?.bottomLeft?.enabled !== false) {
-      const hoveredId = (typeof window !== 'undefined') ? window.__webosHoveredHudId : null;
-      const hudMask = getHudTextMask(appConfig, size.width, size.height, hoveredId);
-      if (hudMask && hudMask.texture) {
-        const bl = appConfig?.ui2d?.bottomLeft || {};
-        textContrastPass.material.uniforms.tDiffuse.value = sceneTarget.texture;
-        textContrastPass.material.uniforms.tMask.value = hudMask.texture;
-        textContrastPass.material.uniforms.uMaskBounds.value.set(
-          hudMask.bounds[0],
-          hudMask.bounds[1],
-          hudMask.bounds[2],
-          hudMask.bounds[3]
-        );
-        textContrastPass.material.uniforms.uEnableMask.value = 1.0;
-        textContrastPass.material.uniforms.uValueBoost.value = bl.valueBoost ?? appConfig?.ui2d?.valueBoost ?? 1.0;
-        textContrastPass.material.uniforms.uSaturationBoost.value = bl.saturationBoost ?? 1.4;
-        textContrastPass.material.uniforms.uBlackThreshold.value = bl.blackThreshold ?? 0.18;
-        textContrastPass.material.uniforms.uWhiteShift.value = bl.whiteShift ?? 1.0;
-        textContrastPass.material.uniforms.uHueShift.value = bl.hueShift ?? 0.0;
-        textContrastPass.material.uniforms.uIntensity.value = bl.contrastIntensity ?? 1.0;
-
-        textContrastPass.render(gl, null);
-      }
-    }
   }, 1);
 
   return null;

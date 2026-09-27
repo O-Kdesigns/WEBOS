@@ -142,16 +142,17 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
         
         <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
           <div style={{ fontSize: '0.75rem', color: '#94a3b8', cursor: 'help' }} title="Nadpis celého bloku. (Např. 'WHAT ARE YOU LOOKING FOR?')">Záhlaví bloku</div>
-          <input type="text" value={appConfig.ui2d?.bottomLeft?.title ?? ''} onChange={e => updateUi2dBottomLeft('title', e.target.value)} style={{ width: '100%', padding: '2px 8px', fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(244,63,94,0.3)', color: 'white', borderRadius: '4px' }} placeholder="Záhlaví..." />
+          <input type="text" value={appConfig.ui2d?.bottomLeft?.header ?? ''} onChange={e => updateUi2dBottomLeft('header', e.target.value)} style={{ width: '100%', padding: '2px 8px', fontSize: '0.75rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(244,63,94,0.3)', color: 'white', borderRadius: '4px' }} placeholder="Záhlaví..." />
         </div>
-        <DenseColor label="Barva záhlaví" value={appConfig.ui2d?.bottomLeft?.titleColor ?? '#ffffff'} onChange={v => updateUi2dBottomLeft('titleColor', v)} />
+        <DenseColor label="Barva záhlaví" value={appConfig.ui2d?.bottomLeft?.headerColor ?? '#ffffff'} onChange={v => updateUi2dBottomLeft('headerColor', v)} />
+        <DenseColor label="Barva textu odkazů" value={appConfig.ui2d?.bottomLeft?.textColor ?? '#c9c9c9'} onChange={v => updateUi2dBottomLeft('textColor', v)} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px' }}>
           {(appConfig.ui2d?.bottomLeft?.items || []).map((item, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: '8px', alignItems: 'center', background: 'rgba(244,63,94,0.05)', padding: '6px 8px', borderRadius: '4px', border: '1px solid rgba(244,63,94,0.1)' }}>
               <div style={{ fontSize: '0.7rem', color: '#f43f5e', opacity: 0.6 }}>#{i+1}</div>
-              <input type="text" value={item.label} onChange={e => updateUi2dBottomLeftItem(i, 'label', e.target.value)} style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#f8fafc', fontSize: '0.75rem', outline: 'none' }} placeholder="Název" />
-              <input type="text" value={item.url} onChange={e => updateUi2dBottomLeftItem(i, 'url', e.target.value)} style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '0.75rem', outline: 'none' }} placeholder="Odkaz / #hash" />
+              <input type="text" value={item.text} onChange={e => updateUi2dBottomLeftItem(i, 'text', e.target.value)} style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#f8fafc', fontSize: '0.75rem', outline: 'none' }} placeholder="Název" />
+              <input type="text" value={item.link} onChange={e => updateUi2dBottomLeftItem(i, 'link', e.target.value)} style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '0.75rem', outline: 'none' }} placeholder="Odkaz / #hash" />
               <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: item.dimmed ? '#f43f5e' : '#94a3b8', cursor: 'pointer' }}>
                 <input type="checkbox" checked={!!item.dimmed} onChange={e => updateUi2dBottomLeftItem(i, 'dimmed', e.target.checked)} style={{ accentColor: '#f43f5e' }} />
                 Tlumit

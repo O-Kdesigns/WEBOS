@@ -42,26 +42,30 @@
   overflow: hidden;
 }
 
-/* Skupina vlevo dole (Vizuální vykreslení zajišťuje WebGL TextContrastPass, DOM slouží jako interaktivní neviditelná vrstva) */
+/* Skupina vlevo dole – skutečný viditelný DOM text (žádná WebGL maska), .hud-blend-group
+   pod ním dělá Active Theory efekt (mix-blend-mode: color-dodge, viz inline style v HUD2D.jsx) */
 .hud-bottom-left {
   user-select: none;
-  line-height: 1.4;
+  line-height: 1.5;
   display: flex;
   flex-direction: column;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: transform 0.2s ease;
   pointer-events: none;
-  opacity: 0 !important;
+}
+
+.hud-blend-group {
+  display: flex;
+  flex-direction: column;
+  isolation: auto;
 }
 
 /* Nadpis menu (např. WHAT ARE YOU LOOKING FOR?) */
 .hud-menu-header {
   font-weight: 700;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
+  letter-spacing: inherit;
   margin-bottom: 14px;
   opacity: 0.85;
   pointer-events: none;
-  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
 /* Seznam položek */
@@ -98,9 +102,8 @@
   gap: 10px;
   text-decoration: none;
   color: inherit;
-  font-weight: 700;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
+  font-weight: inherit;
+  letter-spacing: inherit;
   padding: 2px 6px;
   margin-left: -6px;
   border-radius: 4px;

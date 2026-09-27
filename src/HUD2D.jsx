@@ -33,13 +33,18 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
   const isPlateVisible = Boolean(bl.testPlateEnabled || localPlateActive);
 
   const color = bl.color || '#9d6ef8';
+  const textColor = bl.textColor || '#c9c9c9';
+  const headerColor = bl.headerColor || textColor;
   const hoverColor = bl.hoverColor || '#ffffff';
   const bloomColor = bl.bloomColor || '#a855f7';
   const bloomIntensity = bl.bloomIntensity ?? 1.4;
   const enableBloom = bl.enableBloom !== false;
-  const blendMode = bl.blendMode || 'luminosity';
+  // Barva textu (šedá) je proti pozadí míchána pomocí color-dodge (Active Theory efekt) –
+  // stejný text tak na světlém pozadí "vysvítí" a na tmavém zůstane tlumený, viz LIGHTING.md
+  const blendMode = bl.blendMode || 'color-dodge';
   const fontSize = bl.fontSize ?? 14;
-  const letterSpacing = bl.letterSpacing ?? 1.4;
+  const fontWeight = bl.fontWeight ?? 400;
+  const letterSpacing = bl.letterSpacing ?? 0;
   const lineSpacing = bl.lineSpacing ?? 12;
   const linkNewTab = bl.linkNewTab ?? true;
   const defaultBullet = bl.defaultBullet ?? '->';
@@ -90,7 +95,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
         />
       )}
 
-      <div 
+      <div
         className="hud-2d-container"
         style={{ mixBlendMode: 'normal' }}
       >
@@ -102,95 +107,111 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
           left: `${bl.posX ?? 36}px`,
           fontFamily: fontFam,
           fontSize: `${fontSize}px`,
+          fontWeight: fontWeight,
         }}
       >
-        {/* Záhlaví menu (např. WHAT ARE YOU LOOKING FOR?) - vykresleno v WebGL TextContrastPass */}
-        {bl.header && (
-          <div
-            className="hud-menu-header"
-            style={{
-              color: 'transparent',
-              fontSize: `${fontSize * 0.95}px`,
-              letterSpacing: `${letterSpacing * 1.1}px`,
-              userSelect: 'none',
-            }}
-          >
-            {bl.header}
+        {/* Skutečný viditelný text (žádná duplicitní WebGL maska) – jeden zdroj pravdy pro
+            layout i klikací plochu, takže se nemůže rozejít odkaz od viditelných písmen.
+            mix-blend-mode: color-dodge = Active Theory efekt (text bere barvu/jas pozadí za sebou). */}
+        <div className="hud-blend-group" style={{ mixBlendMode: blendMode }}>
+          {bl.header && (
+            <div
+              className="hud-menu-header"
+              style={{
+                color: headerColor,
+                fontSize: `${fontSize * 0.95}px`,
+                letterSpacing: `${letterSpacing}px`,
+                userSelect: 'none',
+              }}
+            >
+              {bl.header}
+            </div>
+          )}
+
+          {/* Seznam řádků */}
+          <div className="hud-menu-items" style={{ gap: `${lineSpacing}px` }}>
+            {items.map((item, idx) => {
+              const itemId = item.id || `item-${idx}`;
+              const isHovered = hoveredId === itemId;
+              const bulletStr = (item.bullet !== undefined && item.bullet !== '') ? item.bullet : defaultBullet;
+
+              const isClickable = Boolean(item.link);
+              const isHashLink = isClickable && item.link.startsWith('#');
+
+              // Volitelný bloom efekt při najetí myší (navrch color-dodge, ne místo něj)
+              const itemTextShadow = isHovered && enableBloom
+                ? `0 0 12px rgba(${rgbBloom}, ${0.7 * bloomIntensity}), 0 0 28px rgba(${rgbBloom}, ${0.4 * bloomIntensity})`
+                : 'none';
+
+              const handleClick = (e) => {
+                if (!isHashLink || typeof window === 'undefined') return;
+                // Na stránce zatím není napojený scroll/kamera cíl pro jednotlivé kategorie –
+                // odkaz aspoň pošle událost, na kterou se dá později navázat posun po stránce.
+                window.dispatchEvent(new CustomEvent('webos:hud-navigate', {
+                  detail: { id: item.link.slice(1), item }
+                }));
+              };
+
+              return (
+                <div
+                  key={itemId}
+                  className={`hud-menu-item ${item.dimmed ? 'dimmed' : ''}`}
+                  onMouseEnter={() => {
+                    setHoveredId(itemId);
+                    if (typeof window !== 'undefined') window.__webosHoveredHudId = itemId;
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredId(null);
+                    if (typeof window !== 'undefined') window.__webosHoveredHudId = null;
+                  }}
+                >
+                  {/* 2D Bloom & Glare Vignette (eliptická záře pod textem) */}
+                  {enableBloom && (
+                    <div
+                      className="hud-glare-vignette"
+                      style={{
+                        opacity: isHovered ? Math.min(1, 0.6 * bloomIntensity) : 0,
+                        transform: isHovered ? 'translate(-50%, -50%) scale(1.0)' : 'translate(-50%, -50%) scale(0.85)',
+                        background: `radial-gradient(ellipse 65% 100% at 50% 50%, rgba(255, 255, 255, 0.8) 0%, rgba(${rgbBloom}, 0.6) 25%, rgba(${rgbBloom}, 0.15) 55%, transparent 75%)`,
+                        filter: 'blur(10px)',
+                      }}
+                    />
+                  )}
+
+                  {isClickable ? (
+                    <a
+                      href={item.link}
+                      onClick={handleClick}
+                      target={linkNewTab && !isHashLink ? '_blank' : '_self'}
+                      rel="noopener noreferrer"
+                      className="hud-item-link"
+                      style={{
+                        color: isHovered ? hoverColor : textColor,
+                        textShadow: itemTextShadow,
+                        letterSpacing: `${letterSpacing}px`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {bulletStr && <span className="hud-bullet">{bulletStr}</span>}
+                      <span className="hud-text">{item.text}</span>
+                    </a>
+                  ) : (
+                    <div
+                      className="hud-item-static"
+                      style={{
+                        color: isHovered ? hoverColor : textColor,
+                        textShadow: itemTextShadow,
+                        letterSpacing: `${letterSpacing}px`,
+                      }}
+                    >
+                      {bulletStr && <span className="hud-bullet">{bulletStr}</span>}
+                      <span className="hud-text">{item.text}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        )}
-
-        {/* Seznam řádků */}
-        <div className="hud-menu-items" style={{ gap: `${lineSpacing}px` }}>
-          {items.map((item, idx) => {
-            const itemId = item.id || `item-${idx}`;
-            const isHovered = hoveredId === itemId;
-            const bulletStr = (item.bullet !== undefined && item.bullet !== '') ? item.bullet : defaultBullet;
-
-            const isClickable = Boolean(item.link);
-
-            // Výsledný text shadow a bloom efekt při najetí myší
-            const itemTextShadow = isHovered
-              ? `0 0 5px rgba(255, 255, 255, 0.95), 0 0 12px #ffffff, 0 0 24px rgba(${rgbBloom}, ${0.85 * bloomIntensity}), 0 0 42px rgba(${rgbBloom}, ${0.7 * bloomIntensity})`
-              : 'none';
-
-            return (
-              <div
-                key={itemId}
-                className={`hud-menu-item ${item.dimmed ? 'dimmed' : ''}`}
-                onMouseEnter={() => {
-                  setHoveredId(itemId);
-                  if (typeof window !== 'undefined') window.__webosHoveredHudId = itemId;
-                }}
-                onMouseLeave={() => {
-                  setHoveredId(null);
-                  if (typeof window !== 'undefined') window.__webosHoveredHudId = null;
-                }}
-              >
-                {/* 2D Bloom & Glare Vignette (eliptická záře pod textem) */}
-                {enableBloom && (
-                  <div
-                    className="hud-glare-vignette"
-                    style={{
-                      opacity: isHovered ? Math.min(1, 0.6 * bloomIntensity) : 0,
-                      transform: isHovered ? 'translate(-50%, -50%) scale(1.0)' : 'translate(-50%, -50%) scale(0.85)',
-                      background: `radial-gradient(ellipse 65% 100% at 50% 50%, rgba(255, 255, 255, 0.8) 0%, rgba(${rgbBloom}, 0.6) 25%, rgba(${rgbBloom}, 0.15) 55%, transparent 75%)`,
-                      filter: 'blur(10px)',
-                    }}
-                  />
-                )}
-
-                {isClickable ? (
-                  <a
-                    href={item.link}
-                    target={linkNewTab && !item.link.startsWith('#') ? '_blank' : '_self'}
-                    rel="noopener noreferrer"
-                    className="hud-item-link"
-                    style={{
-                      color: isHovered ? '#ffffff' : 'transparent',
-                      textShadow: itemTextShadow,
-                      letterSpacing: `${letterSpacing}px`,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {bulletStr && <span className="hud-bullet">{bulletStr}</span>}
-                    <span className="hud-text">{item.text}</span>
-                  </a>
-                ) : (
-                  <div
-                    className="hud-item-static"
-                    style={{
-                      color: isHovered ? '#ffffff' : 'transparent',
-                      textShadow: itemTextShadow,
-                      letterSpacing: `${letterSpacing}px`,
-                    }}
-                  >
-                    {bulletStr && <span className="hud-bullet">{bulletStr}</span>}
-                    <span className="hud-text">{item.text}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
         </div>
 
         {/* Spodní pilulkové tlačítko (např. ASK ME ANYTHING...) */}
