@@ -4,7 +4,7 @@ Mapa všeho, co ve WEBOSu „svítí“: skutečná three.js světla, falešná 
 Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 
 > **Pravidlo pro AI:** když najdeš světlo / světelný efekt, který tu chybí, nebo nějaký změníš či přidáš, **aktualizuj tento soubor ve stejném commitu**.
-> Poslední revize: 2026-09-27 (modrá záře z levého horního rohu P4 vypnutá -> nové světlo TV P13 s maskou 2D vody).
+> Poslední revize: 2026-09-27 (P13: záře od celého obdélníku TV + široká měkká záře, i z boku min. 55 %; maska vody bez děr; P7 světlo myši vypnuté).
 
 ---
 
@@ -56,12 +56,12 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | P4 | **Atmosférická záře** – 2 barevné skvrny v screen-space. Skvrna 1 (tyrkysová z levého horního rohu) je **vypnutá** (`atmoStrength` 0, kód zůstává) – její barvu a tvar teď používá P13. | `cinematic.atmoColor/X/Y/Size/Strength`, `atmo2*` | vždy (při `cinematic.enabled`) |
 | P5 | **Zrno + viněta** | `cinematic.grain`, `cinematic.vignette` | vždy |
 | P6 | **Hloubková mlha + kouř** | `insideFog` (masterFogIntensity 70, fogColor, fogNear 0.7 / **fogFar 8**, **fogDensity 1.2**, smoke*, baseFogBrightness 2.5) | INSIDE. Dřív fogFar 4.5 / density 1.5 = vše za ~3.5 j. v plné mlze, vzdálené vrstvy částic nebyly vidět. |
-| P7 | **Světlo myši** (volumetrické světlo + stíny kolem kurzoru, barva `uLightColor` = `volumetricLight.color`) | `insideFog.mouseLightExposure/Radius`, `enableMouseFog` | INSIDE |
+| P7 | **Světlo myši** (volumetrické světlo + stíny kolem kurzoru, barva `uLightColor` = `volumetricLight.color`). **Vypnuté** (`enableMouseFog` false) – smyčka stínů se pak vůbec nepočítá. | `insideFog.mouseLightExposure/Radius`, `enableMouseFog` | INSIDE |
 | P8 | **Popředová mlha + viněta mlhy** | `insideFog.foregroundFog`, `vignette*`, `edgeFade` | INSIDE |
 | P9 | **Ghost video** (video prosvítá do hloubky) | `volumetricDepth` (ghostStrength **0.12**, startDistance **3.2**, fadeRange) | INSIDE. Dřív 0.35 od 2.16 = ostrý text videa přes zadní solidy. |
 | P10 | **Středové paprsky z videa** | `volumetricDepth.rays*` | **v kódu vypnuté** (`uCenterRaysExposure = 0`) |
 | P11 | **Záře + paprsky tisku** (maska žhavé vrstvy 1/4, paprsky se sbíhají z vrstvy k hranám rámu = obrazovka × `raysFrameScale` (1 okraje, 0 střed), rohy `raysBevel`; `raysFrame:false` = do bodu `raysCenterX/Y` 0.5/0.33; `raysInward:false` = staré, ven od bodu) | `solidPrint.raysStrength` 10, `rayLength` 0.9 | jen během tisku/odtisku |
-| P13 | **Světlo TV + maska 2D vody** (`tvLight()`): ORBIT = tyrkysová záře s pomalu se vlnícími paprsky kolem **aktivní televize** (sklo `TV_Glass`, pozice a velikost se promítají z 3D, takže světlo drží u TV i při posunu kamery). Viditelnost = jak kolmo se kamera dívá na obrazovku TV (`facingMin` → `facingFull`) × zmizení desky × začátek průletu. **Voda z myši** (rychlost proudu `ParticleFluid` mezi `waterMin`/`waterMax` buněk/s) do záře vyřezává díry (`waterClip`). INSIDE = stejná barva jen v místech vody (tvar podle atmo skvrny P4, min. `insideFloor`). | `tvLight` (color #2f9a9a, strength 2, size 3, rays 0.9, waterMin 12, waterMax 50, insideStrength 1, insideFloor 0.5) | ORBIT (TV v záběru) + INSIDE (jen voda) |
+| P13 | **Světlo TV + maska 2D vody** (`tvLight()`): ORBIT = tyrkysová záře kolem **aktivní televize** (sklo `TV_Glass`): svítí celá plocha – vzdálenost se měří od promítnutého obdélníku obrazovky (i v perspektivě), k tomu jemné paprsky (`rays`) a široká měkká záře bez paprsků (`halo`, na ní jsou vidět bokeh particly). Pozice/velikost z 3D, drží u TV i při posunu kamery. Viditelnost = `facingFloor` (i z boku/shora) → 1 při pohledu v úrovni TV (`facingMin` → `facingFull`) × zmizení desky × začátek průletu. **Voda z myši** do záře vyřezává díry (`waterClip`). Maska vody = průměr 5 vzorků rychlosti (`waterMin`/`waterMax` buněk/s) + advekovaná stopa (z) → ve středech vírů nejsou tmavé díry. INSIDE = stejná barva jen v místech vody, leží i přes particly (85 %), ne jen v mezerách pozadí. | `tvLight` (color #2f9a9a, strength 1, size 1, minSize 0.12, rays 0.45, halo 0.25, facingFloor 0.55, facingMin 0.4, waterMin 12, waterMax 50, insideStrength 1, insideFloor 0.5) | ORBIT (TV v záběru) + INSIDE (jen voda) |
 | P12 | **Kontrast HUD textu** (maska pod texty) | `ui2d` / `valueBoost`, `saturationBoost`… | vždy, kde je HUD text |
 
 ---
@@ -85,7 +85,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - **Solidy** (`MeshStandard` z GLB + `patchSolidLook`): vlastní barva/kov/drsnost, tiskové rýhy, zrno. F3 je přisvítí barvou videa z okolních particlů a přidá lem.
 - **Particly (jelly):** F1 + F2, F4 přisvícení od solidu (oranžové #ff6a2a, síla 1).
 - **Samosvit:** E4 video plátno, E2 prach. E6 je vypnuté.
-- **Post:** P3 DOF (ostré solidy, rozmazané popředí a dálka), P6 mlha + kouř, P7 světlo myši, P8 popředová mlha, P9 ghost video, P13 jen v místech vody, P4 + P5, P2 jen × `insideBloom` (0), P12.
+- **Post:** P3 DOF (ostré solidy, rozmazané popředí a dálka), P6 mlha + kouř, (P7 světlo myši vypnuté), P8 popředová mlha, P9 ghost video, P13 jen v místech vody, P4 + P5, P2 jen × `insideBloom` (0), P12.
 - F3/F4 běží jen při `printFx.progress > 0` (= solid je aspoň částečně vytištěný). Náběh je přes `smoothstep(transitionProgress, 0.6, 1)`.
 
 ### 🔥 INSIDE — aktivní 3D tisk (a odtisk při odchodu)

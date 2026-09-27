@@ -25,7 +25,7 @@ Stav: ⏳ neověřeno · ⚠️ známý problém · ✅ vyřešeno
 | Cinematic řetězec (DOF, bloom, záře, zrno) | `VolumetricLight.jsx` (1/4 rozlišení, HalfFloat) | Víc průchodů přes celou obrazovku; na mobilu vysoké DPR. | Mobilní profil configu `cinematic` (vypnout DOF / snížit počet blur kroků). | ⏳ |
 | Lom skla TV | `TvGlass.jsx` – scéna se 1× za snímek renderuje znovu do 1/2 FBO | Druhý render celé scény = skoro dvojnásobná cena, když je sklo ve frustu. | Na mobilu 1/4 FBO nebo statický lom. | ⏳ |
 | Maska žáru 3D tisku | `SolidPrint.jsx` (1/4 rozlišení, DPR max 1.25) | Extra render proxy meshů jen během tisku. | Nejspíš OK. | ⏳ |
-| Světlo TV + maska vody | `VolumetricLight.jsx` `tvLight()`, config `tvLight` | Každý pixel postu čte navíc texturu proudu (1 fetch) a v okolí TV 2× simplex šum (paprsky). Maska vody je jen, když voda běží: na dotyku jen při tahu prstem, jinak je světlo celé bez děr a v INSIDE není vidět vůbec. | Na mobilu `tvLight.rays` 0 (bez šumu); zvážit trvalou jemnou vodu nebo jiné zobrazení v INSIDE. | ⏳ |
+| Světlo TV + maska vody | `VolumetricLight.jsx` `tvLight()`, config `tvLight` | Každý pixel postu čte navíc texturu proudu (5 fetchů – rozmazaná maska) a v okolí TV 2× simplex šum (paprsky). Maska vody je jen, když voda běží: na dotyku jen při tahu prstem, jinak je světlo celé bez děr a v INSIDE není vidět vůbec. | Na mobilu `tvLight.rays` 0 (bez šumu); zvážit trvalou jemnou vodu nebo jiné zobrazení v INSIDE. | ⏳ |
 | Průměr videa pro přisvícení solidu | `SolidLink.jsx` (render 1×1 HalfFloat za snímek) | Zanedbatelné. | – | ⏳ |
 
 ## Obecně
