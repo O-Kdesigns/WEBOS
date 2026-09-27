@@ -149,6 +149,7 @@ const VolumetricLightShader = {
     uFogRim: { value: 0.35 },
     uWaterStreak: { value: 0.25 },
     uCoverRadius: { value: 0.025 },
+    uSwirlSpeed: { value: new THREE.Vector2(0.03, 0.3) }, // INSIDE: rychlost proudu (výšky obr./s), kdy víří světlo přes particly
     uWaterWisp: { value: 0.8 }
   },
   vertexShader: `
@@ -292,6 +293,7 @@ const VolumetricLightShader = {
     uniform float uFogRim;
     uniform float uWaterStreak;
     uniform float uCoverRadius;
+    uniform vec2 uSwirlSpeed;
     uniform float uWaterWisp;
     uniform float uTvDebug; // DEV: 1 = na obrazovce jen maska vody (zelená) + záře TV (červená)
 
@@ -792,7 +794,8 @@ const VolumetricLightShader = {
       // shluk particlů, víří v ní světlo TV (barva tvLight) – přechod podle toho, kolik okolí particly zakrývají
       float inWater = uTvInside > 0.001 ? insideWater() : 0.0;
       float inCover = inWater > 0.001 ? particleCover() : 0.0;
-      float fogCut = clamp(inWater * (1.0 - inCover) * uFogClear, 0.0, 1.0);
+      // mlha se rozráží všude (i z particlů a solidů -> po odehnání mají svou barvu, dokud se mlha nevrátí)
+      float fogCut = clamp(inWater * uFogClear, 0.0, 1.0);
       fogAlpha *= 1.0 - fogCut;
       // Při fogAlpha = 1.0 (na Fog Far a za ním) scéna 100% přechází do barvy mlhy a za ni již není vidět
       sceneColor = mix(sceneColor, targetFogColor, fogAlpha);
@@ -808,7 +811,10 @@ const VolumetricLightShader = {
         float lit = max(a1 * a1, uTvInsideFloor);
         // okraj rozražené mlhy chytá trochu světla (mlha se rozhrnuje, ne mizí)
         float rim = inWater * (1.0 - inWater) * 4.0 * (1.0 - inCover) * uFogRim;
-        sceneColor += uTvColor * lit * (inWater * inCover + rim) * uTvInside;
+        // přes particly víří světlo jen, dokud se voda hýbe; v klidu zůstanou čisté barvy
+        float spd = length(texture2D(tFluid, vUv).xy) * uFluidTexel.y;
+        float swirl = inWater * inCover * smoothstep(uSwirlSpeed.x, uSwirlSpeed.y, spd);
+        sceneColor += uTvColor * lit * (swirl + rim) * uTvInside;
       }
 
       vec3 finalInside = sceneColor;
@@ -1245,6 +1251,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uFogRim.value = tl.fogRim ?? 0.35;
       u.uWaterStreak.value = tl.waterStreak ?? 0.25;
       u.uCoverRadius.value = tl.coverRadius ?? 0.025;
+      u.uSwirlSpeed.value.set(tl.swirlSpeedMin ?? 0.03, tl.swirlSpeedMax ?? 0.3);
       u.uWaterWisp.value = tl.waterWisp ?? 0.8;
       u.uDyeRange.value.set(tl.dyeMin ?? 0.015, tl.dyeMax ?? 0.25);
       u.uTvClip.value = tl.waterClip ?? 1.0;
@@ -1257,7 +1264,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uFluidOn.value = fl.velocity ? 1 : 0;
       if (fl.vel?.[0]) u.uFluidTexel.value.set(1 / fl.vel[0].width, 1 / fl.vel[0].height);
       // barvivo počítá ParticleFluid, jen když ho někdo kreslí (viewAt) -> INSIDE si o něj řekne
-      if (u.uInsideTransition.value > 0.001) fl.viewAt = performance.now() / 1000;
+      if (u.uInsideTransition.value > 0.001) fl.viewAt = fl.insideAt = performance.now() / 1000;
       u.tDye.value = fl.dyeLive && fl.dye ? fl.dye[0].texture : dummyTexture;
       u.uDyeOn.value = fl.dyeLive && fl.dye ? 1 : 0;
       if (fl.dyeTexel) u.uDyeTexel.value.copy(fl.dyeTexel);
