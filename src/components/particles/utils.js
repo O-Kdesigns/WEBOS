@@ -37,6 +37,8 @@ uniform float uFrontShell;
 uniform sampler2D tWave;       // r = výška hladiny (vlny)
 uniform float uWaveForce;
 uniform float uWaveDrift;
+uniform float uWaveC;          // rychlost vln (výšky obrazovky/s)
+uniform float uWaveCStep;      // posun vlny za krok simulace (buňky)
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -93,10 +95,14 @@ void main() {
                              texture2D(tWave, suv + vec2(0.0, wt.y)).r - texture2D(tWave, suv - vec2(0.0, wt.y)).r) * 0.5;
             // rozrážení: tok energie vlny F = -(dh/dt)*grad(h) míří vždy ve směru šíření (od tahu ven)
             // -> particly jen kmitají (grad) + trvale se odsunou ven (drift), pak je vrátí pružina k cíli
-            float dh = texture2D(tWave, suv).r - texture2D(tWave, suv).g;
-            vec2 flux = -dh * grad;
-            flux *= inversesqrt(length(flux) + 1e-4); // ~lineární s výškou vlny (ne kvadratické)
-            vec2 wndc = (flux * uWaveDrift - grad * uWaveForce) * uFluidTexel * 2.0 * uDt;
+            // posun = výška × rychlost vlny: rychlá vlna přeběhne dřív, ale táhne rychleji -> stejný posun při každé rychlosti
+            vec2 wv = texture2D(tWave, suv).rg;
+            vec2 flux = -(wv.x - wv.y) * grad;
+            // |flux| = krok hladiny × sklon; / krok vlny = sklon² -> sqrt = sklon, jen kde vlna opravdu běží (stojící hrbol = 0)
+            float fl2 = length(flux);
+            // + 0.7: pomalou vlnu particl "vydrží" (drží ho pružina návratu) -> bez základu by pomalé vlny skoro nerozrážely
+            vec2 drift = flux / (fl2 + 1e-7) * sqrt(fl2 / max(uWaveCStep, 1e-3)) * (uWaveC + 0.7) * 2.0; // NDC/s
+            vec2 wndc = (drift * uWaveDrift - grad * uWaveForce * uWaveC * uFluidTexel) * uDt;
             vel.xyz += (uCamRight * (wndc.x * c.w / uProj.x) + uCamUp * (wndc.y * c.w / uProj.y)) * uFluidForce * front;
         }
     }
@@ -314,7 +320,7 @@ export function useGPGPU(count, particlesData, gl) {
       uFluidOn: { value: 0 }, tFluid: { value: null }, uFluidTexel: { value: new THREE.Vector2() }, tFront: { value: null },
       uMVP: { value: new THREE.Matrix4() }, uCamRight: { value: new THREE.Vector3() }, uCamUp: { value: new THREE.Vector3() },
       uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
-      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 },
+      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -510,6 +516,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
         velUniforms.tWave.value = fluid.wave;
         velUniforms.uWaveForce.value = fluidCfg.waveForce;
         velUniforms.uWaveDrift.value = fluidCfg.waveDrift;
+        velUniforms.uWaveC.value = fluid.waveCEff ?? 0;
+        velUniforms.uWaveCStep.value = fluid.waveCStep ?? 0.5;
         velUniforms.uFluidTexel.value.copy(fluid.texel);
         velUniforms.uDt.value = Math.min(Math.max(delta, 1 / 240), 1 / 30);
         velUniforms.uFluidForce.value = mouseMult;

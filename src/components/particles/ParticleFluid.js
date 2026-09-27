@@ -14,9 +14,9 @@ export const FLUID_DEFAULTS = {
   resolution: 128,        // výška mřížky tekutiny (šířka podle poměru stran)
   splatRadius: 0.022,     // poloměr stopy myši (podíl výšky obrazovky)
   splatHardness: 2.5,     // ostrost okraje stopy (1 = měkký gauss, víc = plochý střed a ostrá hrana -> ostřejší vlna)
-  force: 1.6,             // 1 = proud v centru stopy má rychlost kurzoru
+  force: 1.0,             // 1 = proud v centru stopy má rychlost kurzoru
   speedCurve: 0.5,        // odezva na rychlost myši: 1 = lineární, menší = pomalý tah silnější a rychlý slabší
-  maxSpeed: 2.5,          // strop rychlosti tahu (výšky obrazovky za s) – rychlý švih nad tím už nesílí
+  maxSpeed: 1.0,          // strop rychlosti tahu (výšky obrazovky za s) – rychlý švih nad tím už nesílí
   curl: 8,                // víření (moc = spletitý "plyn", málo = klidná voda)
   trailFade: 1.2,         // mizení stopy za s (proud posouvá particly jen ve stopě; menší = stopa i posun vydrží déle)
   dissipation: 0.35,      // útlum proudu za s (menší = delší dojezd)
@@ -27,10 +27,15 @@ export const FLUID_DEFAULTS = {
   frontRes: 128,          // výška mapy nejbližších particlů
   frontPointSize: 4,      // velikost particlu v mapě (buňky) – větší = méně prosvítání zadních
   waveHeight: 3,          // výška vlny z tahu (0 = bez vln)
-  waveSpeed: 0.35,        // rychlost šíření vlny (c² na krok, max 0.5)
-  waveSteps: 2,           // kroků vlny za snímek (rychlejší šíření)
-  waveDamping: 1.2,       // útlum vln za s
-  waveDrift: 40,          // rozrážení: jak daleko vlna particly trvale odsune od tahu ven
+  waveGrowth: 0,          // růst výšky vlny s rychlostí myši (0 = stejná vlna pro každou rychlost, 1 = lineárně)
+  // rychlost vln se řídí myší: vždy waveSpeedRatio× rychlejší než tah -> zdroj nikdy nedožene vlastní vlnu
+  // (jinak "nadzvukový třesk": energie se hromadí a vlna odfoukne půl obrazovky)
+  waveSpeedMin: 0.2,      // nejpomalejší vlna (výšky obrazovky/s) – pomalý tah = pomalé vlny
+  waveSpeedRatio: 1.4,    // rychlost vlny = tolikrát rychlost myši
+  waveSpeedMax: 6,        // strop rychlosti vln (výšky obrazovky/s)
+  waveSpeedHold: 1.2,     // s, jak dlouho vlny drží rychlost po zpomalení myši
+  waveReach: 0.12,        // dosah vln (výšky obrazovky) – útlum podle vzdálenosti, stejný pro pomalé i rychlé vlny
+  waveDrift: 0.015,       // rozrážení: jak daleko vlna particly odsune od tahu ven (pak je vrátí pružina)
   waveForce: 6,           // jak silně vlna tlačí particly (od tahu ven)
   idleSleep: 5,           // s bez pohybu myši -> simulace se uspí (nejdřív až proud dozní)
 };
@@ -111,12 +116,13 @@ void main(){
 // Particly dostávají zrychlení -grad(výška) (hybnost mělké vody): vlna je postupně odtlačí ven a zase vrátí.
 const WAVE = HEAD + `
 uniform sampler2D uWave; uniform vec2 uA; uniform vec2 uB; uniform float uRadius; uniform float uAspect;
-uniform float uPush; uniform float uC2; uniform float uDamp;
+uniform float uPush; uniform float uC2; uniform float uDamp; uniform float uLeak;
 void main(){
   vec4 c = texture2D(uWave, vUv);
   float L = S(uWave, vec2(-1, 0)).r, R = S(uWave, vec2(1, 0)).r, T = S(uWave, vec2(0, 1)).r, B = S(uWave, vec2(0, -1)).r;
   // útlum jen rychlosti hladiny (h - předchozí), jinak by se celá plocha houpala
   float h = c.r + (c.r - c.g) * uDamp + uC2 * (L + R + T + B - 4.0 * c.r);
+  h *= uLeak; // stojící hrbol (zbytek po tahu) pomalu splaskne
   // tah myši = pohybující se předmět ve vodě (jako loď): vodu před sebou zvedne, za sebou nechá důlek
   // (stopa teď - stopa minule) -> čistá příďová vlna bez přidané vody
   vec2 pb = vUv - uB, pa = vUv - uA; pb.x *= uAspect; pa.x *= uAspect;
@@ -153,7 +159,7 @@ class Fluid {
       pressure: mk(PRESSURE, { uP: { value: null }, uDiv: { value: null } }),
       gradient: mk(GRADIENT, { uP: { value: null }, uVel: { value: null } }),
       advect: mk(ADVECT, { uVel: { value: null }, uDt: { value: 0 }, uDissipation: { value: 0 }, uTrailFade: { value: 0 } }),
-      wave: mk(WAVE, { uWave: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uRadius: { value: 0.03 }, uAspect: { value: 1 }, uPush: { value: 0 }, uC2: { value: 0.4 }, uDamp: { value: 0.99 } }),
+      wave: mk(WAVE, { uWave: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uRadius: { value: 0.03 }, uAspect: { value: 1 }, uPush: { value: 0 }, uC2: { value: 0.4 }, uDamp: { value: 0.99 }, uLeak: { value: 1 } }),
     };
     this.w = 0; this.h = 0;
     this.prev = new THREE.Vector2(NaN, NaN);
@@ -212,9 +218,11 @@ class Fluid {
     const now = performance.now() / 1000;
     const dt = Math.min(Math.max(delta, 1 / 240), 1 / 30);
     const pu = state.pointer.x * 0.5 + 0.5, pv = state.pointer.y * 0.5 + 0.5;
+    // skok kurzoru (vjetí do okna odjinud, dotyk jinde) není tah -> jen přesun bez vln a proudu
+    if (Math.hypot((pu - this.prev.x) * width / height, pv - this.prev.y) > Math.max(0.25, 20 * dt)) this.prev.set(NaN, NaN);
     const moved = Number.isFinite(this.prev.x) && (pu !== this.prev.x || pv !== this.prev.y);
     if (moved) {
-      if (!this.active) { this.clear(); this.active = true; }
+      if (!this.active) { this.clear(); this.active = true; this.speed = 0; this.waveC = 0; this.waveAcc = 0; this.waveSrc?.set(this.prev.x, this.prev.y); }
       this.lastMove = now;
     }
     // uspat až když proud skoro dozněl (95 %), jinak by dojezd uťal
@@ -225,36 +233,58 @@ class Fluid {
     gl.autoClear = false;
     const m = this.m;
 
-    // vlny: substepy (stabilita c² <= 0.5), zdroj jen v prvním kroku; síla zdroje podle délky tahu (rychlosti)
-    // křivka odezvy: rychlost tahu (výšky obrazovky/s) -> sqrt-ish + měkký strop, k = násobek síly
-    let k = 1;
-    if (moved) {
-      const sp = Math.hypot((pu - this.prev.x) * width / height, pv - this.prev.y) / dt;
-      const eff = Math.pow(Math.max(sp, 1e-4), Math.max(0.1, cfg.speedCurve));
-      const cap = Math.max(0.1, cfg.maxSpeed);
-      k = Math.min(4, cap * Math.tanh(eff / cap) / Math.max(sp, 1e-4));
-    }
+    // rychlost tahu (výšky obrazovky/s), vyhlazená ~50 ms: myš posílá pozice jinou frekvencí než snímky
+    // (165 Hz obrazovka, 125 Hz myš -> surová rychlost skáče 0 / 2×)
+    const aspect = width / height;
+    const rawSp = moved ? Math.hypot((pu - this.prev.x) * aspect, pv - this.prev.y) / dt : 0;
+    this.speed = (this.speed ?? 0) + (rawSp - (this.speed ?? 0)) * (1 - Math.exp(-dt / 0.05));
+    const sp = Math.max(this.speed, 1e-4);
+    // křivka odezvy: sqrt-ish + měkký strop -> out = výsledná rychlost proudu (výšky obrazovky/s)
+    const cap = Math.max(0.1, cfg.maxSpeed);
+    const out = cap * Math.tanh(Math.pow(sp, Math.max(0.1, cfg.speedCurve)) / cap);
+    const k = Math.min(4, out / sp);
     this.speedGain = k;
 
+    // rychlost vln podle myši: nahoru hned, dolů pomalu (vypuštěné vlny nezastaví)
+    const cTarget = Math.min(cfg.waveSpeedMax, Math.max(cfg.waveSpeedMin, cfg.waveSpeedRatio * this.speed));
+    this.waveC = cTarget > (this.waveC ?? 0) ? cTarget : this.waveC + (cTarget - this.waveC) * (1 - Math.exp(-dt / Math.max(0.05, cfg.waveSpeedHold)));
+    // kroky vln: každý krok posune vlnu přesně o 0.5 buňky (c² = 0.25, stabilní) -> počet kroků za snímek podle času.
+    // Stejná délka kroku je nutná: střídání délek (1 / 2 kroky za snímek) hladinu rozhoupe až do výbuchu.
+    const CSTEP = 0.5;
+    this.waveAcc = (this.waveAcc ?? 0) + this.waveC * this.h * dt / CSTEP;
+    const steps = Math.min(24, Math.floor(this.waveAcc));
+    this.waveAcc = Math.min(1, this.waveAcc - steps);
+    this.waveCStep = CSTEP;
+    this.waveCEff = this.waveC;
+
+    // výška vlny: rychlost vln roste s myší -> vlna je už sama vyrovnaná, jen mírný růst (1 výška obrazovky/s = waveHeight)
+    const wavePush = cfg.waveHeight * Math.min(3, Math.pow(sp, Math.max(0, cfg.waveGrowth)));
     const wu = m.wave.uniforms;
-    wu.uA.value.copy(moved ? this.prev : wu.uB.value); wu.uB.value.set(pu, pv);
+    // zdroj = posun stopy od posledního kroku vln (při pomalých vlnách nemusí být krok v každém snímku)
+    if (!this.waveSrc) this.waveSrc = new THREE.Vector2(pu, pv);
+    if (!Number.isFinite(this.prev.x)) this.waveSrc.set(pu, pv); // po skoku kurzoru bez vlny
+    const srcMoved = this.waveSrc.x !== pu || this.waveSrc.y !== pv;
+    wu.uA.value.copy(this.waveSrc); wu.uB.value.set(pu, pv);
     wu.uRadius.value = cfg.splatRadius * 1.5;
-    wu.uAspect.value = width / height;
-    wu.uC2.value = Math.min(0.5, cfg.waveSpeed);
-    wu.uDamp.value = Math.exp(-cfg.waveDamping / (60 * cfg.waveSteps)); // útlum rychlosti hladiny za krok
-    for (let i = 0; i < cfg.waveSteps; i++) {
-      wu.uPush.value = i === 0 && moved ? cfg.waveHeight * k : 0;
+    wu.uAspect.value = aspect;
+    wu.uC2.value = CSTEP * CSTEP;
+    // útlum za krok: vlna ztratí ~2/3 na dráze waveReach (krok = 0.5 buňky dráhy -> nezávisí na rychlosti vln)
+    wu.uDamp.value = Math.exp(-CSTEP / (Math.max(0.02, cfg.waveReach) * this.h));
+    wu.uLeak.value = Math.exp(-0.8 * CSTEP / (Math.max(0.05, this.waveC) * this.h));
+    for (let i = 0; i < steps; i++) {
+      wu.uPush.value = i === 0 && srcMoved ? wavePush : 0;
       wu.uWave.value = this.waveRT[0].texture;
       this.pass(m.wave, this.waveRT[1]); this.waveRT.reverse();
     }
+    if (steps > 0) this.waveSrc.set(pu, pv);
     this.wave = this.waveRT[0].texture;
 
     if (moved) {
       const s = m.splat.uniforms;
       s.uVel.value = this.vel[0].texture;
       s.uA.value.copy(this.prev); s.uB.value.set(pu, pv);
-      // rychlost kurzoru v buňkách mřížky za sekundu
-      s.uForce.value.set((pu - this.prev.x) * this.w / dt, (pv - this.prev.y) * this.h / dt).multiplyScalar(cfg.force * k);
+      // směr tahu × rychlost z křivky odezvy (buňky mřížky za s; buňka je čtverec -> x * w, y * h)
+      s.uForce.value.set((pu - this.prev.x) * this.w, (pv - this.prev.y) * this.h).normalize().multiplyScalar(out * this.h * cfg.force);
       s.uRadius.value = cfg.splatRadius;
       s.uHardness.value = Math.max(0.5, cfg.splatHardness);
       s.uAspect.value = width / height;
