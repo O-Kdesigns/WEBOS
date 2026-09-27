@@ -7,6 +7,7 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
   const fluid = appConfig.particlePhysics?.fluid || {};
   const updateFluid = (field, value) => updateParticlePhysics('fluid', { ...fluid, [field]: value });
   const esc = { ...ESCAPE_DEFAULTS, ...(appConfig.particlePhysics?.escape || {}) };
+  const updateSolidPrint = (field, value) => updateConfig('solidPrint', { ...(appConfig.solidPrint || {}), [field]: value });
   const updateEscape = (field, value) => updateParticlePhysics('escape', { ...(appConfig.particlePhysics?.escape || {}), [field]: value });
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
@@ -100,6 +101,11 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
         <DenseSlider desc="Síla výbuchu, který rozfoukne částice při přejetí myší." label="Síla odfouknutí myší" min={0.1} max={5.0} step={0.1} value={appConfig.particlePhysics?.mouseForce ?? 1.0} color="#ec4899" onChange={v => updateParticlePhysics('mouseForce', v)} />
         <DenseSlider desc="Dosah kolizní kuličky myši rozrážející částice." label="Průměr stopy (Radius)" min={0.1} max={5.0} step={0.1} value={appConfig.particlePhysics?.mouseRadius ?? 2.0} color="#ec4899" onChange={v => updateParticlePhysics('mouseRadius', v)} />
         <DenseSlider desc="Délka pomyslného průniku laseru z kurzoru skrz scénu." label="Délka průniku (Laser)" min={0.1} max={20.0} step={0.1} value={appConfig.particlePhysics?.laserLength ?? 5.0} color="#ec4899" onChange={v => updateParticlePhysics('laserLength', v)} />
+
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Paprsky 3D tisku</div>
+        <DenseSlider desc="Kam se paprsky tisku sbíhají: 1 = přesně k okrajům obrazovky, 0 = rám se smrskne do jednoho bodu ve středu." label="Rám paprsků (Scale)" min={0} max={1} step={0.01} value={appConfig.solidPrint?.raysFrameScale ?? 1} color="#ec4899" onChange={v => updateSolidPrint('raysFrameScale', v)} />
+        <DenseSlider desc="Zaoblení rohů rámu – změkčí zlom paprsků mezi hranami." label="Bevel hran" min={0} max={1} step={0.01} value={appConfig.solidPrint?.raysBevel ?? 0.3} color="#ec4899" onChange={v => updateSolidPrint('raysBevel', v)} />
       </DashboardCard>
 
       <DashboardCard title="Vnitřní Mlha" icon="🌫️" color="#6366f1">

@@ -104,7 +104,10 @@ const VolumetricLightShader = {
     uPrintRays: { value: 0.0 },
     uPrintRayLen: { value: 0.55 },
     uPrintCenter: { value: new THREE.Vector2(0.5, 0.4) },
-    uPrintInward: { value: 1.0 }
+    uPrintInward: { value: 1.0 },
+    uPrintFrame: { value: 1.0 },
+    uPrintFrameScale: { value: 1.0 },
+    uPrintBevel: { value: 0.3 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -208,6 +211,21 @@ const VolumetricLightShader = {
     uniform float uPrintRayLen;
     uniform vec2 uPrintCenter;
     uniform float uPrintInward;
+    uniform float uPrintFrame;       // 1 = paprsky se sbíhají k okrajům rámu (zmenšená obrazovka), 0 = k bodu uPrintCenter
+    uniform float uPrintFrameScale;  // 1 = rám = okraje obrazovky, 0 = rám se smrskne do středu obrazovky
+    uniform float uPrintBevel;       // 0..1 zaoblení rohů rámu + změkčení zlomu mezi hranami
+
+    // vzdálenost od rámu (aspect prostor, střed obrazovky = 0): <0 uvnitř, >0 venku
+    float printFrameSd(vec2 p) {
+      vec2 b = 0.5 * uPrintFrameScale * vec2(uAspect, 1.0);
+      float r = uPrintBevel * min(b.x, b.y);
+      vec2 q = abs(p) - b + r;
+      // uvnitř měkké maximum -> směr k nejbližší hraně se u úhlopříčky přelije plynule (bevel)
+      float k = max(r, 1e-4);
+      float h = clamp(0.5 + 0.5 * (q.x - q.y) / k, 0.0, 1.0);
+      float smx = mix(q.y, q.x, h) + k * h * (1.0 - h);
+      return length(max(q, 0.0)) + min(smx, 0.0) - r;
+    }
 
     // Paprsky 3D tisku: tiskárna svítí z bodu ZA kamerou, paprsek vede z žhavé vrstvy ke kameře.
     // Na obrazovce to je klasický god ray: pixel sbírá žár z masky směrem K úběžníku uPrintCenter,
@@ -218,6 +236,23 @@ const VolumetricLightShader = {
       if (dist < 0.0001) return vec3(0.0);
       // uPrintInward = 1: paprsek vede z vrstvy DO bodu (pixel sbírá žár směrem OD bodu, paprsky se sbíhají)
       vec2 dir = toC / dist * (1.0 - 2.0 * uPrintInward);
+      vec2 streakP = -toC;
+      if (uPrintFrame > 0.5) {
+        // rám: světlo teče z vrstvy k nejbližšímu místu na rámu, pixel sbírá žár proti proudu
+        vec2 p = (uv - 0.5) * vec2(uAspect, 1.0);
+        float d = printFrameSd(p);
+        const float E = 0.002;
+        vec2 g = vec2(printFrameSd(p + vec2(E, 0.0)) - printFrameSd(p - vec2(E, 0.0)),
+                      printFrameSd(p + vec2(0.0, E)) - printFrameSd(p - vec2(0.0, E)));
+        float gl = length(g);
+        if (gl < 1e-6) return vec3(0.0);
+        g /= gl;
+        dist = abs(d);
+        vec2 toward = -sign(d) * g;          // směr proudu světla k rámu
+        dir = -toward;
+        // pruhy podle místa, kam paprsek na rámu dopadne (u scale 0 = úhel kolem středu)
+        streakP = p - g * d - toward * 0.02;
+      }
       float stepLen = uPrintRayLen / 40.0;
       vec2 stepUv = dir / vec2(uAspect, 1.0) * stepLen;
       // plný jitter startu (IGN) – jinak z 40 kroků vznikají soustředné pruhy
@@ -232,7 +267,7 @@ const VolumetricLightShader = {
         w *= 0.955;
       }
       // pruhování podle úhlu (jednotlivé paprsky místo plochého vějíře), pomalu se vlní
-      float ang = atan(toC.y, toC.x) * 38.0 + uTime * 0.4;
+      float ang = atan(streakP.y, streakP.x) * 38.0 + uTime * 0.4;
       float fa = fract(ang), ia = floor(ang);
       float h0 = fract(sin(ia * 91.345) * 47453.5453), h1 = fract(sin((ia + 1.0) * 91.345) * 47453.5453);
       float streak = 0.45 + 0.9 * mix(h0, h1, fa * fa * (3.0 - 2.0 * fa));
@@ -956,6 +991,9 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uPrintRayLen.value = printFx.rayLength;
     mat.uniforms.uPrintCenter.value.copy(printFx.center);
     mat.uniforms.uPrintInward.value = printFx.inward ? 1 : 0;
+    mat.uniforms.uPrintFrame.value = printFx.frame ? 1 : 0;
+    mat.uniforms.uPrintFrameScale.value = printFx.frameScale;
+    mat.uniforms.uPrintBevel.value = printFx.bevel;
 
     // 1. Vykreslení hlavní scény včetně hloubkového bufferu do render targetu
     gl.setRenderTarget(sceneTarget);

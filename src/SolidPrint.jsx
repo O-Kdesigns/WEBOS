@@ -37,6 +37,9 @@ export const printFx = {
   rayLength: 0.9,
   center: new THREE.Vector2(0.5, 0.33),
   inward: true,         // true = paprsky se sbíhají z vrstvy do bodu center (kamera), false = utíkají od něj ven
+  frame: true,          // true = paprsky se sbíhají k okrajům rámu (obrazovka zmenšená frameScale), přebíjí center
+  frameScale: 1,        // 1 = rám = okraje obrazovky, 0 = smrskne se do středu obrazovky
+  bevel: 0.3,           // zaoblení rohů rámu
   renderMask: null      // (gl, camera) => texture | null, nastaví SolidPrintDriver
 };
 if (import.meta.env.DEV && typeof window !== 'undefined') window.__printFx = printFx;
@@ -303,6 +306,10 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     // raysInward:false = staré god rays, tiskárna ZA kamerou, paprsky utíkají od center ven
     printFx.inward = cfg.raysInward ?? true;
     printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.33);
+    // raysFrame (výchozí): paprsky se sbíhají k okrajům obrazovky zmenšené na raysFrameScale, rohy zaoblené raysBevel
+    printFx.frame = (cfg.raysFrame ?? true) && printFx.inward;
+    printFx.frameScale = cfg.raysFrameScale ?? 1;
+    printFx.bevel = cfg.raysBevel ?? 0.3;
 
     printFx.meshes.forEach(p > 0 ? fx.show : fx.hide);
     if (leaving && p <= 0) onUnprinted?.();
