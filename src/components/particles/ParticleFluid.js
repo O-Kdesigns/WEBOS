@@ -11,6 +11,13 @@ import * as THREE from 'three';
 
 export const FLUID_DEFAULTS = {
   enabled: true,
+  // 'pavel' = jako PavelDoGreat WebGL-Fluid-Simulation: myš proud PŘIČÍTÁ (víc tahů = víc energie, střih -> víry),
+  // 'brush' = starý štětec: proud ve stopě se NASTAVÍ na rychlost kurzoru (force/speedCurve/maxSpeed/wake/splatHardness)
+  mode: 'pavel',
+  splatForce: 6000,       // [pavel] síla tahu (Pavel 6000): posun kurzoru za snímek × tohle = přidaný proud
+  pavelRadius: 0.25,      // [pavel] poloměr stopy (Pavel SPLAT_RADIUS 0.25 = rozptyl 0.0025 obrazovky²)
+  dyeResolution: 512,     // [pavel] rozlišení barviva pro náhled "2D voda" (Pavel 1024; počítá se jen když je náhled zapnutý)
+  dyeFade: 1,             // [pavel] mizení barviva náhledu za s (Pavel DENSITY_DISSIPATION 1)
   resolution: 128,        // výška mřížky tekutiny (šířka podle poměru stran)
   splatRadius: 0.022,     // poloměr stopy myši (podíl výšky obrazovky)
   splatHardness: 2.5,     // ostrost okraje stopy (1 = měkký gauss, víc = plochý střed a ostrá hrana -> ostřejší vlna)
@@ -64,6 +71,26 @@ void main(){
   // xy: prst ve vodě -> proud má rychlost kurzoru; z: stopa = "barvivo" (screen blend, max 1).
   // Barvivo proud unáší (advekce) -> stočí se do vírů a particly v něm proud cítí.
   gl_FragColor = vec4(v.xy + (uForce - v.xy) * max(w, uWake * wk), 1.0 - (1.0 - v.z) * (1.0 - max(w, wk)), 1.0);
+}`;
+
+// Pavlův splat: gauss kolem bodu, přičte se (proud i barvivo). Pro proud z = stopa pro particly (screen blend, max 1).
+const SPLAT_ADD = HEAD + `
+uniform sampler2D uTarget; uniform vec2 uPoint; uniform vec3 uColor; uniform float uRadius; uniform float uAspect; uniform float uMask;
+void main(){
+  vec2 p = vUv - uPoint; p.x *= uAspect;
+  float g = exp(-dot(p, p) / uRadius);
+  vec4 b = texture2D(uTarget, vUv);
+  vec3 add = b.xyz + g * uColor;
+  if (uMask > 0.5) add.z = 1.0 - (1.0 - b.z) * (1.0 - g);
+  gl_FragColor = vec4(add, 1.0);
+}`;
+
+// Advekce barviva (jiné rozlišení než proud) – jako Pavel: výsledek / (1 + útlum·dt)
+const ADVECT_DYE = HEAD + `
+uniform sampler2D uVel; uniform sampler2D uSrc; uniform vec2 uVelTexel; uniform float uDt; uniform float uDissipation;
+void main(){
+  vec2 coord = vUv - uDt * texture2D(uVel, vUv).xy * uVelTexel;
+  gl_FragColor = vec4(texture2D(uSrc, coord).rgb / (1.0 + uDissipation * uDt), 1.0);
 }`;
 
 const CURL = HEAD + `
@@ -142,12 +169,23 @@ void main(){
   gl_FragColor = vec4(h, c.r, 0.0, 1.0);
 }`;
 
-// Náhled vody na obrazovce (slider "2D voda" vedle AI živého renderu) – jako PavelDoGreat:
-// barva = směr proudu, jas = rychlost, krytí = stopa přesně tak, jak ji cítí particly (smoothstep jako v utils.js).
+// Náhled vody na obrazovce (slider "2D voda" vedle AI živého renderu).
+// pavel: barvivo jako PavelDoGreat (barva tahu + stínování z gradientu jasu, krytí = jas).
+// brush: barva = směr proudu, jas = rychlost, krytí = stopa přesně tak, jak ji cítí particly (smoothstep jako v utils.js).
 const VIEW = HEAD + `
-uniform sampler2D uVel; uniform float uOpacity; uniform float uSpeedNorm;
+uniform sampler2D uVel; uniform sampler2D uDye; uniform float uUseDye; uniform vec2 uDyeTexel; uniform float uOpacity; uniform float uSpeedNorm;
 vec3 hue(float h){ return clamp(abs(fract(h + vec3(0.0, 2.0, 1.0) / 3.0) * 6.0 - 3.0) - 1.0, 0.0, 1.0); }
 void main(){
+  if (uUseDye > 0.5) {
+    vec3 c = texture2D(uDye, vUv).rgb;
+    float dx = length(texture2D(uDye, vUv + vec2(uDyeTexel.x, 0.0)).rgb) - length(texture2D(uDye, vUv - vec2(uDyeTexel.x, 0.0)).rgb);
+    float dy = length(texture2D(uDye, vUv + vec2(0.0, uDyeTexel.y)).rgb) - length(texture2D(uDye, vUv - vec2(0.0, uDyeTexel.y)).rgb);
+    vec3 n = normalize(vec3(dx, dy, length(uDyeTexel)));
+    c *= clamp(n.z + 0.7, 0.7, 1.0);
+    float a = max(c.r, max(c.g, c.b));
+    gl_FragColor = vec4(c / max(a, 1e-4), clamp(a, 0.0, 1.0) * uOpacity); // barva bez ztmavení, jas -> krytí
+    return;
+  }
   vec4 v = texture2D(uVel, vUv);
   float sp = length(v.xy) * uSpeedNorm;
   float a = smoothstep(0.1, 0.7, v.z);
@@ -180,7 +218,9 @@ class Fluid {
       pressure: mk(PRESSURE, { uP: { value: null }, uDiv: { value: null } }),
       gradient: mk(GRADIENT, { uP: { value: null }, uVel: { value: null } }),
       advect: mk(ADVECT, { uVel: { value: null }, uDt: { value: 0 }, uDissipation: { value: 0 }, uTrailFade: { value: 0 } }),
-      view: mk(VIEW, { uVel: { value: null }, uOpacity: { value: 0 }, uSpeedNorm: { value: 0.01 } }),
+      view: mk(VIEW, { uVel: { value: null }, uDye: { value: null }, uUseDye: { value: 0 }, uDyeTexel: { value: new THREE.Vector2() }, uOpacity: { value: 0 }, uSpeedNorm: { value: 0.01 } }),
+      splatAdd: mk(SPLAT_ADD, { uTarget: { value: null }, uPoint: { value: new THREE.Vector2() }, uColor: { value: new THREE.Vector3() }, uRadius: { value: 0.0025 }, uAspect: { value: 1 }, uMask: { value: 0 } }),
+      advectDye: mk(ADVECT_DYE, { uVel: { value: null }, uSrc: { value: null }, uVelTexel: { value: new THREE.Vector2() }, uDt: { value: 0 }, uDissipation: { value: 1 } }),
       wave: mk(WAVE, { uWave: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uRadius: { value: 0.03 }, uAspect: { value: 1 }, uPush: { value: 0 }, uC2: { value: 0.4 }, uDamp: { value: 0.99 }, uLeak: { value: 1 } }),
     };
     this.w = 0; this.h = 0;
@@ -194,6 +234,18 @@ class Fluid {
     const reset = () => this.prev.set(NaN, NaN);
     window.addEventListener('blur', reset);
     window.addEventListener('focus', reset);
+  }
+
+  // Barvivo pro náhled (jen pavel + zapnutý náhled): vlastní rozlišení, texel se nastavuje zvlášť.
+  ensureDye(w, h) {
+    if (this.dye && this.dye[0].width === w && this.dye[0].height === h) return;
+    this.dye?.forEach((t) => t.dispose());
+    this.dye = [makeTarget(w, h), makeTarget(w, h)];
+    this.dyeTexel = new THREE.Vector2(1 / w, 1 / h);
+    const gl = this.gl, prev = gl.getRenderTarget(), col = gl.getClearColor(new THREE.Color()), a = gl.getClearAlpha();
+    gl.setClearColor(0x000000, 0);
+    this.dye.forEach((t) => { gl.setRenderTarget(t); gl.clear(true, false, false); });
+    gl.setClearColor(col, a); gl.setRenderTarget(prev);
   }
 
   resize(w, h) {
@@ -301,7 +353,35 @@ class Fluid {
     if (steps > 0) this.waveSrc.set(pu, pv);
     this.wave = this.waveRT[0].texture;
 
-    if (moved) {
+    const pavel = cfg.mode !== 'brush';
+    // barvivo jen když se náhled kreslí (drawView v posledních 0.5 s) – particly ho nepotřebují
+    const dyeOn = pavel && now - (this.viewAt ?? -1e9) < 0.5;
+    if (dyeOn) {
+      const dh = Math.max(64, Math.round(cfg.dyeResolution));
+      this.ensureDye(Math.max(64, Math.round(dh * aspect)), dh);
+    }
+    if (moved && pavel) {
+      // Pavel: splat v aktuálním bodě, proud += posun kurzoru × splatForce (posun y / poměr stran jako u Pavla)
+      const sa = m.splatAdd.uniforms;
+      let dx = pu - this.prev.x, dy = pv - this.prev.y;
+      if (aspect < 1) dx *= aspect; else dy /= aspect;
+      sa.uPoint.value.set(pu, pv);
+      sa.uAspect.value = aspect;
+      sa.uRadius.value = Math.max(0.01, cfg.pavelRadius) / 100 * Math.max(1, aspect);
+      sa.uTarget.value = this.vel[0].texture;
+      sa.uColor.value.set(dx * cfg.splatForce, dy * cfg.splatForce, 0);
+      sa.uMask.value = 1;
+      this.pass(m.splatAdd, this.vel[1]); this.swapVel();
+      if (dyeOn) {
+        // barva tahu jako Pavel: náhodný odstín ×0.15, mění se ~10× za s
+        this.colorT = (this.colorT ?? 1) + dt * 10;
+        if (this.colorT >= 1 || !this.dyeColor) { this.colorT %= 1; this.dyeColor = new THREE.Color().setHSL(Math.random(), 1, 0.5).multiplyScalar(0.15); }
+        sa.uTarget.value = this.dye[0].texture;
+        sa.uColor.value.set(this.dyeColor.r, this.dyeColor.g, this.dyeColor.b);
+        sa.uMask.value = 0;
+        this.pass(m.splatAdd, this.dye[1]); this.dye.reverse();
+      }
+    } else if (moved) {
       const s = m.splat.uniforms;
       s.uVel.value = this.vel[0].texture;
       s.uA.value.copy(this.prev); s.uB.value.set(pu, pv);
@@ -342,6 +422,15 @@ class Fluid {
     a.uVel.value = this.vel[0].texture; a.uDt.value = dt; a.uDissipation.value = cfg.dissipation; a.uTrailFade.value = cfg.trailFade;
     this.pass(m.advect, this.vel[1]); this.swapVel();
 
+    if (dyeOn) {
+      const ad = m.advectDye.uniforms;
+      ad.uVel.value = this.vel[0].texture; ad.uSrc.value = this.dye[0].texture; ad.uVelTexel.value.copy(this.texel);
+      ad.uDt.value = dt; ad.uDissipation.value = cfg.dyeFade;
+      ad.uTexel.value.copy(this.dyeTexel);
+      this.pass(m.advectDye, this.dye[1]); this.dye.reverse();
+    }
+    this.dyeLive = dyeOn;
+
     gl.autoClear = prevAutoClear;
     gl.setRenderTarget(prevTarget);
     this.velocity = this.vel[0].texture;
@@ -349,10 +438,13 @@ class Fluid {
 
   // Nakreslí proud přes hotový snímek (volá FluidView po postprocessingu). Uspaná voda = nic.
   drawView(opacity) {
+    this.viewAt = performance.now() / 1000;
     if (!this.velocity || opacity <= 0) return;
     const gl = this.gl, prev = gl.getRenderTarget(), ac = gl.autoClear, mv = this.m.view;
     mv.transparent = true;
     mv.uniforms.uVel.value = this.velocity;
+    mv.uniforms.uUseDye.value = this.dyeLive && this.dye ? 1 : 0;
+    if (this.dye) { mv.uniforms.uDye.value = this.dye[0].texture; mv.uniforms.uDyeTexel.value.copy(this.dyeTexel); }
     mv.uniforms.uOpacity.value = opacity;
     mv.uniforms.uSpeedNorm.value = 2 / Math.max(1, this.h); // proud 0.5 výšky obrazovky/s = plná barva
     gl.autoClear = false;
@@ -362,7 +454,8 @@ class Fluid {
   }
 
   dispose() {
-    [...(this.vel || []), ...(this.p || []), ...(this.waveRT || []), this.div, this.curlRT].forEach((t) => t?.dispose());
+    [...(this.vel || []), ...(this.p || []), ...(this.waveRT || []), ...(this.dye || []), this.div, this.curlRT].forEach((t) => t?.dispose());
+    this.dye = null;
   }
 }
 
