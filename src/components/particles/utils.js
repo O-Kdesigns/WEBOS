@@ -22,7 +22,7 @@ uniform float uMouseRadius;
 uniform float uMouseForce;
 // Vodnatá fyzika (ParticleFluid.js): proud z neviditelné mřížky tekutiny v místě particlu na obrazovce.
 uniform float uFluidOn;
-uniform sampler2D tFluid;     // rychlost proudu (buňky mřížky / s)
+uniform sampler2D tFluid;     // xy = rychlost proudu (buňky mřížky / s), z = stopa myši (0..1)
 uniform vec2 uFluidTexel;     // 1 / rozměr mřížky
 uniform sampler2D tFront;     // 1 / hloubka nejbližšího particlu v buňce obrazovky
 uniform mat4 uMVP;            // lokální prostor meshe -> clip
@@ -78,9 +78,12 @@ void main() {
             float frontInv = texture2D(tFront, ruv).x;
             float behind = frontInv > 0.0 ? rc.w - 1.0 / frontInv : 0.0;
             float front = 1.0 - smoothstep(uFrontShell * 0.5, uFrontShell, behind);
-            vec2 ndc = texture2D(tFluid, suv).xy * uFluidTexel * 2.0 * uDt; // posun v NDC za snímek
+            vec3 fl = texture2D(tFluid, suv).xyz; // xy = proud, z = stopa myši
+            vec2 ndc = fl.xy * smoothstep(0.1, 0.7, fl.z) * uFluidTexel * 2.0 * uDt; // posun v NDC za snímek, jen ve stopě
             vec3 flow = (uCamRight * (ndc.x * c.w / uProj.x) + uCamUp * (ndc.y * c.w / uProj.y)) * uFluidForce;
-            vel.xyz += (flow - vel.xyz) * uCoupling * front;
+            // proud strhává, ale klidná voda particl nebrzdí -> po zastavení myši dál klouže (dojezd)
+            float grab = smoothstep(0.0, 1.0, length(flow) / (length(vel.xyz) + 1e-6));
+            vel.xyz += (flow - vel.xyz) * uCoupling * front * grab;
         }
     }
 

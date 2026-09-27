@@ -12,17 +12,19 @@ import * as THREE from 'three';
 export const FLUID_DEFAULTS = {
   enabled: true,
   resolution: 128,        // výška mřížky tekutiny (šířka podle poměru stran)
-  splatRadius: 0.04,      // poloměr stopy myši (podíl výšky obrazovky)
-  force: 1.0,             // 1 = proud v centru stopy má rychlost kurzoru
-  curl: 18,               // víření
-  dissipation: 1.2,       // útlum proudu za s (menší = delší dojezd)
-  pressureIterations: 16,
-  coupling: 0.3,          // jak rychle se particl přizpůsobí proudu (za snímek)
-  friction: 0.92,         // útlum vlastní rychlosti particlu za snímek
+  splatRadius: 0.022,     // poloměr stopy myši (podíl výšky obrazovky)
+  splatHardness: 2.5,     // ostrost okraje stopy (1 = měkký gauss, víc = plochý střed a ostrá hrana -> ostřejší vlna)
+  force: 1.6,             // 1 = proud v centru stopy má rychlost kurzoru
+  curl: 8,                // víření (moc = spletitý "plyn", málo = klidná voda)
+  trailFade: 1.2,         // mizení stopy za s (proud posouvá particly jen ve stopě; menší = stopa i posun vydrží déle)
+  dissipation: 0.35,      // útlum proudu za s (menší = delší dojezd)
+  pressureIterations: 24, // víc = čistší, soudržnější proud
+  coupling: 0.14,         // jak rychle se particl přizpůsobí proudu (za snímek; menší = těžší, líná voda)
+  friction: 0.965,        // útlum vlastní rychlosti particlu za snímek (větší = delší klouzání)
   frontShell: 0.12,       // tloušťka přední vrstvy particlů, kterou proud unáší (world)
   frontRes: 128,          // výška mapy nejbližších particlů
   frontPointSize: 4,      // velikost particlu v mapě (buňky) – větší = méně prosvítání zadních
-  idleSleep: 5,           // s bez pohybu myši -> simulace se uspí
+  idleSleep: 5,           // s bez pohybu myši -> simulace se uspí (nejdřív až proud dozní)
 };
 
 const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
@@ -31,15 +33,16 @@ const HEAD = `uniform vec2 uTexel; varying vec2 vUv;
 `;
 
 const SPLAT = HEAD + `
-uniform sampler2D uVel; uniform vec2 uA; uniform vec2 uB; uniform vec2 uForce; uniform float uRadius; uniform float uAspect;
+uniform sampler2D uVel; uniform vec2 uA; uniform vec2 uB; uniform vec2 uForce; uniform float uRadius; uniform float uAspect; uniform float uHardness;
 void main(){
   // stopa = úsečka od minulé pozice kurzoru (bez děr při rychlém tahu)
   vec2 pa = vUv - uA, ba = uB - uA; pa.x *= uAspect; ba.x *= uAspect;
   float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-10), 0.0, 1.0);
   vec2 d = pa - ba * h;
-  float w = exp(-dot(d, d) / (uRadius * uRadius));
-  vec2 v = texture2D(uVel, vUv).xy;
-  gl_FragColor = vec4(v + (uForce - v) * w, 0.0, 1.0); // prst ve vodě: proud má rychlost kurzoru
+  float w = exp(-pow(dot(d, d) / (uRadius * uRadius), uHardness));
+  vec4 v = texture2D(uVel, vUv);
+  // xy: prst ve vodě -> proud má rychlost kurzoru; z: stopa (screen blend, max 1)
+  gl_FragColor = vec4(v.xy + (uForce - v.xy) * w, 1.0 - (1.0 - v.z) * (1.0 - w), 1.0);
 }`;
 
 const CURL = HEAD + `
@@ -57,7 +60,8 @@ void main(){
   vec2 f = 0.5 * vec2(abs(T) - abs(B), abs(R) - abs(L));
   f /= length(f) + 1e-4;
   f *= uCurlStrength * C; f.y *= -1.0;
-  gl_FragColor = vec4(texture2D(uVel, vUv).xy + f * uDt, 0.0, 1.0);
+  vec4 v = texture2D(uVel, vUv);
+  gl_FragColor = vec4(v.xy + f * uDt, v.z, 1.0);
 }`;
 
 const DIVERGENCE = HEAD + `
@@ -82,14 +86,16 @@ const GRADIENT = HEAD + `
 uniform sampler2D uP; uniform sampler2D uVel;
 void main(){
   float L = S(uP, vec2(-1, 0)).x, R = S(uP, vec2(1, 0)).x, T = S(uP, vec2(0, 1)).x, B = S(uP, vec2(0, -1)).x;
-  gl_FragColor = vec4(texture2D(uVel, vUv).xy - 0.5 * vec2(R - L, T - B), 0.0, 1.0);
+  vec4 v = texture2D(uVel, vUv);
+  gl_FragColor = vec4(v.xy - 0.5 * vec2(R - L, T - B), v.z, 1.0);
 }`;
 
 const ADVECT = HEAD + `
-uniform sampler2D uVel; uniform float uDt; uniform float uDissipation;
+uniform sampler2D uVel; uniform float uDt; uniform float uDissipation; uniform float uTrailFade;
 void main(){
   vec2 coord = vUv - uDt * texture2D(uVel, vUv).xy * uTexel;
-  gl_FragColor = vec4(texture2D(uVel, coord).xy / (1.0 + uDissipation * uDt), 0.0, 1.0);
+  vec4 v = texture2D(uVel, coord);
+  gl_FragColor = vec4(v.xy / (1.0 + uDissipation * uDt), v.z * exp(-uTrailFade * uDt), 1.0);
 }`;
 
 function makeTarget(w, h) {
@@ -109,14 +115,14 @@ class Fluid {
     this.scene.add(this.quad);
     const mk = (fs, u) => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: fs, uniforms: { uTexel: { value: new THREE.Vector2() }, ...u }, depthTest: false, depthWrite: false });
     this.m = {
-      splat: mk(SPLAT, { uVel: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uForce: { value: new THREE.Vector2() }, uRadius: { value: 0.04 }, uAspect: { value: 1 } }),
+      splat: mk(SPLAT, { uVel: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uForce: { value: new THREE.Vector2() }, uRadius: { value: 0.04 }, uAspect: { value: 1 }, uHardness: { value: 1 } }),
       curl: mk(CURL, { uVel: { value: null } }),
       vorticity: mk(VORTICITY, { uVel: { value: null }, uCurl: { value: null }, uCurlStrength: { value: 0 }, uDt: { value: 0 } }),
       divergence: mk(DIVERGENCE, { uVel: { value: null } }),
       scale: mk(SCALE, { uSrc: { value: null }, uValue: { value: 0 } }),
       pressure: mk(PRESSURE, { uP: { value: null }, uDiv: { value: null } }),
       gradient: mk(GRADIENT, { uP: { value: null }, uVel: { value: null } }),
-      advect: mk(ADVECT, { uVel: { value: null }, uDt: { value: 0 }, uDissipation: { value: 0 } }),
+      advect: mk(ADVECT, { uVel: { value: null }, uDt: { value: 0 }, uDissipation: { value: 0 }, uTrailFade: { value: 0 } }),
     };
     this.w = 0; this.h = 0;
     this.prev = new THREE.Vector2(NaN, NaN);
@@ -178,7 +184,8 @@ class Fluid {
       if (!this.active) { this.clear(); this.active = true; }
       this.lastMove = now;
     }
-    if (this.active && now - this.lastMove > cfg.idleSleep) this.active = false;
+    // uspat až když proud skoro dozněl (95 %), jinak by dojezd uťal
+    if (this.active && now - this.lastMove > Math.max(cfg.idleSleep, 3 / Math.max(0.05, Math.min(cfg.dissipation, cfg.trailFade)))) this.active = false;
     if (!this.active) { this.prev.set(pu, pv); this.velocity = null; return; }
 
     const gl = this.gl, prevTarget = gl.getRenderTarget(), prevAutoClear = gl.autoClear;
@@ -192,6 +199,7 @@ class Fluid {
       // rychlost kurzoru v buňkách mřížky za sekundu
       s.uForce.value.set((pu - this.prev.x) * this.w / dt, (pv - this.prev.y) * this.h / dt).multiplyScalar(cfg.force);
       s.uRadius.value = cfg.splatRadius;
+      s.uHardness.value = Math.max(0.5, cfg.splatHardness);
       s.uAspect.value = width / height;
       this.pass(m.splat, this.vel[1]); this.swapVel();
     }
@@ -220,7 +228,7 @@ class Fluid {
     this.pass(m.gradient, this.vel[1]); this.swapVel();
 
     const a = m.advect.uniforms;
-    a.uVel.value = this.vel[0].texture; a.uDt.value = dt; a.uDissipation.value = cfg.dissipation;
+    a.uVel.value = this.vel[0].texture; a.uDt.value = dt; a.uDissipation.value = cfg.dissipation; a.uTrailFade.value = cfg.trailFade;
     this.pass(m.advect, this.vel[1]); this.swapVel();
 
     gl.autoClear = prevAutoClear;
