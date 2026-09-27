@@ -15,6 +15,8 @@ export const FLUID_DEFAULTS = {
   splatRadius: 0.022,     // poloměr stopy myši (podíl výšky obrazovky)
   splatHardness: 2.5,     // ostrost okraje stopy (1 = měkký gauss, víc = plochý střed a ostrá hrana -> ostřejší vlna)
   force: 1.6,             // 1 = proud v centru stopy má rychlost kurzoru
+  speedCurve: 0.5,        // odezva na rychlost myši: 1 = lineární, menší = pomalý tah silnější a rychlý slabší
+  maxSpeed: 2.5,          // strop rychlosti tahu (výšky obrazovky za s) – rychlý švih nad tím už nesílí
   curl: 8,                // víření (moc = spletitý "plyn", málo = klidná voda)
   trailFade: 1.2,         // mizení stopy za s (proud posouvá particly jen ve stopě; menší = stopa i posun vydrží déle)
   dissipation: 0.35,      // útlum proudu za s (menší = delší dojezd)
@@ -223,6 +225,16 @@ class Fluid {
     const m = this.m;
 
     // vlny: substepy (stabilita c² <= 0.5), zdroj jen v prvním kroku; síla zdroje podle délky tahu (rychlosti)
+    // křivka odezvy: rychlost tahu (výšky obrazovky/s) -> sqrt-ish + měkký strop, k = násobek síly
+    let k = 1;
+    if (moved) {
+      const sp = Math.hypot((pu - this.prev.x) * width / height, pv - this.prev.y) / dt;
+      const eff = Math.pow(Math.max(sp, 1e-4), Math.max(0.1, cfg.speedCurve));
+      const cap = Math.max(0.1, cfg.maxSpeed);
+      k = Math.min(4, cap * Math.tanh(eff / cap) / Math.max(sp, 1e-4));
+    }
+    this.speedGain = k;
+
     const wu = m.wave.uniforms;
     wu.uA.value.copy(moved ? this.prev : wu.uB.value); wu.uB.value.set(pu, pv);
     wu.uRadius.value = cfg.splatRadius * 1.5;
@@ -230,7 +242,7 @@ class Fluid {
     wu.uC2.value = Math.min(0.5, cfg.waveSpeed);
     wu.uDamp.value = Math.exp(-cfg.waveDamping / (60 * cfg.waveSteps)); // útlum rychlosti hladiny za krok
     for (let i = 0; i < cfg.waveSteps; i++) {
-      wu.uPush.value = i === 0 && moved ? cfg.waveHeight : 0;
+      wu.uPush.value = i === 0 && moved ? cfg.waveHeight * k : 0;
       wu.uWave.value = this.waveRT[0].texture;
       this.pass(m.wave, this.waveRT[1]); this.waveRT.reverse();
     }
@@ -241,7 +253,7 @@ class Fluid {
       s.uVel.value = this.vel[0].texture;
       s.uA.value.copy(this.prev); s.uB.value.set(pu, pv);
       // rychlost kurzoru v buňkách mřížky za sekundu
-      s.uForce.value.set((pu - this.prev.x) * this.w / dt, (pv - this.prev.y) * this.h / dt).multiplyScalar(cfg.force);
+      s.uForce.value.set((pu - this.prev.x) * this.w / dt, (pv - this.prev.y) * this.h / dt).multiplyScalar(cfg.force * k);
       s.uRadius.value = cfg.splatRadius;
       s.uHardness.value = Math.max(0.5, cfg.splatHardness);
       s.uAspect.value = width / height;
