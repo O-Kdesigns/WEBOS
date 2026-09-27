@@ -14,7 +14,8 @@ export const FLUID_DEFAULTS = {
   resolution: 128,        // výška mřížky tekutiny (šířka podle poměru stran)
   splatRadius: 0.022,     // poloměr stopy myši (podíl výšky obrazovky)
   splatHardness: 2.5,     // ostrost okraje stopy (1 = měkký gauss, víc = plochý střed a ostrá hrana -> ostřejší vlna)
-  force: 1.0,             // 1 = proud v centru stopy má rychlost kurzoru
+  strength: 1.0,          // celková síla vody na particly (proud i vlny) – hlavní "hlasitost" myši
+  force: 1.0,             // 1 = proud v centru stopy má rychlost kurzoru (jen úzká stopa přímo pod kurzorem)
   speedCurve: 0.5,        // odezva na rychlost myši: 1 = lineární, menší = pomalý tah silnější a rychlý slabší
   maxSpeed: 1.0,          // strop rychlosti tahu (výšky obrazovky za s) – rychlý švih nad tím už nesílí
   curl: 8,                // víření (moc = spletitý "plyn", málo = klidná voda)

@@ -580,7 +580,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
         velUniforms.uWaveCStep.value = fluid.waveCStep ?? 0.5;
         velUniforms.uFluidTexel.value.copy(fluid.texel);
         velUniforms.uDt.value = Math.min(Math.max(delta, 1 / 240), 1 / 30);
-        velUniforms.uFluidForce.value = mouseMult;
+        // celková síla: násobí vše, co voda particlům dává (proud i vlny)
+        velUniforms.uFluidForce.value = mouseMult * Math.max(0, fluidCfg.strength ?? 1);
         velUniforms.uCoupling.value = fluidCfg.coupling;
         velUniforms.uFriction.value = fluidCfg.friction;
         velUniforms.uFrontShell.value = fluidCfg.frontShell;
