@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { portalFx } from './PortalTransition';
 import { patchSolidLook } from './SolidLink';
+import { buildSlices, sliceLine } from './printSlices';
 
 // 3D tisk solidů při vstupu do projektu (INSIDE).
 // Až particly doletí do tvaru projektu, solidy "vyrostou" odspodu nahoru: vše nad řezem (uPrintY, world Y)
@@ -41,12 +42,13 @@ export const printFx = {
   lineA: new THREE.Vector2(0.3, 0.5),
   lineB: new THREE.Vector2(0.7, 0.5),
   lineColor: new THREE.Color(0, 0, 0),   // barva * síla laserů do prázdna (0 = vypnuto)
-  lineOn: false,        // linka je promítnutá (tiskne se) -> žhnoucí linka + pára
+  lineOn: false,        // tiskne se (žár > 0) -> pára běží; linka jen když je v té výšce nějaký solid (lineVis)
+  lineVis: 0,           // 0..1 plynulé zobrazení linky (v aktuální výšce řezu je / není solid)
   heat: 0,              // žár tisku 0..1 (náběh / dohasnutí)
   glow: new THREE.Color('#ff5a12'),
   hot: new THREE.Color('#fff0c8'),
   // pára nad linkou (PrintSteam.js): strength 0 = vypnuto
-  steam: { strength: 2, rise: 0.15, turb: 1.5, fade: 1.1, mouse: 1, res: 160 },
+  steam: { strength: 2, rise: 0.15, turb: 1.5, fade: 1.1, mouse: 1, res: 160, smoke: 0.6, smokeColor: '#a4a4aa' },
   frame: false,         // true = paprsky se sbíhají k okrajům rámu (obrazovka zmenšená frameScale), přebíjí center
   frameScale: 1,        // 1 = rám = okraje obrazovky, 0 = smrskne se do středu obrazovky
   bevel: 0.3,           // zaoblení rohů rámu
@@ -202,7 +204,7 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
   useEffect(() => () => target.dispose(), [target]);
   useEffect(() => () => { gpu.material.dispose(); gpu.scene.clear(); gpu.proxies.clear(); }, [gpu]);
 
-  const st = useRef({ wait: 0, yMin: 0, yMax: 1, box: new THREE.Box3(), clear: new THREE.Color(), v: new THREE.Vector3() });
+  const st = useRef({ wait: 0, yMin: 0, yMax: 1, box: new THREE.Box3(), clear: new THREE.Color(), v: new THREE.Vector3(), slices: buildSlices([], 0, 0), la: new THREE.Vector2(), lb: new THREE.Vector2() });
 
   // proxy meshe v masce sdílí geometrii se solidem (nevlastní ji -> nedisposovat)
   const sync = useMemo(() => {
@@ -294,6 +296,8 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
       s.box.makeEmpty();
       printFx.meshes.forEach(fx.expand);
       s.yMin = s.box.min.y; s.yMax = s.box.max.y;
+      // řezy pro tiskovou linku (1× za tisk)
+      s.slices = buildSlices(printFx.meshes, s.yMin, s.yMax);
     }
 
     const band = cfg.band ?? Math.max(0.02, (s.yMax - s.yMin) * 0.07);
@@ -316,25 +320,31 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     // raysInward:false = staré god rays, tiskárna ZA kamerou, paprsky utíkají od center ven
     printFx.inward = cfg.raysInward ?? true;
     printFx.center.set(cfg.raysCenterX ?? 0.5, cfg.raysCenterY ?? 0.25);
-    // tisková linka: řez ve výšce uPrintY přes celou šířku solidů (+ raysBedMargin na každou stranu), uprostřed
-    // jejich hloubky, promítnutý na obrazovku. Lasery do prázdna (raysBed) z center na celou linku počítá VolumetricLight.
-    const bed = printFx.frame || s.box.isEmpty() ? 0 : (cfg.raysBed ?? 1);
-    printFx.lineColor.copy(u.uPrintGlow.value).multiplyScalar(bed * heat);
+    // tisková linka: od nejlevějšího po nejpravější bod, který se ve výšce uPrintY právě tiskne (řezy solidů,
+    // printSlices.js), promítnuto na obrazovku; raysBedMargin ji prodlouží (podíl délky na každou stranu).
+    // Kde v té výšce žádný solid není, linka (a lasery do prázdna, zdroj páry) plynule zhasne.
+    printFx.lineOn = !printFx.frame && heat > 0;
+    const hasLine = printFx.lineOn && sliceLine(s.slices, u.uPrintY.value, state.camera, s.la, s.lb);
+    if (hasLine) {
+      const m = cfg.raysBedMargin ?? 0;
+      const dx = s.lb.x - s.la.x;
+      // jediný bod (špička) -> aspoň kousek linky, jinak by linka neměla směr
+      const ex = Math.max(0, 0.004 - Math.abs(dx) * 0.5);
+      // vodorovně na obrazovce (krajní body leží v různé hloubce -> jinak by byla šikmá), ve výšce jejich průměru
+      const ly = (s.la.y + s.lb.y) * 0.5;
+      printFx.lineA.set(s.la.x - dx * m - ex, ly);
+      printFx.lineB.set(s.lb.x + dx * m + ex, ly);
+    }
+    printFx.lineVis = printFx.lineOn ? THREE.MathUtils.damp(printFx.lineVis, hasLine ? 1 : 0, 10, dt) : 0;
+    const bed = printFx.frame ? 0 : (cfg.raysBed ?? 1);
+    printFx.lineColor.copy(u.uPrintGlow.value).multiplyScalar(bed * heat * printFx.lineVis);
     printFx.heat = heat;
     printFx.glow.copy(u.uPrintGlow.value);
     printFx.hot.copy(u.uPrintHot.value);
     const stm = printFx.steam;
     stm.strength = cfg.steam ?? 2; stm.rise = cfg.steamRise ?? 0.15; stm.turb = cfg.steamTurb ?? 1.5;
     stm.fade = cfg.steamFade ?? 1.1; stm.mouse = cfg.steamMouse ?? 1;
-    printFx.lineOn = !printFx.frame && !s.box.isEmpty() && heat > 0;
-    if (printFx.lineOn) {
-      const m = (s.box.max.x - s.box.min.x) * (cfg.raysBedMargin ?? 0.15);
-      const z = (s.box.min.z + s.box.max.z) * 0.5;
-      s.v.set(s.box.min.x - m, u.uPrintY.value, z).project(state.camera);
-      printFx.lineA.set(s.v.x * 0.5 + 0.5, s.v.y * 0.5 + 0.5);
-      s.v.set(s.box.max.x + m, u.uPrintY.value, z).project(state.camera);
-      printFx.lineB.set(s.v.x * 0.5 + 0.5, s.v.y * 0.5 + 0.5);
-    }
+    stm.smoke = cfg.smoke ?? 0.6; stm.smokeColor = cfg.smokeColor ?? '#a4a4aa';
     // raysFrame (experiment, vypnuto): paprsky se sbíhají k okrajům obrazovky zmenšené na raysFrameScale, rohy zaoblené raysBevel
     printFx.frame = (cfg.raysFrame ?? false) && printFx.inward;
     printFx.frameScale = cfg.raysFrameScale ?? 1;

@@ -118,6 +118,11 @@ const VolumetricLightShader = {
     uPrintLineHot: { value: new THREE.Color(0, 0, 0) },
     tSteam: { value: dummyTexture },                       // pára nad linkou (PrintSteam.js)
     uSteamOn: { value: 0.0 },
+    uSteamGlow: { value: new THREE.Color(0, 0, 0) },
+    uSteamHot: { value: new THREE.Color(0, 0, 0) },
+    uSmokeColor: { value: new THREE.Color('#a4a4aa') },  // šedá kouře nahoře (dole se míchá do červena)
+    uSmokeOpacity: { value: 0.6 },
+    uPrintSolo: { value: 0.0 },                          // DEV window.__printSolo: jen linka + lasery + pára na černé
 
     // Světlo TV (config tvLight): ORBIT = záře + paprsky kolem aktivní televize, voda z myši do ní vyřezává díry;
     // INSIDE = to samé světlo je vidět jen tam, kde je voda
@@ -341,17 +346,36 @@ const VolumetricLightShader = {
         float halo = exp(-ly * ly / (0.005 * 0.005)) * 0.12;
         col += c * (core * 1.4 + halo) * heatL * fade;
       }
-      if (uSteamOn > 0.0) {
-        vec2 st = texture2D(tSteam, uv).rg;
-        // jemné chomáče navíc (textura páry je malá): vertikálně natažený šum stoupající s párou
-        vec2 wp = vec2(uv.x * uAspect * 38.0, uv.y * 16.0 - uTime * 1.6);
-        float wisp = mix(lnoise(wp.x + lnoise(wp.y) * 3.0), lnoise(wp.x * 2.1 + wp.y * 0.7 + 9.0), 0.4);
-        st *= 0.35 + 1.1 * wisp * wisp;
-        // nasvícená zespodu: u linky jasná, výš hasne
-        float lit = 0.2 + 0.8 * exp(-max(hAbove, 0.0) / 0.07);
-        vec3 sc = uPrintLineGlow * st.r * 0.45 + mix(uPrintLineGlow, uPrintLineHot, 0.3) * st.g * 0.7;
-        col += sc * lit * uSteamOn;
-      }
+      return col;
+    }
+
+    // Kouř / pára nad tiskovou linkou (PrintSteam.js): R = kouř z celé linky – NEaditivní, šedý závoj,
+    // u linky do červena (nasvícený žárem), nahoře čistě šedý; G = horká pára z míst, kde se opravdu tiskne (aditivní žár).
+    uniform vec3 uSteamGlow, uSteamHot;
+    uniform vec3 uSmokeColor;
+    uniform float uSmokeOpacity;
+    uniform float uPrintSolo;
+    vec3 printSteam(vec3 base, vec2 uv) {
+      if (uSteamOn <= 0.0) return base;
+      vec2 st = texture2D(tSteam, uv).rg;
+      // jemné chomáče navíc (textura páry je malá): vertikálně natažený šum stoupající s párou
+      vec2 wp = vec2(uv.x * uAspect * 38.0, uv.y * 16.0 - uTime * 1.6);
+      float wisp = mix(lnoise(wp.x + lnoise(wp.y) * 3.0), lnoise(wp.x * 2.1 + wp.y * 0.7 + 9.0), 0.4);
+      float wm = 0.35 + 1.1 * wisp * wisp;
+      // výška nad linkou (na x pixelu)
+      float ex = uPrintLineB.x - uPrintLineA.x;
+      float s = clamp((uv.x - uPrintLineA.x) / (abs(ex) > 1e-5 ? ex : 1e-5), 0.0, 1.0);
+      float h = max(uv.y - mix(uPrintLineA.y, uPrintLineB.y, s), 0.0);
+      float nearL = exp(-h / 0.06);
+      // kouř: závoj, dole červeno-šedý, nahoře šedý
+      float a = (1.0 - exp(-st.r * (1.2 + 2.4 * wisp * wisp))) * uSmokeOpacity;
+      vec3 red = uSmokeColor * 0.45 + uSteamGlow * 0.35;
+      vec3 sc = mix(uSmokeColor, red, nearL);
+      vec3 col = mix(base, sc, clamp(a, 0.0, 0.85));
+      col += uSteamGlow * st.r * nearL * 0.12 * uSteamOn;   // žár prosvítá kouřem těsně nad linkou
+      // horká pára z tištěných míst (aditivní)
+      float lit = 0.2 + 0.8 * exp(-h / 0.07);
+      col += mix(uSteamGlow, uSteamHot, 0.3) * st.g * wm * 0.7 * lit * uSteamOn;
       return col;
     }
 
@@ -914,10 +938,12 @@ const VolumetricLightShader = {
       vec3 finalColor = mix(orbitColor, finalInside, t);
       if (uPrintRays > 0.001) {
         // žhavá vrstva prosvítí i přes mlhu INSIDE + paprsky k televizi
+        if (uPrintSolo > 0.5) finalColor = vec3(0.02);
         finalColor += texture2D(tPrintMask, vUv).rgb * uPrintRays * 0.25;
         finalColor += printRays(vUv, dither);
         finalColor += printLineRays(vUv);
         finalColor += printLineGlow(vUv);
+        finalColor = printSteam(finalColor, vUv);
       }
 
       gl_FragColor = vec4(cinematicFinish(finalColor + tvLight(cineBg), cineBg), baseColor.a);
@@ -1384,17 +1410,23 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uPrintLineColor.value.copy(printFx.lineColor);
     // žhnoucí linka + pára nad ní (jen když se tiskne)
     const lineOn = !!printMask && printFx.lineOn;
-    mat.uniforms.uPrintLineGlow.value.copy(printFx.glow).multiplyScalar(lineOn ? printFx.heat : 0);
-    mat.uniforms.uPrintLineHot.value.copy(printFx.hot).multiplyScalar(lineOn ? printFx.heat : 0);
+    mat.uniforms.uPrintSolo.value = import.meta.env.DEV && window.__printSolo ? 1 : 0;
+    const lk = lineOn ? printFx.heat * printFx.lineVis : 0;
+    mat.uniforms.uPrintLineGlow.value.copy(printFx.glow).multiplyScalar(lk);
+    mat.uniforms.uPrintLineHot.value.copy(printFx.hot).multiplyScalar(lk);
+    mat.uniforms.uSteamGlow.value.copy(printFx.glow).multiplyScalar(lineOn ? printFx.heat : 0);
+    mat.uniforms.uSteamHot.value.copy(printFx.hot).multiplyScalar(lineOn ? printFx.heat : 0);
     const stc = printFx.steam;
     if (lineOn && stc.strength > 0) {
       const fl = getFluid(gl);
       mat.uniforms.tSteam.value = steam.step(gl, {
         a: printFx.lineA, b: printFx.lineB, mask: printMask, fluid: fl.velocity, fluidTexel: mat.uniforms.uFluidTexel.value,
         dt: Math.min(Math.max(delta, 1 / 240), 1 / 30), time: state.clock.getElapsedTime(), aspect: size.width / Math.max(1, size.height),
-        res: stc.res, rise: stc.rise, lift: 0.02, turb: stc.turb, fade: stc.fade, emit: 5, hot: 1, mouse: stc.mouse,
+        res: stc.res, rise: stc.rise, lift: 0.02, turb: stc.turb, fade: stc.fade, emit: 5 * printFx.lineVis, hot: 1, mouse: stc.mouse,
       });
       mat.uniforms.uSteamOn.value = stc.strength * printFx.heat;
+      mat.uniforms.uSmokeOpacity.value = Math.min(1, stc.smoke) * printFx.heat;
+      if (steam.smokeColor !== stc.smokeColor) { steam.smokeColor = stc.smokeColor; mat.uniforms.uSmokeColor.value.set(stc.smokeColor); }
     } else {
       if (steam.live) steam.clear(gl);
       mat.uniforms.tSteam.value = dummyTexture;

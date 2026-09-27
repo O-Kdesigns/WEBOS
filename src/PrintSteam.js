@@ -45,7 +45,8 @@ void main() {
 
   vec2 back = vUv - vel * uDt;
   vec2 dens = texture2D(uSrc, back).rg;
-  dens *= exp(-uFade * uDt);
+  // výš = rychleji mizí (kouř se nahoře ztrácí, sloupy se ke konci zmenšují)
+  dens *= exp(-(uFade + hp * 7.0) * uDt);
   // okraje textury nerecyklovat
   dens *= step(0.0, back.x) * step(back.x, 1.0) * step(back.y, 1.0);
 
@@ -62,7 +63,8 @@ void main() {
            + texture2D(uMask, vec2(vUv.x, ly + 0.008)).rgb;
     float hot = clamp(dot(m, vec3(0.33)) * 1.2, 0.0, 1.0);
     float e = band * edge * uDt * uEmit;
-    dens.r += e * (0.5 * puff + hot * (0.2 + 0.8 * puff));
+    // kouř z celé linky (rovnoměrně, jen jemně po obláčcích) + víc tam, kde se tiskne
+    dens.r += e * (0.55 + 0.45 * puff + hot * 0.5);
     dens.g += e * hot * uHot * puff;
   }
   gl_FragColor = vec4(min(dens, vec2(4.0)), 0.0, 1.0);
