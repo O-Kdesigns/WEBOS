@@ -19,7 +19,6 @@ const BackgroundVideoShader = {
     uContrast: { value: 1.05 },
     uVignetteSoftness: { value: 0.45 },
     uCurvature: { value: 0.35 },
-    uBlur: { value: 0.03 },
     uMouseParallax: { value: new THREE.Vector2(0, 0) }
   },
   vertexShader: `
@@ -54,20 +53,9 @@ const BackgroundVideoShader = {
 
     varying vec2 vUv;
 
-    uniform float uBlur;
     void main() {
-      // rozmazané video = měkké světlo v dálce (jako Active Theory), ne ostrý obdélník za solidy
-      vec3 col = texture2D(uVideo, vUv).rgb * 0.2;
-      if (uBlur > 0.0001) {
-        for (int i = 0; i < 12; i++) {
-          float a = float(i) * 2.39996;
-          float rr = sqrt((float(i) + 0.5) / 12.0) * uBlur;
-          col += texture2D(uVideo, vUv + vec2(cos(a), sin(a) * 1.78) * rr).rgb * (0.8 / 12.0);
-        }
-      } else {
-        col *= 5.0;
-      }
-      
+      vec3 col = texture2D(uVideo, vUv).rgb;
+
       // �prava kontrastu a jasu
       col = ((col - 0.5) * uContrast) + 0.5;
       col = max(vec3(0.0), col * uBrightness);
@@ -164,7 +152,6 @@ export function VolumetricVideoBackground({
       su.uBrightness.value = cfg.brightness ?? 1.0;
       su.uContrast.value = cfg.contrast ?? 1.05;
       su.uVignetteSoftness.value = cfg.vignetteSoftness ?? 0.45;
-      su.uBlur.value = cfg.blur ?? 0.03;
       su.uCurvature.value = cfg.curvature ?? 0.35;
       su.uMouseParallax.value.copy(mouseLerp.current);
     }
