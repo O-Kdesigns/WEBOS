@@ -4,7 +4,7 @@ Mapa všeho, co ve WEBOSu „svítí“: skutečná three.js světla, falešná 
 Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 
 > **Pravidlo pro AI:** když najdeš světlo / světelný efekt, který tu chybí, nebo nějaký změníš či přidáš, **aktualizuj tento soubor ve stejném commitu**.
-> Poslední revize: 2026-09-26 (commit e22f5bf + SolidLink).
+> Poslední revize: 2026-09-27 (INSIDE podle Active Theory: DOF v INSIDE, rozmazané video plátno, nový jelly).
 
 ---
 
@@ -28,8 +28,8 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 
 | # | Zdroj | Kde | Nastavení | Na co působí |
 |---|-------|-----|-----------|--------------|
-| F1 | **Jelly key + fill light** | `JellyVideoMaterial.js` | natvrdo: key `(0.35,0.85,0.55)`, fill `(-0.4,-0.3,0.7)`; lesk podle `roughness/metalness` particlů | Video particly (`colorMode: video`). Jelly je `ShaderMaterial` → **L1–L5 ho vůbec neovlivní**, svítí jen F1 + video uvnitř + Fresnel lem + SSS. |
-| F2 | **Video uvnitř jelly** | tamtéž | `transmission`, `thickness`, `transitionMaxLight/MinDark` | Particly „svítí“ barvou videa (samosvit), při rotaci DNA se míchá tmavá/světlá (`uNoiseAmount`). |
+| F1 | **Jelly key + fill light** | `JellyVideoMaterial.js` | natvrdo: key `(0.35,0.85,0.55)`, fill `(-0.4,-0.3,0.7)`; lesk podle `roughness/metalness` particlů. Ostrý mokrý odlesk + **kaustika** (svítivý půlměsíc na opačné straně než odlesk) + Fresnel lem barvou okolí (průměr 4 vzorků videa) | Video particly (`colorMode: video`). Jelly je `ShaderMaterial` → **L1–L5 ho vůbec neovlivní**, svítí jen F1 + video uvnitř + Fresnel lem + SSS. |
+| F2 | **Video uvnitř jelly** | tamtéž | `transmission`, `thickness`, `videoTint` (0.35), `videoGain` (1.4), `transitionMaxLight/MinDark` | V každé kuličce je celé video převrácené jako v čočce (+20 % polohy na obrazovce, drobný náhodný posun a jas na kuličku). Barva želé tónuje jen z `videoTint`, dřív násobila video celou barvou. Při rotaci DNA se míchá tmavá/světlá (`uNoiseAmount`). |
 | F3 | **Particly → solid** | `SolidLink.jsx` (`patchSolidLook`) | stránka `particlesSettings.particleLight` (Xelith: intensity 4, radius 0.3, wrap 0.5, barva z videa) | 12 sond (shluky particlů), barva = průměr videa (1×1 pass za snímek). Difúze + lesk + Fresnel lem (`solidMaterial.rim`) na solidu. |
 | F4 | **Solid → particly** | `SolidLink.jsx` (`solidLightAt` v jelly) | `particlesSettings.solidLight` (Xelith: #ff6a2a, intensity 1, radius 0.35) | 8 sond ze solidu. Přisvítí jelly particly kolem solidu. |
 | F5 | **Žár tisku → particly** | `SolidLink.jsx` driver | `solidLight.printHeat` (1) × `printFx.uPrintHeat` | Jen sondy blízko řezu (`uPrintY`) svítí barvou `uPrintGlow`. |
@@ -41,7 +41,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | E1 | **Pozadí** | `DarkStudioBackground.jsx` | `backgroundSettings.color` (#0a0a0f), jednobarevné |
 | E2 | **Atmosférický prach** | `AtmosphereDust.jsx` | `atmosphereDust` (4000 bodů, additive, bokeh, 4 barvy) |
 | E3 | **Skla TV / video na deskách** | `TvGlass.jsx` | Blender custom props `tvRim`, `tvRimStrength`, `tvMilk`, `tvBackground`… Video jako portál, lem skla je samosvit. |
-| E4 | **Video plátno INSIDE** | `VolumetricVideoBackground.jsx` | `volumetricVideo` (brightness 2.5, contrast 1.09, vignetteSoftness) |
+| E4 | **Video plátno INSIDE** | `VolumetricVideoBackground.jsx` | `volumetricVideo` (brightness 2.5, contrast 1.09, **scale 2.6, zDistance 3.2, blur 0.03, vignetteSoftness 0.8**) | Velké rozmazané světlo daleko za obsahem. Dřív to byl malý ostrý obdélník (scale 0.9, z 1.5) přímo za solidy = „divné světlo uprostřed“. |
 | E5 | **Žhavá vrstva tisku** | `SolidPrint.jsx` | `solidPrint` (`coolColor`, `glowColor` #ff5a12, `hotColor`, `intensity`, `band`) – emise na řezu solidu + žhavé jádro přes řez (back-faces) |
 | E6 | **Vlastní záře solidu** | `SolidLink.jsx` `uLookGlow` | `solidLight.selfGlow` (Xelith 0 = vypnuto) |
 
@@ -51,13 +51,13 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 |---|-------|-----------|-----|
 | P1 | **God rays ze středu DNA** (z pozice L3 na obrazovce, z jasných pixelů nad `threshold`) | `volumetricLight` (exposure, decay 0.92, density, weight, threshold 0.4, rayLength 2, maxRadius 0.73) | ORBIT (× `uVisibility` = jak moc kamera míří na L3), zhasínají s `uInsideTransition` |
 | P2 | **Bloom** | `cinematic.bloomStrength` 1.2, `bloomThreshold` 0.35 | ORBIT; v INSIDE × `cinematic.insideBloom` (výchozí 0 = vypnuto) |
-| P3 | **DOF** (ohnisko = osa DNA + `focusOffset`) | `cinematic.dofStrength/focusRange/blurRadius` | jen ORBIT |
+| P3 | **DOF** (ORBIT: ohnisko = osa DNA + `focusOffset`; INSIDE: `insideFocus` 1.9 = solidy) | `cinematic.dofStrength/focusRange/blurRadius`, `insideDof` (0.85), `insideFocus`, `insideFocusRange` (1.1) | ORBIT i INSIDE (prolnutí podle přechodu). Blur 3 průchody + 4 vzorky při skládání (jinak kostičky). |
 | P4 | **Atmosférická záře** – 2 barevné skvrny v screen-space | `cinematic.atmoColor/X/Y/Size/Strength`, `atmo2*` | vždy (při `cinematic.enabled`) |
 | P5 | **Zrno + viněta** | `cinematic.grain`, `cinematic.vignette` | vždy |
-| P6 | **Hloubková mlha + kouř** | `insideFog` (masterFogIntensity 70, fogColor, fogNear/Far, smoke*, baseFogBrightness 2.5) | INSIDE |
+| P6 | **Hloubková mlha + kouř** | `insideFog` (masterFogIntensity 70, fogColor, fogNear 0.7 / **fogFar 8**, **fogDensity 1.2**, smoke*, baseFogBrightness 2.5) | INSIDE. Dřív fogFar 4.5 / density 1.5 = vše za ~3.5 j. v plné mlze, vzdálené vrstvy částic nebyly vidět. |
 | P7 | **Světlo myši** (volumetrické světlo + stíny kolem kurzoru, barva `uLightColor` = `volumetricLight.color`) | `insideFog.mouseLightExposure/Radius`, `enableMouseFog` | INSIDE |
 | P8 | **Popředová mlha + viněta mlhy** | `insideFog.foregroundFog`, `vignette*`, `edgeFade` | INSIDE |
-| P9 | **Ghost video** (video prosvítá do hloubky) | `volumetricDepth` (ghostStrength 0.35, startDistance, fadeRange) | INSIDE |
+| P9 | **Ghost video** (video prosvítá do hloubky) | `volumetricDepth` (ghostStrength **0.12**, startDistance **3.2**, fadeRange) | INSIDE. Dřív 0.35 od 2.16 = ostrý text videa přes zadní solidy. |
 | P10 | **Středové paprsky z videa** | `volumetricDepth.rays*` | **v kódu vypnuté** (`uCenterRaysExposure = 0`) |
 | P11 | **Záře + paprsky tisku** (maska žhavé vrstvy 1/4, paprsky ke kameře od `raysCenterX/Y`) | `solidPrint.raysStrength` 10, `rayLength` 0.9 | jen během tisku/odtisku |
 | P12 | **Kontrast HUD textu** (maska pod texty) | `ui2d` / `valueBoost`, `saturationBoost`… | vždy, kde je HUD text |
@@ -83,7 +83,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - **Solidy** (`MeshStandard` z GLB + `patchSolidLook`): vlastní barva/kov/drsnost, tiskové rýhy, zrno. F3 je přisvítí barvou videa z okolních particlů a přidá lem.
 - **Particly (jelly):** F1 + F2, F4 přisvícení od solidu (oranžové #ff6a2a, síla 1).
 - **Samosvit:** E4 video plátno, E2 prach. E6 je vypnuté.
-- **Post:** P6 mlha + kouř, P7 světlo myši, P8 popředová mlha, P9 ghost video, P4 + P5, P2 jen × `insideBloom` (0), P12.
+- **Post:** P3 DOF (ostré solidy, rozmazané popředí a dálka), P6 mlha + kouř, P7 světlo myši, P8 popředová mlha, P9 ghost video, P4 + P5, P2 jen × `insideBloom` (0), P12.
 - F3/F4 běží jen při `printFx.progress > 0` (= solid je aspoň částečně vytištěný). Náběh je přes `smoothstep(transitionProgress, 0.6, 1)`.
 
 ### 🔥 INSIDE — aktivní 3D tisk (a odtisk při odchodu)
@@ -106,6 +106,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - `window.__linkOverride = { solidMaterial, particleLight, solidLight }`, `window.__linkFx` → F3–F6
 - `window.__printOverride = {...}`, `window.__printHold = 0..1`, `window.__printFx` → E5, P11
 - `window.__portalHold = 0..1` → zmrazí průlet (prolnutí ORBIT/INSIDE postu)
+- `window.__postMat` → materiál postu (uniformy P1–P12 přímo, přepisují se každý snímek z configu)
 - `window.__r3f.get().scene.traverse(o => o.isLight && console.log(o.type, o.intensity))` → výpis skutečných světel (kontrola, jestli nepřibylo nějaké z GLB)
 
 ## 4. Známé slabiny / nápady

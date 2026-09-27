@@ -50,7 +50,7 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, pageTitle, 
         />
       )}
 
-      <DenseSlider desc="Měřítko jednotlivých kuliček." label="Velikost částic" min={0.01} max={5.0} step={0.01} color={c} value={settings.size ?? 0.2} onChange={v => onUpdate('size', v)} />
+      <DenseSlider desc="Měřítko jednotlivých kuliček." label="Velikost částic" min={0.002} max={0.1} step={0.001} color={c} value={settings.baseSize ?? 0.1} onChange={v => onUpdate('baseSize', v)} />
       <DenseSlider desc="0 = stejná velikost, 1 = divoký organický rozptyl" label="Náhodnost velikosti" min={0} max={1.0} step={0.01} color={c} value={settings.sizeRandomness ?? 0.0} onChange={v => onUpdate('sizeRandomness', v)} />
       <DenseSlider desc="Procento z celkového počtu vrcholů sítě." label="Hustota bodů z modelu" min={0} max={100} step={1} color={c} value={settings.modelDensity ?? 100} unit="%" onChange={v => onUpdate('modelDensity', v)} />
       
@@ -73,11 +73,14 @@ export function ParticleSettingsPanel({ settings = {}, onUpdate, id, pageTitle, 
       
       {settings.colorMode === 'video' && (
         <>
-          <DenseSlider desc="Efekt rybího oka a čočky promítající video do kuličky." label="Zakřivení optiky (Distortion)" min={0} max={2.0} step={0.05} color={c} value={settings.videoDistortion ?? 1.0} onChange={v => onUpdate('videoDistortion', v)} />
-          <DenseSlider desc="Maximální intenzita svítících barvy." label="Maximální světlá (Jas)" min={0} max={2.0} step={0.05} color={c} value={settings.maxLuma ?? 1.0} onChange={v => onUpdate('maxLuma', v)} />
-          <DenseSlider desc="Jak hluboká je černá v tmavých proudech (0 = tma, 0.2 = měkká temnota)." label="Minimální tmavá (Úroveň)" min={0} max={1.0} step={0.05} color={c} value={settings.minLuma ?? 0.1} onChange={v => onUpdate('minLuma', v)} />
-          <DenseSlider desc="0 = neprůhledné, 1 = plně zářivý průchod videa skrz kuličku." label="Průchod světla (Transmise)" min={0} max={1.0} step={0.05} color={c} value={settings.transmission ?? 1.0} onChange={v => onUpdate('transmission', v)} />
-          <DenseSlider desc="Absorpce světla a sytost želatinového jádra." label="Hloubka sytosti (Thickness)" min={0} max={5.0} step={0.1} color={c} value={settings.thickness ?? 1.0} onChange={v => onUpdate('thickness', v)} />
+          <DenseSlider desc="Efekt rybího oka a čočky promítající video do kuličky." label="Zakřivení optiky (Distortion)" min={0} max={2.0} step={0.05} color={c} value={settings.refractionDistortion ?? 0.6} onChange={v => onUpdate('refractionDistortion', v)} />
+          <DenseSlider desc="Při otáčení DNA: nejsvětlejší tón víření." label="Maximální světlá (Jas)" min={0} max={2.0} step={0.05} color={c} value={settings.transitionMaxLight ?? 0.8} onChange={v => onUpdate('transitionMaxLight', v)} />
+          <DenseSlider desc="Jak hluboká je černá v tmavých proudech (0 = tma, 0.2 = měkká temnota)." label="Minimální tmavá (Úroveň)" min={0} max={1.0} step={0.05} color={c} value={settings.transitionMinDark ?? 0.05} onChange={v => onUpdate('transitionMinDark', v)} />
+          <DenseSlider desc="0 = neprůhledné, 1 = plně zářivý průchod videa skrz kuličku." label="Průchod světla (Transmise)" min={0} max={1.0} step={0.05} color={c} value={settings.transmission ?? 0.85} onChange={v => onUpdate('transmission', v)} />
+          <DenseSlider desc="Absorpce světla a sytost želatinového jádra." label="Hloubka sytosti (Thickness)" min={0} max={5.0} step={0.1} color={c} value={settings.thickness ?? 1.2} onChange={v => onUpdate('thickness', v)} />
+          <DenseSlider desc="0 = video ve svých barvách, 1 = celé přebarvené barvou želé." label="Tónování videa (síla)" min={0} max={1.0} step={0.05} color={c} value={settings.videoTint ?? 0.35} onChange={v => onUpdate('videoTint', v)} />
+          <DenseSlider desc="Jas videa uvnitř kuliček." label="Jas videa v želé" min={0.2} max={4.0} step={0.05} color={c} value={settings.videoGain ?? 1.4} onChange={v => onUpdate('videoGain', v)} />
+          <DenseSlider desc="Jak moc se kuličky přelévají (dýchají) – 0 = tuhé koule." label="Želé vlnění" min={0} max={1.5} step={0.05} color={c} value={settings.jellyWobble ?? 0.5} onChange={v => onUpdate('jellyWobble', v)} />
         </>
       )}
     </div>

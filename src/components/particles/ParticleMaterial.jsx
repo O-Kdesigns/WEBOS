@@ -135,6 +135,9 @@ export function ParticleMaterial({ settings, videoTexture, opacity = 1, rotation
         uOpacity={opacity}
         uMaxLight={settings.transitionMaxLight ?? 0.8}
         uMinDark={settings.transitionMinDark ?? 0.05}
+        uTint={settings.videoTint ?? 0.35}
+        uWobble={settings.jellyWobble ?? 0.5}
+        uVideoGain={settings.videoGain ?? 1.4}
         transparent={true}
         depthWrite={true}
       />

@@ -19,12 +19,17 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     uMaxLight: 0.8,
     uMinDark: 0.05,
     uTransitionProgress: 1.0,
-    uDnaColor: new THREE.Color("#3b82f6")
+    uDnaColor: new THREE.Color("#3b82f6"),
+    uTint: 0.35,
+    uWobble: 0.5,
+    uVideoGain: 1.4
   },
   `
   uniform sampler2D tPositions;
   uniform float uTransitionProgress;
   uniform vec3 uDnaColor;
+  uniform float uTime;
+  uniform float uWobble;
   attribute vec2 aComputeUV;
   
   varying vec2 vUv;
@@ -33,6 +38,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   varying vec3 vViewPosition;
   varying vec3 vWorldPos;
   varying float vScale;
+  varying vec3 vRand;
   
   void main() {
     vUv = uv;
@@ -40,8 +46,21 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec4 computedData = texture2D(tPositions, aComputeUV);
     vec3 computedPos = computedData.xyz;
     float computedScale = computedData.w;
-    
-    vec3 transformed = position * computedScale + computedPos;
+
+    // náhoda na particl (stabilní, z UV v compute textuře)
+    vRand = fract(sin(vec3(dot(aComputeUV, vec2(127.1, 311.7)), dot(aComputeUV, vec2(269.5, 183.3)), dot(aComputeUV, vec2(419.2, 371.9)))) * 43758.5453);
+
+    // želé: kulička se pomalu přelévá (tvar dýchá), každá v jiné fázi
+    float ph = vRand.x * 6.2832;
+    float t = uTime * (1.6 + vRand.y);
+    float w = sin(position.x * 2.6 + t + ph) * sin(position.y * 2.3 - t * 0.83 + ph * 1.7) + 0.6 * sin(position.z * 3.1 + t * 1.2 - ph);
+    vec3 p = position * (1.0 + uWobble * 0.14 * w * smoothstep(0.0, 1.0, uTransitionProgress));
+
+    // minimální vzdálenost od kamery: kulička těsně u objektivu se zmenší do ztracena (jinak zakryje půl obrazu)
+    vec4 centerView = viewMatrix * modelMatrix * instanceMatrix * vec4(computedPos, 1.0);
+    float nearFade = smoothstep(0.12, 0.4, -centerView.z);
+
+    vec3 transformed = p * computedScale * nearFade + computedPos;
     vec4 instancePosition = instanceMatrix * vec4(transformed, 1.0);
     vec4 mvPosition = viewMatrix * modelMatrix * instancePosition;
     
@@ -75,6 +94,9 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   varying vec3 vViewPosition;
   varying vec3 vWorldPos;
   varying float vScale;
+  varying vec3 vRand;
+  uniform float uTint;
+  uniform float uVideoGain;
 
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
@@ -114,14 +136,16 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec3 viewDir = normalize(vViewPosition);
     float NdotV = max(dot(normal, viewDir), 0.0);
     
-    // 1. Sférické mapování celého videa do vnitřku každé kuličky
+    // 1. Kulička = čočka: v každé je CELÉ video, převrácené (jako skleněná kulička) a zakřivené k okraji
     vec2 sphereUv = normal.xy;
-    float r = length(sphereUv);
-    
-    // Zakřivení optiky / čočky podle uDistortion
-    float curvePower = mix(1.0, 0.65, clamp(uDistortion, 0.0, 2.0));
-    float curvedR = (r > 0.0001) ? pow(r, curvePower) : 0.0;
-    vec2 lensUv = (r > 0.0001) ? (sphereUv / r) * (curvedR * 0.49) + 0.5 : vec2(0.5);
+    float r = min(length(sphereUv), 1.0);
+    float curvePower = mix(1.0, 0.55, clamp(uDistortion * 0.5, 0.0, 1.0));
+    vec2 dir = r > 0.0001 ? sphereUv / r : vec2(0.0);
+    vec2 lensUv = 0.5 - dir * pow(r, curvePower) * 0.49;
+    // lehce navázat na polohu na obrazovce (sousední kuličky ukazují podobný výřez = vypadá to jako lom pozadí)
+    // + drobný náhodný posun a zoom na kuličku -> každá má trochu jiný jas/odstín
+    vec2 screenUv = vScreenPos.xy / max(vScreenPos.w, 1e-4) * 0.5 + 0.5;
+    lensUv = mix(lensUv, screenUv, 0.2) + (vRand.xy - 0.5) * 0.12;
     
     // Vodový šum POUZE při rotaci / přechodu (uNoiseAmount > 0.001)
     float waterNoise = 0.0;
@@ -146,15 +170,25 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     } else {
       videoTex = texture2D(tVideo, lensUv);
     }
+    // "okolí" = průměr 4 vzdálených vzorků videa – čím svítí prostředí na okraji kuličky
+    vec2 ec = vec2(0.5) + (screenUv - 0.5) * 0.5;
+    vec3 envCol = (texture2D(tVideo, ec + vec2(0.22, 0.2)).rgb + texture2D(tVideo, ec + vec2(-0.22, 0.2)).rgb
+                 + texture2D(tVideo, ec + vec2(0.22, -0.2)).rgb + texture2D(tVideo, ec + vec2(-0.22, -0.2)).rgb) * 0.25;
     
-    // 3. Absorpce světla a hloubka želé (Beer-Lambertův zákon pro tloušťku a sytost)
-    float depth = sqrt(max(0.0, 1.0 - r * r)) * (1.0 + max(uThickness, 0.0) * 0.8);
-    vec3 absorption = exp(-(vec3(1.0) - uColorMod) * depth * max(uThickness * 0.8, 0.15));
+    // 3. Želé tělo: tónování barvou jen z části (uTint), ať video ukáže svoje barvy.
+    //    Absorpce (Beer-Lambert) roste k okraji – delší cesta světla = sytější a tmavší lem
+    vec3 tint = mix(vec3(1.0), uColorMod, clamp(uTint, 0.0, 1.0));
+    float path = mix(0.35, 1.25, 1.0 - NdotV) * max(uThickness, 0.0);
+    vec3 absorption = exp(-(vec3(1.0) - uColorMod) * path * (0.3 + uTint));
+    // náhodný jas na kuličku (jako v hloubce různě nasvícené kapky)
+    float bead = mix(0.55, 1.25, vRand.z * vRand.z);
     
     // 4. Transmise a vnitřní vyzařování videa skrz želé
-    vec3 innerVideoColor = videoTex.rgb * uColorMod * absorption;
+    vec3 innerVideoColor = videoTex.rgb * tint * absorption * uVideoGain * bead;
     float trans = clamp(uTransmission, 0.0, 1.0);
-    vec3 coreColor = mix(uColorMod * 0.25 * absorption, innerVideoColor, trans);
+    vec3 coreColor = mix(uColorMod * 0.12 * absorption, innerVideoColor, trans);
+    // tmavý lem uvnitř obrysu (lom na okraji koule vede světlo jinam)
+    coreColor *= mix(1.0, 0.3, smoothstep(0.6, 0.98, r));
     
     float mixProgress = 0.0;
     // 5. Zamíchávání tmavé a světlé složky POUZE při rotaci
@@ -174,31 +208,35 @@ export const JellyVideoMaterialImpl = shaderMaterial(
       coreColor = mix(coreColor, swirledTone, mixProgress);
     }
     
-    // 4. Odlesky a lesklost povrchu (Roughness a Metalness)
+    // 6. Odlesky: ostrý mokrý bod + měkký druhý (Roughness a Metalness)
     vec3 keyLight = normalize(vec3(0.35, 0.85, 0.55));
     vec3 H1 = normalize(keyLight + viewDir);
     float NdotH1 = max(dot(normal, H1), 0.0);
     float rough = clamp(uRoughness, 0.02, 1.0);
-    float shininess = mix(140.0, 6.0, rough);
-    float spec1 = pow(NdotH1, shininess);
+    float shininess = mix(220.0, 8.0, rough);
+    float spec1 = pow(NdotH1, shininess) * 1.6 + pow(NdotH1, shininess * 0.12) * 0.12;
     
     vec3 fillLight = normalize(vec3(-0.4, -0.3, 0.7));
     vec3 H2 = normalize(fillLight + viewDir);
-    float spec2 = pow(max(dot(normal, H2), 0.0), shininess * 0.6) * 0.35;
+    float spec2 = pow(max(dot(normal, H2), 0.0), shininess * 0.6) * 0.3;
     
     float metal = clamp(uMetalness, 0.0, 1.0);
     vec3 specTint = mix(vec3(1.0), uColorMod, metal);
     vec3 totalSpecular = (spec1 + spec2) * specTint * (1.0 - rough * 0.5);
     
-    // 5. Mokrý želatinový Fresnel lem a translucentní podsvícení (Subsurface Scattering)
-    float fresnel = pow(1.0 - NdotV, mix(3.5, 2.0, rough));
-    vec3 rimGlaze = mix(vec3(1.0), uColorMod, 0.4) * (fresnel * (1.0 - rough * 0.4) * 0.6);
+    // 7. Želé: kaustika = čočka soustředí světlo na opačnou stranu, než je odlesk (svítivý půlměsíc uvnitř)
+    float caustic = pow(max(dot(-dir, keyLight.xy / max(length(keyLight.xy), 1e-4)), 0.0), 2.0) * smoothstep(0.35, 0.8, r) * (1.0 - smoothstep(0.85, 1.0, r));
+    vec3 causticGlow = caustic * (videoTex.rgb * 1.6 + envCol) * tint * trans * 0.9;
+
+    // 8. Mokrý Fresnel lem = odraz okolí (rozmazané video), ne bílá
+    float fresnel = pow(1.0 - NdotV, mix(4.0, 2.2, rough));
+    vec3 rimGlaze = mix(envCol * 1.4 + 0.03, vec3(0.8), 0.2) * fresnel * (1.0 - rough * 0.4) * 0.3;
     
-    float sss = pow(max(0.0, dot(viewDir, -keyLight + normal * 0.4)), 2.0) * 0.5;
-    vec3 sssGlow = sss * uColorMod * (videoTex.rgb + 0.25) * trans * (1.0 - mixProgress * 0.8);
+    float sss = pow(max(0.0, dot(viewDir, -keyLight + normal * 0.4)), 2.0) * 0.35;
+    vec3 sssGlow = sss * tint * (videoTex.rgb + 0.1) * trans * (1.0 - mixProgress * 0.8);
     
-    // 6. Výsledný složený vzhled
-    vec3 finalColor = coreColor + (totalSpecular + rimGlaze) * mix(1.0, 0.4, mixProgress) + sssGlow;
+    // 9. Výsledný složený vzhled
+    vec3 finalColor = coreColor + (totalSpecular + rimGlaze + causticGlow) * mix(1.0, 0.4, mixProgress) + sssGlow;
     finalColor = mix(finalColor, finalColor * uColorMod, metal * 0.5);
     
     // přisvícení od solidu (a žáru 3D tisku), SolidLink.jsx – mimo INSIDE je uSLightAmt 0

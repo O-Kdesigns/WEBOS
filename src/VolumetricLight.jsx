@@ -82,6 +82,7 @@ const VolumetricLightShader = {
 
     // Cinematic vrstva (Active Theory look): DOF, bloom, atmosféra, zrno, viněta
     tBlur: { value: dummyTexture },
+    uBlurTexel: { value: new THREE.Vector2(0.004, 0.004) },
     uCineEnabled: { value: 1.0 },
     uDofStrength: { value: 1.0 },
     uFocusDist: { value: 8.0 },
@@ -179,6 +180,13 @@ const VolumetricLightShader = {
     uniform float uCenterRayDensity;
 
     uniform sampler2D tBlur;
+    uniform vec2 uBlurTexel;
+    // rozmazaný buffer je ve 1/4 rozlišení -> 4 posunuté vzorky, jinak je u silného DOF vidět mřížka (kostičky)
+    vec3 blurSmooth(vec2 uv) {
+      vec2 o = uBlurTexel * 0.75;
+      return 0.25 * (texture2D(tBlur, uv + vec2(o.x, o.y)).rgb + texture2D(tBlur, uv + vec2(-o.x, o.y)).rgb
+                   + texture2D(tBlur, uv + vec2(o.x, -o.y)).rgb + texture2D(tBlur, uv - o).rgb);
+    }
     uniform float uCineEnabled;
     uniform float uDofStrength;
     uniform float uFocusDist;
@@ -309,7 +317,7 @@ const VolumetricLightShader = {
       if (uCineEnabled > 0.5 && uDofStrength > 0.001 && !cineBg) {
         float lz = getLinearDepth(cineDepth, uCameraNear, uCameraFar);
         float coc = smoothstep(0.0, max(0.01, uFocusRange), abs(lz - uFocusDist)) * uDofStrength;
-        baseColor.rgb = mix(baseColor.rgb, texture2D(tBlur, vUv).rgb, clamp(coc, 0.0, 1.0));
+        baseColor.rgb = mix(baseColor.rgb, blurSmooth(vUv), clamp(coc, 0.0, 1.0));
       }
       float dither = getDither(gl_FragCoord.xy) * uDitherStrength;
 
@@ -814,6 +822,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
 
     const mat = materialRef.current;
     if (!mat) return;
+    if (import.meta.env.DEV) window.__postMat = mat; // ladění uniform postu z konzole
 
     const safeDelta = Math.min(Math.max(delta, 0), 0.1);
 
@@ -998,8 +1007,10 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       gl.render(blurPass.scene, quadCamera);
       bu.uMode.value = 1;
       const radius = cine.blurRadius ?? 1.5;
-      for (let it = 0; it < 2; it++) {
-        const r = radius * (it + 1);
+      // 3 průchody s rostoucím krokem (0.6/1.1/1.6 × radius, stejný celkový rozptyl jako dřív 1× + 2×):
+      // velký krok hned ve 2 průchodech dělal v silném DOF (INSIDE popředí/dálka) kostičky
+      for (let it = 0; it < 3; it++) {
+        const r = radius * (0.6 + 0.5 * it);
         bu.uTexel.value.set(1 / bw, 1 / bh);
         bu.tInput.value = a.texture; bu.uDir.value.set(r, 0);
         gl.setRenderTarget(b); gl.render(blurPass.scene, quadCamera);
@@ -1007,15 +1018,17 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         gl.setRenderTarget(a); gl.render(blurPass.scene, quadCamera);
       }
       mat.uniforms.tBlur.value = a.texture;
+      mat.uniforms.uBlurTexel.value.set(1 / bw, 1 / bh);
 
       // Ohnisko: vodorovná vzdálenost kamery od osy DNA (x=0, z=0) + posun z configu
       const autoFocus = Math.hypot(camWorldPosRef.current.x, camWorldPosRef.current.z);
-      mat.uniforms.uFocusDist.value = autoFocus + (cine.focusOffset ?? 0);
-      mat.uniforms.uFocusRange.value = cine.focusRange ?? 2.5;
-      // INSIDE: jiná kamera i scéna (světlé solidy) -> DOF by rozmazal obsah a bloom by solidy
-      // přepálil do bílých fleků. Obojí plynule stáhnout podle přechodu ORBIT -> INSIDE.
+      // INSIDE: vlastní ohnisko (vzdálenost od kamery Camera_In, solidy jsou ~2 j. daleko) -> ostré solidy,
+      // rozmazané popředí i dálka = hloubka jako Active Theory. Bloom by solidy přepálil do bílých fleků -> stažený.
       const inside = transitionRef.current;
-      mat.uniforms.uDofStrength.value = (cine.dofStrength ?? 0.9) * (1 - inside);
+      const lerp = (a, b) => a + (b - a) * inside;
+      mat.uniforms.uFocusDist.value = lerp(autoFocus + (cine.focusOffset ?? 0), cine.insideFocus ?? 1.9);
+      mat.uniforms.uFocusRange.value = lerp(cine.focusRange ?? 2.5, cine.insideFocusRange ?? 1.1);
+      mat.uniforms.uDofStrength.value = lerp(cine.dofStrength ?? 0.9, cine.insideDof ?? 0.85);
       mat.uniforms.uBloomStrength.value = (cine.bloomStrength ?? 0.8) * (1 - inside * (1 - (cine.insideBloom ?? 0.0)));
       mat.uniforms.uBloomThreshold.value = cine.bloomThreshold ?? 0.45;
       mat.uniforms.uAtmoColor.value.set(cine.atmoColor ?? '#2f9a9a');
