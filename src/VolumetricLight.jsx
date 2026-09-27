@@ -150,7 +150,7 @@ const VolumetricLightShader = {
     uWaterStreak: { value: 0.25 },
     uCoverRadius: { value: 0.025 },
     uSwirlSpeed: { value: new THREE.Vector2(0.03, 0.3) }, // INSIDE: rychlost proudu (výšky obr./s), kdy víří světlo přes particly
-    uWaterWisp: { value: 0.8 }
+    uDustLightPos: { value: new THREE.Vector2(0.5, 1.15) } // ORBIT: odkud svítí mlha z prachu (nebe nad obrazovkou)
   },
   vertexShader: `
     varying vec2 vUv;
@@ -294,7 +294,7 @@ const VolumetricLightShader = {
     uniform float uWaterStreak;
     uniform float uCoverRadius;
     uniform vec2 uSwirlSpeed;
-    uniform float uWaterWisp;
+    uniform vec2 uDustLightPos;
     uniform float uTvDebug; // DEV: 1 = na obrazovce jen maska vody (zelená) + záře TV (červená)
 
     // vzdálenost od rámu (aspect prostor, střed obrazovky = 0): <0 uvnitř, >0 venku
@@ -425,15 +425,8 @@ const VolumetricLightShader = {
       float sl = length(s);
       if (sl > 0.06) s *= 0.06 / sl;
       float d = dyeAt(vUv) * 0.4 + dyeAt(vUv - s * 0.33) * 0.27 + dyeAt(vUv - s * 0.66) * 0.2 + dyeAt(vUv - s) * 0.13;
-      if (d < 0.001) return 0.0;
-      // pramínky: šum natažený podél proudu (souřadnice otočené do směru toku) -> zakřivené žilky kopírují víry
-      vec2 v = texture2D(tFluid, vUv).xy;
-      float vl = length(v);
-      vec2 fd = vl > 1e-3 ? v / vl : vec2(1.0, 0.0);
-      vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);
-      vec2 q = vec2(dot(p, fd) * 2.0, dot(p, vec2(-fd.y, fd.x)) * 6.0);
-      float wisp = fbmSmoke(q + vec2(-uTime * 0.6, uTime * 0.05));
-      return d * mix(1.0, smoothstep(0.1, 1.0, wisp) * 1.5, uWaterWisp);
+      // (šum natočený podle směru proudu tu byl a ve vírech se lámal do ostrých „květin“ -> pryč)
+      return d;
     }
     // Kolik okolí zakrývají particly (0 = volný výhled na pozadí, 1 = hustý shluk): 8 vzorků hloubky na kruhu
     float particleCover() {
@@ -448,7 +441,7 @@ const VolumetricLightShader = {
     // ORBIT mlha nasvícená 2D prachem (AtmosphereDust, v hloubce = pozadí): prach rozsvítí mlhu kolem sebe (haze)
     // a táhne z ní paprsky od středu světla – stejným směrem jako god rays P1. Voda do ní dělá díry.
     vec3 dustFog() {
-      vec2 toL = uLightScreenPos - vUv;
+      vec2 toL = uDustLightPos - vUv;
       float dl = length(toL);
       vec2 st = (dl > 1e-4 ? toL / dl : vec2(0.0)) * min(dl, uDustRayLen) / 24.0;
       vec2 uv = vUv + st * getDither(gl_FragCoord.xy);
@@ -1252,7 +1245,10 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uWaterStreak.value = tl.waterStreak ?? 0.25;
       u.uCoverRadius.value = tl.coverRadius ?? 0.025;
       u.uSwirlSpeed.value.set(tl.swirlSpeedMin ?? 0.03, tl.swirlSpeedMax ?? 0.3);
-      u.uWaterWisp.value = tl.waterWisp ?? 0.8;
+      // 'top' = shora jako z nebe (dustLightY nad horní hranou), 'center' = střed obrazovky, 'object' = střed DNA jako P1
+      const dlf = tl.dustLightFrom ?? 'top';
+      if (dlf === 'object') u.uDustLightPos.value.copy(u.uLightScreenPos.value);
+      else u.uDustLightPos.value.set(0.5, dlf === 'center' ? 0.5 : (tl.dustLightY ?? 1.15));
       u.uDyeRange.value.set(tl.dyeMin ?? 0.015, tl.dyeMax ?? 0.25);
       u.uTvClip.value = tl.waterClip ?? 1.0;
       u.uTvInside.value = tl.enabled === false ? 0 : (tl.insideStrength ?? 1);
@@ -1264,7 +1260,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uFluidOn.value = fl.velocity ? 1 : 0;
       if (fl.vel?.[0]) u.uFluidTexel.value.set(1 / fl.vel[0].width, 1 / fl.vel[0].height);
       // barvivo počítá ParticleFluid, jen když ho někdo kreslí (viewAt) -> INSIDE si o něj řekne
-      if (u.uInsideTransition.value > 0.001) fl.viewAt = fl.insideAt = performance.now() / 1000;
+      if (u.uInsideTransition.value > 0.001) fl.viewAt = performance.now() / 1000;
       u.tDye.value = fl.dyeLive && fl.dye ? fl.dye[0].texture : dummyTexture;
       u.uDyeOn.value = fl.dyeLive && fl.dye ? 1 : 0;
       if (fl.dyeTexel) u.uDyeTexel.value.copy(fl.dyeTexel);

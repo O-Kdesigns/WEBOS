@@ -30,7 +30,6 @@ export const FLUID_DEFAULTS = {
   speedCurve: 0.5,        // odezva na rychlost myši: 1 = lineární, menší = pomalý tah silnější a rychlý slabší
   maxSpeed: 1.0,          // strop rychlosti tahu (výšky obrazovky za s) – rychlý švih nad tím už nesílí
   curl: 8,                // víření (moc = spletitý "plyn", málo = klidná voda)
-  insideCurl: 6,          // víření v INSIDE (voda je tam vidět -> klidnější, bez "květin")
   trailFade: 1.2,         // mizení stopy za s (proud posouvá particly jen ve stopě; menší = stopa i posun vydrží déle)
   dissipation: 0.35,      // útlum proudu za s (menší = delší dojezd)
   pressureIterations: 24, // víc = čistší, soudržnější proud
@@ -419,7 +418,7 @@ class Fluid {
     this.pass(m.curl, this.curlRT);
 
     const v = m.vorticity.uniforms;
-    v.uVel.value = this.vel[0].texture; v.uCurl.value = this.curlRT.texture; v.uCurlStrength.value = now - (this.insideAt ?? -1e9) < 0.5 ? cfg.insideCurl : cfg.curl; v.uDt.value = dt;
+    v.uVel.value = this.vel[0].texture; v.uCurl.value = this.curlRT.texture; v.uCurlStrength.value = cfg.curl; v.uDt.value = dt;
     this.pass(m.vorticity, this.vel[1]); this.swapVel();
 
     m.divergence.uniforms.uVel.value = this.vel[0].texture;
