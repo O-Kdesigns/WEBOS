@@ -53,6 +53,10 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
         <DenseSlider desc="Jak rychle mizí stopa myši ve vodě. Menší = particly se posouvají déle a dál." label="Mizení stopy" min={0.1} max={5} step={0.05} value={fluid.trailFade ?? FLUID_DEFAULTS.trailFade} color="#ec4899" onChange={v => updateFluid('trailFade', v)} />
         <DenseSlider desc="Víření vody (malé víry za stopou)." label="Víření" min={0} max={30} step={0.5} value={fluid.curl ?? FLUID_DEFAULTS.curl} color="#ec4899" onChange={v => updateFluid('curl', v)} />
         <DenseSlider desc="Jak rychle se particl nechá strhnout proudem (menší = líné, těžší particly)." label="Strhávání particlů" min={0.02} max={1} step={0.01} value={fluid.coupling ?? FLUID_DEFAULTS.coupling} color="#ec4899" onChange={v => updateFluid('coupling', v)} />
+        <DenseSlider desc="Výška vlny, kterou tah myši zvedne (jako loď). 0 = bez vln." label="Výška vlny" min={0} max={10} step={0.1} value={fluid.waveHeight ?? FLUID_DEFAULTS.waveHeight} color="#ec4899" onChange={v => updateFluid('waveHeight', v)} />
+        <DenseSlider desc="Jak silně vlna rozráží particly kolmo od tahu ven." label="Síla vlny na particly" min={0} max={40} step={0.5} value={fluid.waveForce ?? FLUID_DEFAULTS.waveForce} color="#ec4899" onChange={v => updateFluid('waveForce', v)} />
+        <DenseSlider desc="Rychlost, jakou se vlna šíří od tahu ven." label="Rychlost vlny" min={0.05} max={0.5} step={0.01} value={fluid.waveSpeed ?? FLUID_DEFAULTS.waveSpeed} color="#ec4899" onChange={v => updateFluid('waveSpeed', v)} />
+        <DenseSlider desc="Jak rychle vlny doznívají. Menší = vlna doběhne dál." label="Útlum vln" min={0.1} max={5} step={0.05} value={fluid.waveDamping ?? FLUID_DEFAULTS.waveDamping} color="#ec4899" onChange={v => updateFluid('waveDamping', v)} />
         <DenseSlider desc="Tloušťka přední vrstvy particlů, kterou voda posouvá (world). Zadní zůstanou." label="Hloubka přední vrstvy" min={0.02} max={1} step={0.01} value={fluid.frontShell ?? FLUID_DEFAULTS.frontShell} color="#ec4899" onChange={v => updateFluid('frontShell', v)} />
 
         <div style={{ height: '8px' }} />

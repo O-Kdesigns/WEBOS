@@ -34,6 +34,8 @@ uniform float uFluidForce;
 uniform float uCoupling;
 uniform float uFriction;
 uniform float uFrontShell;
+uniform sampler2D tWave;       // r = výška hladiny (vlny)
+uniform float uWaveForce;
 
 void main() {
     vec2 uv = gl_FragCoord.xy / resolution.xy;
@@ -84,6 +86,12 @@ void main() {
             // proud strhává, ale klidná voda particl nebrzdí -> po zastavení myši dál klouže (dojezd)
             float grab = smoothstep(0.0, 1.0, length(flow) / (length(vel.xyz) + 1e-6));
             vel.xyz += (flow - vel.xyz) * uCoupling * front * grab;
+            // vlna: zrychlení -grad(výška) -> hřbet od tahu postupně odtlačí particly ven, pak je vrátí
+            vec2 wt = uFluidTexel;
+            vec2 grad = vec2(texture2D(tWave, suv + vec2(wt.x, 0.0)).r - texture2D(tWave, suv - vec2(wt.x, 0.0)).r,
+                             texture2D(tWave, suv + vec2(0.0, wt.y)).r - texture2D(tWave, suv - vec2(0.0, wt.y)).r) * 0.5;
+            vec2 wndc = -grad * uWaveForce * uFluidTexel * 2.0 * uDt;
+            vel.xyz += (uCamRight * (wndc.x * c.w / uProj.x) + uCamUp * (wndc.y * c.w / uProj.y)) * uFluidForce * front;
         }
     }
 
@@ -300,7 +308,7 @@ export function useGPGPU(count, particlesData, gl) {
       uFluidOn: { value: 0 }, tFluid: { value: null }, uFluidTexel: { value: new THREE.Vector2() }, tFront: { value: null },
       uMVP: { value: new THREE.Matrix4() }, uCamRight: { value: new THREE.Vector3() }, uCamUp: { value: new THREE.Vector3() },
       uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
-      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 },
+      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -385,8 +393,9 @@ function disposeCompute(c) {
 }
 
 function mergeFluidCfg(prev, src) {
-  if (prev && prev.src === src) return prev;
-  return { ...FLUID_DEFAULTS, ...(src || {}), src };
+  const ov = import.meta.env.DEV ? window.__fluidOverride : null; // DEV ladění
+  if (prev && prev.src === src && prev.ov === ov) return prev;
+  return { ...FLUID_DEFAULTS, ...(src || {}), ...(ov || {}), src, ov };
 }
 
 // --- LOGIKA ---
@@ -492,6 +501,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
         velUniforms.uProj.value.set(cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]);
         velUniforms.uMVP.value.copy(mvp);
         velUniforms.tFluid.value = fluid.velocity;
+        velUniforms.tWave.value = fluid.wave;
+        velUniforms.uWaveForce.value = fluidCfg.waveForce;
         velUniforms.uFluidTexel.value.copy(fluid.texel);
         velUniforms.uDt.value = Math.min(Math.max(delta, 1 / 240), 1 / 30);
         velUniforms.uFluidForce.value = mouseMult;

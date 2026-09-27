@@ -24,6 +24,11 @@ export const FLUID_DEFAULTS = {
   frontShell: 0.12,       // tloušťka přední vrstvy particlů, kterou proud unáší (world)
   frontRes: 128,          // výška mapy nejbližších particlů
   frontPointSize: 4,      // velikost particlu v mapě (buňky) – větší = méně prosvítání zadních
+  waveHeight: 3,          // výška vlny z tahu (0 = bez vln)
+  waveSpeed: 0.35,        // rychlost šíření vlny (c² na krok, max 0.5)
+  waveSteps: 2,           // kroků vlny za snímek (rychlejší šíření)
+  waveDamping: 1.2,       // útlum vln za s
+  waveForce: 12,          // jak silně vlna tlačí particly (od tahu ven)
   idleSleep: 5,           // s bez pohybu myši -> simulace se uspí (nejdřív až proud dozní)
 };
 
@@ -98,6 +103,28 @@ void main(){
   gl_FragColor = vec4(v.xy / (1.0 + uDissipation * uDt), v.z * exp(-uTrailFade * uDt), 1.0);
 }`;
 
+// Vlny na hladině (rovnice vln na výškové mapě, jako ripple/brázda za lodí v hrách): tah myši je jako loď (před sebou zvedne vodu, za sebou důlek),
+// ten se pak rozbíhá kolmo od tahu ven -> postupné rozrážení. r = výška teď, g = výška minulý krok.
+// Particly dostávají zrychlení -grad(výška) (hybnost mělké vody): vlna je postupně odtlačí ven a zase vrátí.
+const WAVE = HEAD + `
+uniform sampler2D uWave; uniform vec2 uA; uniform vec2 uB; uniform float uRadius; uniform float uAspect;
+uniform float uPush; uniform float uC2; uniform float uDamp;
+void main(){
+  vec4 c = texture2D(uWave, vUv);
+  float L = S(uWave, vec2(-1, 0)).r, R = S(uWave, vec2(1, 0)).r, T = S(uWave, vec2(0, 1)).r, B = S(uWave, vec2(0, -1)).r;
+  // útlum jen rychlosti hladiny (h - předchozí), jinak by se celá plocha houpala
+  float h = c.r + (c.r - c.g) * uDamp + uC2 * (L + R + T + B - 4.0 * c.r);
+  // tah myši = pohybující se předmět ve vodě (jako loď): vodu před sebou zvedne, za sebou nechá důlek
+  // (stopa teď - stopa minule) -> čistá příďová vlna bez přidané vody
+  vec2 pb = vUv - uB, pa = vUv - uA; pb.x *= uAspect; pa.x *= uAspect;
+  float r2 = uRadius * uRadius;
+  h += uPush * (exp(-dot(pb, pb) / r2) - exp(-dot(pa, pa) / r2));
+  // okraje obrazovky pohlcují (vlna se neodráží zpátky)
+  vec2 e = min(vUv, 1.0 - vUv);
+  h *= mix(0.85, 1.0, smoothstep(0.0, 0.05, min(e.x, e.y)));
+  gl_FragColor = vec4(h, c.r, 0.0, 1.0);
+}`;
+
 function makeTarget(w, h) {
   return new THREE.WebGLRenderTarget(w, h, {
     type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
@@ -123,6 +150,7 @@ class Fluid {
       pressure: mk(PRESSURE, { uP: { value: null }, uDiv: { value: null } }),
       gradient: mk(GRADIENT, { uP: { value: null }, uVel: { value: null } }),
       advect: mk(ADVECT, { uVel: { value: null }, uDt: { value: 0 }, uDissipation: { value: 0 }, uTrailFade: { value: 0 } }),
+      wave: mk(WAVE, { uWave: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uRadius: { value: 0.03 }, uAspect: { value: 1 }, uPush: { value: 0 }, uC2: { value: 0.4 }, uDamp: { value: 0.99 } }),
     };
     this.w = 0; this.h = 0;
     this.prev = new THREE.Vector2(NaN, NaN);
@@ -131,6 +159,7 @@ class Fluid {
     this.frameDone = false;
     this.texel = new THREE.Vector2();
     this.velocity = null;
+    this.wave = null;
     const reset = () => this.prev.set(NaN, NaN);
     window.addEventListener('blur', reset);
     window.addEventListener('focus', reset);
@@ -145,6 +174,7 @@ class Fluid {
     this.p = [makeTarget(w, h), makeTarget(w, h)];
     this.div = makeTarget(w, h);
     this.curlRT = makeTarget(w, h);
+    this.waveRT = [makeTarget(w, h), makeTarget(w, h)];
     Object.values(this.m).forEach((m) => m.uniforms.uTexel.value.copy(this.texel));
     this.clear();
   }
@@ -153,7 +183,7 @@ class Fluid {
     const gl = this.gl, prev = gl.getRenderTarget();
     const col = gl.getClearColor(new THREE.Color()), a = gl.getClearAlpha();
     gl.setClearColor(0x000000, 0);
-    [...this.vel, ...this.p].forEach((t) => { gl.setRenderTarget(t); gl.clear(true, false, false); });
+    [...this.vel, ...this.p, ...this.waveRT].forEach((t) => { gl.setRenderTarget(t); gl.clear(true, false, false); });
     gl.setClearColor(col, a);
     gl.setRenderTarget(prev);
   }
@@ -186,11 +216,25 @@ class Fluid {
     }
     // uspat až když proud skoro dozněl (95 %), jinak by dojezd uťal
     if (this.active && now - this.lastMove > Math.max(cfg.idleSleep, 3 / Math.max(0.05, Math.min(cfg.dissipation, cfg.trailFade)))) this.active = false;
-    if (!this.active) { this.prev.set(pu, pv); this.velocity = null; return; }
+    if (!this.active) { this.prev.set(pu, pv); this.velocity = null; this.wave = null; return; }
 
     const gl = this.gl, prevTarget = gl.getRenderTarget(), prevAutoClear = gl.autoClear;
     gl.autoClear = false;
     const m = this.m;
+
+    // vlny: substepy (stabilita c² <= 0.5), zdroj jen v prvním kroku; síla zdroje podle délky tahu (rychlosti)
+    const wu = m.wave.uniforms;
+    wu.uA.value.copy(moved ? this.prev : wu.uB.value); wu.uB.value.set(pu, pv);
+    wu.uRadius.value = cfg.splatRadius * 1.5;
+    wu.uAspect.value = width / height;
+    wu.uC2.value = Math.min(0.5, cfg.waveSpeed);
+    wu.uDamp.value = Math.exp(-cfg.waveDamping / (60 * cfg.waveSteps)); // útlum rychlosti hladiny za krok
+    for (let i = 0; i < cfg.waveSteps; i++) {
+      wu.uPush.value = i === 0 && moved ? cfg.waveHeight : 0;
+      wu.uWave.value = this.waveRT[0].texture;
+      this.pass(m.wave, this.waveRT[1]); this.waveRT.reverse();
+    }
+    this.wave = this.waveRT[0].texture;
 
     if (moved) {
       const s = m.splat.uniforms;
@@ -237,13 +281,13 @@ class Fluid {
   }
 
   dispose() {
-    [...(this.vel || []), ...(this.p || []), this.div, this.curlRT].forEach((t) => t?.dispose());
+    [...(this.vel || []), ...(this.p || []), ...(this.waveRT || []), this.div, this.curlRT].forEach((t) => t?.dispose());
   }
 }
 
 let fluid = null;
 export function getFluid(gl) {
-  if (!fluid) fluid = new Fluid(gl);
+  if (!fluid) { fluid = new Fluid(gl); if (import.meta.env.DEV) window.__fluid = fluid; }
   return fluid;
 }
 
