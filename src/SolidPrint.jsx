@@ -87,6 +87,8 @@ const GLSL_COMMON = /* glsl */`
 function patchMaterial(src) {
   const mat = src.clone();
   const keepBack = src.side === THREE.DoubleSide;
+  // emisní textura z GLB = zapečené světlo (SolidLink bakedLight)
+  const baked = !!src.emissiveMap;
   mat.side = THREE.DoubleSide;
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, shared);
@@ -111,9 +113,9 @@ function patchMaterial(src) {
         }
         #include <opaque_fragment>`);
     // vzhled povrchu + světelná vazba s particly (SolidLink.jsx)
-    patchSolidLook(shader);
+    patchSolidLook(shader, baked);
   };
-  mat.customProgramCacheKey = () => 'solidprint' + (keepBack ? 'D' : 'F');
+  mat.customProgramCacheKey = () => 'solidprint' + (keepBack ? 'D' : 'F') + (baked ? 'B' : '');
   return mat;
 }
 

@@ -10,7 +10,10 @@ import { printFx } from './SolidPrint';
 // - solid -> particly: solid (sondy z jeho vrcholů) přisvítí particly kolem sebe. Barva = solidLight.color
 //   + žár 3D tisku (printFx heat), takže tištěná vrstva rozsvítí particly okolo.
 // - vzhled solidu: barva/kov/drsnost, utlumení přímých světel scény a odrazů HDRI, tiskové vrstvy v normále, zrno drsnosti, lem.
-// Nastavení je per stránka v particlesSettings: solidMaterial, particleLight, solidLight (vše volitelné,
+// - zapečené světlo (bakedLight): solid z GLB s emisní texturou (Xelith: rudé světlo z emisních dílů Obsah0, Cycles bake
+//   v ASSETS/newworldorder9ai.blend, tools/bake_xelith.py). Emise se nečte jako záře, ale jako světlo dopadající
+//   na kov: difuze × barva, odlesk × specular (+ Fresnel, zrno povrchu), jen malý podíl jako čistá záře.
+// Nastavení je per stránka v particlesSettings: solidMaterial, particleLight, solidLight, bakedLight (vše volitelné,
 // bez klíčů se nic nemění = původní materiál z GLB). DEV: window.__linkOverride = { solidMaterial, particleLight,
 // solidLight } nahradí config živě, window.__linkFx = stav.
 
@@ -31,6 +34,12 @@ export const linkUniforms = {
   uLookRim: { value: 0 },
   uLookDirect: { value: 1 },
   uLookGlow: { value: new THREE.Color(0, 0, 0) },
+  // zapečené světlo (emisní textura solidu)
+  uBakeAmt: { value: 1 },
+  uBakeDiffuse: { value: 1 },
+  uBakeSpec: { value: 1 },
+  uBakeGlow: { value: 0.1 },
+  uBakeSheen: { value: 1 },
   // particly -> solid
   uPLightAmt: { value: 0 },
   uPLightColor: { value: new THREE.Color('#ffffff') },
@@ -53,6 +62,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') window.__linkFx = link
 const SOLID_DECL = /* glsl */`
   uniform float uLookOn, uLookMetal, uLookRough, uLookEnv, uLookLayers, uLookGrain, uLookRim, uLookDirect;
   uniform vec3 uLookColor, uLookGlow;
+  uniform float uBakeAmt, uBakeDiffuse, uBakeSpec, uBakeGlow, uBakeSheen;
   uniform float uPLightAmt, uPLightVideo, uPLightRadius, uPLightWrap;
   uniform vec3 uPLightColor;
   uniform sampler2D uPLightAvg;
@@ -60,7 +70,8 @@ const SOLID_DECL = /* glsl */`
 `;
 
 // Volá SolidPrint.patchMaterial v onBeforeCompile (po vlastních úpravách tisku).
-export function patchSolidLook(shader) {
+// baked = materiál má emisní texturu se zapečeným světlem (jiný program, customProgramCacheKey v SolidPrint).
+export function patchSolidLook(shader, baked = false) {
   Object.assign(shader.uniforms, linkUniforms);
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', '#include <common>\n' + SOLID_DECL)
@@ -81,6 +92,9 @@ export function patchSolidLook(shader) {
         normal = normalize(normal - (lg - dot(lg, normal) * normal));
       }`)
     .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      ${baked ? `// zapečené světlo: emise (textura × síla z GLB) = světlo dopadající na povrch, jako záře jen malý podíl
+      vec3 bakedLight = totalEmissiveRadiance * uBakeAmt;
+      totalEmissiveRadiance = bakedLight * uBakeGlow;` : ''}
       totalEmissiveRadiance += uLookGlow;`)
     .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
       // odrazy HDRI (preset city) na solidu utlumit – jinak se leskne světlem, které ve scéně není
@@ -112,7 +126,17 @@ export function patchSolidLook(shader) {
         reflectedLight.indirectDiffuse += plCol * material.diffuseColor;
         // kov nemá difuzi -> světlo particlů se musí ukázat v odlesku (a na hranách jako lem)
         reflectedLight.indirectSpecular += plCol * (material.specularColor * (1.0 - material.roughness * 0.6) * 0.5 + plF * uLookRim);
-      }`);
+      }`)
+    // až za AO: zapečené světlo už stínění obsahuje (AO z GLB tlumí jen odrazy okolí a přímá světla scény)
+    .replace('#include <aomap_fragment>', `#include <aomap_fragment>
+      ${baked ? `{
+        float bkNV = clamp(dot(normal, geometryViewDir), 0.0, 1.0);
+        reflectedLight.indirectDiffuse += bakedLight * material.diffuseColor * uBakeDiffuse;
+        // kov nemá difuzi -> rudé světlo hlavně v odlesku: hladší = silnější, pod úhlem se blíží bílé (Fresnel),
+        // zrno povrchu ho rozbije, aby nebyl plochý jako nálepka
+        vec3 bkSpec = mix(material.specularColor, vec3(1.0), pow(1.0 - bkNV, 4.0) * uBakeSheen) * (1.0 - material.roughness * 0.5);
+        reflectedLight.indirectSpecular += bakedLight * bkSpec * (0.55 + 0.9 * lookGrain) * uBakeSpec;
+      }` : ''}`);
 }
 
 // --- GLSL: particly (jelly video / physical), přisvícení od solidu ---
@@ -188,6 +212,8 @@ const AVG_FRAG = /* glsl */`
 `;
 
 const DEFAULT_PL = { enabled: false, color: '#ffffff', useVideoColor: true, intensity: 1.5, radius: 0.35, wrap: 0.5 };
+// bez klíče bakedLight platí výchozí (solid se zapečeným světlem ho má vždy, jinak by emise svítila plochou září)
+const DEFAULT_BL = { enabled: true, intensity: 1, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1 };
 const DEFAULT_SL = { enabled: false, color: '#ff7a3a', intensity: 0.5, radius: 0.4, printHeat: 1.0, selfGlow: 0 };
 
 // Renderuje se v ProjectContent jako sourozenec solidů a particlů (stejný rodič = stejný prostor).
@@ -243,6 +269,7 @@ export function SolidLinkDriver({ nodes, settings, videoTexture, transitionProgr
     const sm = cfgSrc.solidMaterial;
     const pl = cfgSrc.particleLight;
     const sl = cfgSrc.solidLight;
+    const bl = { ...DEFAULT_BL, ...(cfgSrc.bakedLight || {}) };
     const tp = transitionProgress?.get ? transitionProgress.get() : (transitionProgress ?? 0);
     const inside = THREE.MathUtils.smoothstep(tp, 0.6, 1.0);
     const printP = printFx.progress;
@@ -261,6 +288,13 @@ export function SolidLinkDriver({ nodes, settings, videoTexture, transitionProgr
       u.uLookRim.value = sm.rim ?? 0.6;
       u.uLookDirect.value = sm.directLight ?? 0.35;
     }
+
+    // zapečené světlo
+    u.uBakeAmt.value = bl.enabled ? bl.intensity : 0;
+    u.uBakeDiffuse.value = bl.diffuse;
+    u.uBakeSpec.value = bl.specular;
+    u.uBakeGlow.value = bl.glow;
+    u.uBakeSheen.value = bl.sheen;
 
     g.updateWorldMatrix(true, false);
     const mw = g.matrixWorld;

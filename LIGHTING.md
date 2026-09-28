@@ -33,6 +33,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | F3 | **Particly → solid** | `SolidLink.jsx` (`patchSolidLook`) | stránka `particlesSettings.particleLight` (Xelith: intensity 4, radius 0.3, wrap 0.5, barva z videa) | 12 sond (shluky particlů), barva = průměr videa (1×1 pass za snímek). Difúze + lesk + Fresnel lem (`solidMaterial.rim`) na solidu. |
 | F4 | **Solid → particly** | `SolidLink.jsx` (`solidLightAt` v jelly) | `particlesSettings.solidLight` (Xelith: #ff6a2a, intensity 1, radius 0.35) | 8 sond ze solidu. Přisvítí jelly particly kolem solidu. |
 | F5 | **Žár tisku → particly** | `SolidLink.jsx` driver | `solidLight.printHeat` (1) × `printFx.uPrintHeat` | Jen sondy blízko řezu (`uPrintY`) svítí barvou `uPrintGlow`. |
+| F6 | **Zapečené rudé světlo na solidu** (od 2026-09-28) | GLB materiál `Xelith Solid Baked` (emisní textura `xelith_solid_light` 2048 + AO `xelith_solid_ao` 1024, UV `BakeUV`) → `SolidPrint.patchMaterial` (program `solidprint…B`) → `SolidLink.patchSolidLook(shader, baked)` | stránka `particlesSettings.bakedLight` (Xelith: intensity 4, specular 1.2, diffuse 1, sheen 1, glow 0.08; bez klíče výchozí intensity 1) | Cycles bake v `ASSETS/newworldorder9ai.blend`: světlo, které emisní díly **Obsah0** (rudá emise 15–21, magma, bílé Fresnel lemy – na webu z nich jsou particly) vrhají na kovový solid Obsah1 (DIFFUSE direct+indirect na bílé difuzi, svět 0, expozice p99,5 → emise 9,78 v GLB). Shader emisi nebere jako záři: `bakedLight` = světlo dopadající na povrch → difuze × barva + **odlesk** × specular (Fresnel k bílé pod úhlem, rozbité zrnem `lookGrain`), až za AO (stínění už obsahuje); jako čistá záře jen `glow`. AO (jen ze solidu, 0,12 m) standardně tlumí odrazy HDRI a přímá světla. Statické – když myš particly rozfouká, světlo zůstane (podklad pod nimi). Cena: +0,02 ms GPU (solid 0,26 → 0,28 ms při 2561×1478). |
 
 ### 1c. Samosvítící prvky (nejsou osvětlené, samy vydávají barvu)
 
@@ -43,7 +44,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 | E3 | **Skla TV / video na deskách** | `TvGlass.jsx` | Blender custom props `tvRim`, `tvRimStrength`, `tvMilk`, `tvBackground`… Video jako portál, lem skla je samosvit. |
 | E4 | **Video plátno INSIDE** | `VolumetricVideoBackground.jsx` | `volumetricVideo` (brightness 2.5, contrast 1.09, **scale 2.6, zDistance 3.2, blur 0.03, vignetteSoftness 0.8**) | Velké rozmazané světlo daleko za obsahem. Dřív to byl malý ostrý obdélník (scale 0.9, z 1.5) přímo za solidy = „divné světlo uprostřed“. |
 | E5 | **Žhavá vrstva tisku** | `SolidPrint.jsx` | `solidPrint` (`coolColor`, `glowColor` #ff5a12, `hotColor`, `intensity`, `band`) – emise na řezu solidu + žhavé jádro přes řez (back-faces) |
-| E6 | **Vlastní záře solidu** | `SolidLink.jsx` `uLookGlow` | `solidLight.selfGlow` (Xelith 0 = vypnuto) |
+| E6 | **Vlastní záře solidu** | `SolidLink.jsx` `uLookGlow` | `solidLight.selfGlow` (Xelith 0 = vypnuto). Podíl zapečeného světla F6 jako záře: `bakedLight.glow`. |
 | E7 | **Odtržené particly DNA** | `particles/shaders/escapeGlsl.js` + jelly / `ParticleMaterial` (emissive) | `particlePhysics.escape`: `color` (#ffb347), `tint` 0.7 přebarvení, `flash` 1.2 = záblesk v bodě zlomu jen o trochu přes normální jas (každý particl ve svůj čas, doznění `flashTime` 0.6 s, `pop` 0.4 zvětšení), `glow` 0.1 trvalá záře; před samovolným připojením (`life`) barva 1,5 s odeznívá. Záblesk chytá bloom **i god rays P1** (práh jasu 0.4). Dřív `flash` 6 + hromadné odtržení po přepnutí projektu = celá obrazovka žlutých paprsků; trvalá záře 0.35 dělala trvalé oranžové paprsky, proto 0.1. |
 
 ### 1d. Post-processing (`VolumetricLightPass` v `VolumetricLight.jsx`, jeden fullscreen shader + blur řetězec 1/4)
@@ -81,8 +82,8 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - Particly morphují DNA → tvar projektu (`transitionProgress`).
 
 ### 🎥 INSIDE — před tiskem / po dotištění (solidy stojí)
-- **Světla:** L1–L5 pořád existují (nic se nevypíná podle viewMode). Kamerový spot L2 svítí na solidy zepředu. Proto `solidMaterial.directLight` (Xelith 0.22) tlumí L2–L5 a `reflections` (0.25) tlumí L1.
-- **Solidy** (`MeshStandard` z GLB + `patchSolidLook`): vlastní barva/kov/drsnost, tiskové rýhy, zrno. F3 je přisvítí barvou videa z okolních particlů a přidá lem.
+- **Světla:** L1–L5 pořád existují (nic se nevypíná podle viewMode). Kamerový spot L2 svítí na solidy zepředu. Proto `solidMaterial.directLight` (Xelith 0.02 – víc = bílý flek na čele malého robota) tlumí L2–L5 a `reflections` (0.6 – lesk kovu místo spotu) tlumí L1.
+- **Solidy** (`MeshStandard` z GLB + `patchSolidLook`): Xelith od 2026-09-28 = tmavý lesklý kov jako v původním videu (#3c3b3d, kov 0.92, drsnost 0.28, zrno 0.35, **bez tiskových rýh** `layerLines` 0 – dřív béžový „tištěný“ plast #6f6962/0.4/0.52/rýhy 0.3). **F6** zapečené rudé světlo z emisních dílů (hlavní zdroj nálady), F3 je přisvítí barvou videa z okolních particlů a přidá lem.
 - **Particly (jelly):** F1 + F2, F4 přisvícení od solidu (oranžové #ff6a2a, síla 1).
 - **Samosvit:** E4 video plátno, E2 prach. E6 je vypnuté.
 - **Post:** P3 DOF (ostré solidy, rozmazané popředí a dálka), P6 mlha + kouř, (P7 světlo myši vypnuté), P8 popředová mlha, P9 ghost video, P13 jen v místech vody (rozráží mlhu všude, nad particly víří světlo jen za pohybu), P4 + P5, P2 jen × `insideBloom` (0), P12.
@@ -99,13 +100,13 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 
 ### 🛠 Editor
 - Globální světla: sekce Kamera (L2), Volumetric (L3 + P1), Inside fog (P6–P8), Background (E1). `cinematic` a `atmosphereDust` jsou zatím jen v configu / DEV override.
-- Per stránka: **Stránky → „💡 Solidy & světlo částic“** (F3, F4, F5, E6, materiál solidu), tlačítko „Výchozí předvolba (Xelith)“.
+- Per stránka: **Stránky → „💡 Solidy & světlo částic“** (F3, F4, F5, E6, F6 „🟥 Zapečené světlo (Blender)“, materiál solidu), tlačítko „Výchozí předvolba (Xelith)“.
 
 ---
 
 ## 3. DEV ladění světel (jen `npm run dev`)
 - `window.__cineOverride = {...}` → P2–P5 živě
-- `window.__linkOverride = { solidMaterial, particleLight, solidLight }`, `window.__linkFx` → F3–F6
+- `window.__linkOverride = { solidMaterial, particleLight, solidLight, bakedLight }` (nahradí celý config stránky), `window.__linkFx` → F3–F6, E6
 - `window.__printOverride = {...}`, `window.__printHold = 0..1`, `window.__printFx` → E5, P11
 - `window.__portalHold = 0..1` → zmrazí průlet (prolnutí ORBIT/INSIDE postu)
 - `window.__tvLightOverride = { strength, debug: 1 }` → P13 živě; `debug: 1` = obrazovka jen maska vody (zelená) + záře TV (červená), `debug: 2/3/4` = surový proud, `debug: 7` = mlha z prachu ×4, `8` = tBlur, `9` = INSIDE voda (červená) + zakrytí particly (zelená) + barvivo (modrá). `window.__tvLight` = pozice/velikost/viditelnost TV
@@ -119,6 +120,12 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - Hodnoty jsou přibližné (GPU jede v pipeline – malé průchody hned za velkým můžou „zdědit“ čekání), porovnávat součty a A/B, ne jednotlivé setiny.
 - **Záznamník záseků** (`src/debug/FrameProbe.js`, v DEV běží vždy): snímek výrazně delší než medián → `debug_logs/hitch_*.log` (+ `latest_hitch.log`, konzole `window.__hitches`): intervaly snímků kolem záseku, JS čas R3F snímku vs. mimo něj (React, GC…), čekání na kompilaci shaderů (`link`), uploady textur/bufferů, GPU čas snímku (s `?prof=1`), značky událostí (`mark()` – přepnutí projektu, GPGPU, video, kolize, `React render …` z `ProbeProfiler`), Long Animation Frames (≥ 50 ms). `?jsprof=1` = vzorky JS Self-Profiling API (hlavička `Document-Policy: js-profiling` z vite.config), souhrn přes všechny záseky: `window.__probe.jsTop()`.
 - DEV přepínače: `?strict=1` = React StrictMode (jinak vypnutý – 2× data a GPGPU), `?reacttracks=1` = nechat React stopy pro DevTools (jinak je `vite.config` skryje, stojí čas při commitu).
+
+### 🟥 Bake světla solidu v Blenderu (F6)
+- Skript `tools/bake_xelith.py` (headless, ~2 min na RTX): `"C:/Program Files/Blender Foundation/Blender 5.1/blender.exe" -b C:/WEBOS/ASSETS/newworldorder9ai.blend --python tools/bake_xelith.py -- 2048 512 <out.blend> <out.glb>` (argumenty: rozlišení, vzorky světla, výstup `-` = neukládat).
+- Co dělá: z `Particles_Xelith_Obsah1` (GN + Decimate) udělá hotový mesh se stejným jménem + UV `BakeUV` (smart project 66°, concave balení, ~49 % plochy, ~730 px/m); původní objekt přejmenuje na `Particles_Xelith_Obsah1 zdroj` a vyndá ze scény (fake user, Blender File → Objects) – **glTF exportér bere i vypnuté kolekce**, zdroj by jinak přidal 10,5 MB. Při opakování na 9ai souboru zdroj vrátí a bake udělá znovu. Obsah0 se pro bake dočasně bez GN (skutečné plochy s emisními materiály), svět na 0. Textury: `C:/WEBOS/ASSETS/bake/xelith_solid_light.jpg` (sRGB, 2048), `xelith_solid_ao.jpg` (1024). Export stejnými parametry jako `scene['glTF2ExportSettings']`; všechny ostatní nody GLB ověřeny bajtově shodné.
+- Procedurální „Scratched Metal“ se zapéct nevyplatí: po Decimate jsou UV rozsekané, barva vyšla jednolitě šedá a normála jen fasetový šum → barva a lesk kovu zůstávají parametry `solidMaterial`.
+- Změna emisních dílů / tvaru solidu v Blenderu = spustit skript znovu (ruční export GLB z 9ai souboru textury obsahuje, ale nepřepeče je).
 
 ## 4. Známé slabiny / nápady
 - L2 bez útlumu (decay 0) přepaluje nejbližší objekty. U solidů se to kompenzuje přes `directLight`, u ostatních GLB meshů ne.

@@ -66,13 +66,13 @@
         },
         "solidMaterial": {
           "enabled": true,
-          "color": "#6f6962",
-          "metalness": 0.4,
-          "roughness": 0.52,
-          "reflections": 0.25,
-          "directLight": 0.22,
-          "layerLines": 0.3,
-          "grain": 0.3,
+          "color": "#3c3b3d",
+          "metalness": 0.92,
+          "roughness": 0.28,
+          "reflections": 0.6,
+          "directLight": 0.02,
+          "layerLines": 0,
+          "grain": 0.35,
           "rim": 0.8
         },
         "particleLight": {
@@ -90,6 +90,14 @@
           "radius": 0.35,
           "printHeat": 1,
           "selfGlow": 0
+        },
+        "bakedLight": {
+          "enabled": true,
+          "intensity": 4,
+          "diffuse": 1,
+          "specular": 1.2,
+          "glow": 0.08,
+          "sheen": 1
         }
       },
       "videoUrl": "video/reklama xelith.mp4"

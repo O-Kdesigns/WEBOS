@@ -6,9 +6,10 @@ import { DenseSlider, DenseToggle, DenseColor } from './OrbitSettingsPanel';
 
 // Výchozí předvolba (naladěno na Xelith) – tlačítko ji zkopíruje do nového projektu.
 export const SOLID_LINK_PRESET = {
-  solidMaterial: { enabled: true, color: '#6f6962', metalness: 0.4, roughness: 0.52, reflections: 0.25, directLight: 0.22, layerLines: 0.3, grain: 0.3, rim: 0.8 },
+  solidMaterial: { enabled: true, color: '#3c3b3d', metalness: 0.92, roughness: 0.28, reflections: 0.6, directLight: 0.02, layerLines: 0, grain: 0.35, rim: 0.8 },
   particleLight: { enabled: true, useVideoColor: true, color: '#ffffff', intensity: 4, radius: 0.3, wrap: 0.5 },
-  solidLight: { enabled: true, color: '#ff6a2a', intensity: 1, radius: 0.35, printHeat: 1, selfGlow: 0 }
+  solidLight: { enabled: true, color: '#ff6a2a', intensity: 1, radius: 0.35, printHeat: 1, selfGlow: 0 },
+  bakedLight: { enabled: true, intensity: 4, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1 }
 };
 
 const SubTitle = ({ color, children }) => (
@@ -22,19 +23,21 @@ export function SolidLinkPanel({ settings, onUpdate, onReplace }) {
   const sm = settings.solidMaterial || {};
   const pl = settings.particleLight || {};
   const sl = settings.solidLight || {};
+  const bl = settings.bakedLight || {};
   // změna jednoho pole = nový objekt (chybějící hodnoty doplní předvolba, ať se po zapnutí nic neskokově nemění)
   const set = (key, cur, def) => (field, value) => onUpdate(key, { ...def, ...cur, [field]: value });
   const setSm = set('solidMaterial', sm, P.solidMaterial);
   const setPl = set('particleLight', pl, P.particleLight);
   const setSl = set('solidLight', sl, P.solidLight);
+  const setBl = set('bakedLight', bl, P.bakedLight);
   const v = (obj, def, k) => obj[k] ?? def[k];
 
   return (
     <div>
       <button
-        onClick={() => onReplace({ solidMaterial: { ...P.solidMaterial }, particleLight: { ...P.particleLight }, solidLight: { ...P.solidLight } })}
+        onClick={() => onReplace({ solidMaterial: { ...P.solidMaterial }, particleLight: { ...P.particleLight }, solidLight: { ...P.solidLight }, bakedLight: { ...P.bakedLight } })}
         style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.4)', color: '#f59e0b', padding: '4px 12px', fontSize: '0.75rem', borderRadius: '4px', cursor: 'pointer', marginBottom: '8px' }}
-        title="Nastaví všechny tři skupiny na výchozí hodnoty (naladěno na Xelith)"
+        title="Nastaví všechny skupiny na výchozí hodnoty (naladěno na Xelith)"
       >↺ Výchozí předvolba (Xelith)</button>
 
       <SubTitle color="#e2e8f0">🧱 Materiál solidu</SubTitle>
@@ -48,6 +51,16 @@ export function SolidLinkPanel({ settings, onUpdate, onReplace }) {
         <DenseSlider label="Tiskové vrstvy" desc="Vodorovné rýhy po 3D tisku (hustota = počet vrstev tisku)." min={0} max={1.5} step={0.01} value={v(sm, P.solidMaterial, 'layerLines')} color="#e2e8f0" onChange={x => setSm('layerLines', x)} />
         <DenseSlider label="Zrno povrchu" desc="Jemná nerovnost lesku po povrchu." min={0} max={1} step={0.01} value={v(sm, P.solidMaterial, 'grain')} color="#e2e8f0" onChange={x => setSm('grain', x)} />
         <DenseSlider label="Lem od částic" desc="Jak moc se světlo částic chytá na hranách solidu (Fresnel)." min={0} max={2} step={0.01} value={v(sm, P.solidMaterial, 'rim')} color="#e2e8f0" onChange={x => setSm('rim', x)} />
+      </>)}
+
+      <SubTitle color="#dc2626">🟥 Zapečené světlo (Blender)</SubTitle>
+      <DenseToggle label="Zapnout" desc="Solid z GLB s emisní texturou (Xelith: rudé světlo z emisních dílů, zapečené v Cycles). Emise se čte jako světlo dopadající na kov, ne jako záře. Vypnuto = bez zapečeného světla." checked={v(bl, P.bakedLight, 'enabled')} color="#dc2626" onChange={x => setBl('enabled', x)} />
+      {v(bl, P.bakedLight, 'enabled') && (<>
+        <DenseSlider label="Síla" desc="Celková síla zapečeného světla." min={0} max={10} step={0.05} value={v(bl, P.bakedLight, 'intensity')} color="#dc2626" onChange={x => setBl('intensity', x)} />
+        <DenseSlider label="V odlesku" desc="Kolik světla se ukáže v lesku kovu (hlavní složka u kovu)." min={0} max={4} step={0.05} value={v(bl, P.bakedLight, 'specular')} color="#dc2626" onChange={x => setBl('specular', x)} />
+        <DenseSlider label="Difuzně" desc="Světlo × barva povrchu (u kovu slabé, víc u nekovu)." min={0} max={4} step={0.05} value={v(bl, P.bakedLight, 'diffuse')} color="#dc2626" onChange={x => setBl('diffuse', x)} />
+        <DenseSlider label="Pod úhlem" desc="Na hranách a plochách pod ostrým úhlem se odlesk blíží bílé (Fresnel)." min={0} max={1} step={0.01} value={v(bl, P.bakedLight, 'sheen')} color="#dc2626" onChange={x => setBl('sheen', x)} />
+        <DenseSlider label="Záře" desc="Podíl, který svítí sám (nezávisle na materiálu). Vyšší = jako plochá emise." min={0} max={1} step={0.01} value={v(bl, P.bakedLight, 'glow')} color="#dc2626" onChange={x => setBl('glow', x)} />
       </>)}
 
       <SubTitle color="#ef4444">✨ Částice osvětlují solid</SubTitle>
