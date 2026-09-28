@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { getFluid } from './components/particles/ParticleFluid';
 import { particleSystems } from './components/particles/utils';
 import { portalFx } from './PortalTransition';
+import { TEX_LOD0 } from './glslTexLod0';
 
 // Jádro DNA (ORBIT): skleněná „páteř“ UVNITŘ obou vláken šroubovice a UVNITŘ příček mezi nimi – skleněné
 // destičky + energetická nit s pulzy. Schovaná v particlech; ukáže se jen tam, odkud particly odletěly,
@@ -52,10 +53,10 @@ export const DNA_CORE_DEFAULTS = {
   tileAwayMin: 0.24,  // world – tyčinky počítají particly až za touhle vzdáleností od domova (linie od awayMin)
   tileAwayMax: 0.4,
   appearTwist: 3.5,   // rad – o kolik se tyčinka při objevení zašroubuje (střídavě na obě strany)
-  // tyčinky se kolem kurzoru pootočí podle pohybu myši (pružina s dozvukem)
-  spinMouse: 0.5,     // rad na (NDC/s) rychlosti myši
-  spinRadius: 0.45,   // NDC – dosah kolem kurzoru
-  spinMax: 1.4,       // rad – strop pootočení
+  // tyčinky roztáčí proud 2D vody (myš) – každá má vlastní úhel a úhlovou rychlost, dlouho dobíhá
+  spinMouse: 30,      // rad/s² na (NDC/s) proudu přes tyčinku (kolmo na její osu na obrazovce)
+  spinDamp: 0.6,      // 1/s – útlum otáčení (menší = delší dojezd)
+  spinMax: 16,        // rad/s – strop úhlové rychlosti (25 = 0,42 rad/snímek -> stroboskop)
   settle: 4,          // s po posledním pohybu vody, kdy se odhalení ještě počítá (particly se vracejí)
   // obálka rozvíření z rychlosti myši – už jen pro útlum god rays (VolumetricLight)
   stirMin: 0.03,
@@ -216,9 +217,9 @@ const tileVert = HELIX_GLSL + /* glsl */`
   attribute vec3 aInst;
   attribute float aRung;
   uniform float uRungScale;
-  uniform vec4 uSpinP;    // pootočení od myši, myš x, y (NDC), dosah
+  attribute vec2 aSt;     // texel stavu otáčení této tyčinky
+  uniform sampler2D tSpin; // r = úhel od myši (simulace spinFrag)
   uniform float uAppearTwist; // rad – zašroubování při objevení
-  uniform float uAspect;
   varying vec3 vP;        // pozice v destičce, -1..1 na každé ose
   varying vec3 vN;
   varying vec3 vV;
@@ -245,11 +246,7 @@ const tileVert = HELIX_GLSL + /* glsl */`
     float rot = 1.0 - lv;
     rot = rot * rot * (3.0 - 2.0 * rot);
     vReveal = smoothstep(0.0, 0.25, lv);
-    // pootočení od myši: jen kolem kurzoru (podle polohy středu tyčinky na obrazovce)
-    vec4 cc = projectionMatrix * viewMatrix * vec4(C, 1.0);
-    vec2 dm = (cc.xy / max(cc.w, 1e-4) - uSpinP.yz) * vec2(uAspect, 1.0);
-    float fall = exp(-dot(dm, dm) / (uSpinP.w * uSpinP.w));
-    float spin = aInst.z + rot * uAppearTwist * (h > 0.5 ? 1.0 : -1.0) + uSpinP.x * fall * (0.8 + 0.4 * h);
+    float spin = aInst.z + rot * uAppearTwist * (h > 0.5 ? 1.0 : -1.0) + texture2D(tSpin, aSt).x;
     float cs = cos(spin), sn = sin(spin);
     vec3 W = cs * N + sn * B;
     vec3 D = -sn * N + cs * B;
@@ -289,6 +286,51 @@ const tileFrag = PULSE_GLSL + /* glsl */`
     vec3 col = uGlass * (0.1 + fres * 0.6 + edge * 0.7 + top * 0.35) + energy * (0.5 + edge * 1.2 + fres * 0.5);
     float alpha = clamp(0.2 + fres * 0.45 + edge * 0.6 + top * 0.2 + p * 0.12, 0.0, 1.0) * uOpacity;
     gl_FragColor = vec4(col * uIntensity, alpha * vReveal);
+  }
+`;
+
+// Otáčení tyčinek: 1 texel = 1 tyčinka (tTiles: y, druh, poloha na příčce, platná). Proud 2D vody v místě
+// tyčinky na obrazovce, kolmo na její osu (průmět), ji roztočí; útlum -> dlouhý dojezd. r = úhel, g = rychlost.
+const spinVert = /* glsl */`
+  varying vec2 vUv;
+  void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+`;
+const spinFrag = TEX_LOD0 + HELIX_GLSL + /* glsl */`
+  uniform sampler2D tPrev;
+  uniform sampler2D tTiles;
+  uniform sampler2D tFluid;
+  uniform vec2 uFluidTexel;
+  uniform float uFluidOn;
+  uniform mat4 uVP;
+  uniform float uAspect;
+  uniform float uDt;
+  uniform vec3 uSpin;     // síla, útlum, strop rychlosti
+  varying vec2 vUv;
+  void main() {
+    vec4 st = texture2D(tPrev, vUv);
+    vec4 td = texture2D(tTiles, vUv);
+    float ang = st.x, vel = st.y;
+    if (td.w > 0.5 && uFluidOn > 0.5) {
+      vec3 C, T, N, B;
+      if (td.y < 1.5) helixFrame(td.x, td.y, C, T, N, B);
+      else rungFrame(td.x, td.z, C, T, N, B);
+      vec4 c0 = uVP * vec4(C, 1.0), c1 = uVP * vec4(C + T * 0.2, 1.0);
+      if (c0.w > 0.05 && c1.w > 0.05) {
+        vec2 n0 = c0.xy / c0.w, n1 = c1.xy / c1.w;
+        vec2 suv = n0 * 0.5 + 0.5;
+        if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0) {
+          vec3 fl = texture2D(tFluid, suv).xyz;
+          vec2 f = fl.xy * uFluidTexel * 2.0 * smoothstep(0.05, 0.5, fl.z) * vec2(uAspect, 1.0); // NDC/s
+          vec2 a = (n1 - n0) * vec2(uAspect, 1.0);
+          float al = length(a);
+          // proud kolmo na osu tyčinky ji roztočí (osa mířící do kamery = nic)
+          if (al > 1e-4) vel += (a.x * f.y - a.y * f.x) / al * smoothstep(0.01, 0.06, al) * uSpin.x * uDt;
+        }
+      }
+    }
+    vel = clamp(vel * exp(-uSpin.y * uDt), -uSpin.z, uSpin.z);
+    ang = mod(ang + vel * uDt + 3.14159265, 6.2831853) - 3.14159265;
+    gl_FragColor = vec4(ang, vel, 0.0, 1.0);
   }
 `;
 
@@ -468,10 +510,32 @@ export function DnaCore({ appConfig }) {
     tileGeo.setAttribute('aInst', new THREE.InstancedBufferAttribute(new Float32Array(total * 3), 3));
     tileGeo.setAttribute('aRung', new THREE.InstancedBufferAttribute(new Float32Array(total), 1));
     tileGeo.instanceCount = perStrand * 2;
+    // stav otáčení: 1 texel na tyčinku
+    const S = Math.ceil(Math.sqrt(total));
+    const stUv = new Float32Array(total * 2);
+    for (let i = 0; i < total; i++) { stUv[i * 2] = ((i % S) + 0.5) / S; stUv[i * 2 + 1] = (Math.floor(i / S) + 0.5) / S; }
+    tileGeo.setAttribute('aSt', new THREE.InstancedBufferAttribute(stUv, 2));
+    const tilesTex = new THREE.DataTexture(new Float32Array(S * S * 4), S, S, THREE.RGBAFormat, THREE.FloatType);
+    tilesTex.needsUpdate = true;
+    const mkState = () => new THREE.WebGLRenderTarget(S, S, {
+      type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+      depthBuffer: false, stencilBuffer: false,
+    });
+    const spinRT = [mkState(), mkState()];
+    const spinMat = new THREE.ShaderMaterial({
+      vertexShader: spinVert, fragmentShader: spinFrag,
+      uniforms: { ...shared, tPrev: { value: null }, tTiles: { value: tilesTex }, tFluid: { value: null }, uFluidTexel: { value: new THREE.Vector2() },
+        uFluidOn: { value: 0 }, uVP: { value: new THREE.Matrix4() }, uAspect: { value: 1 }, uDt: { value: 0 }, uSpin: { value: new THREE.Vector3() } },
+      depthTest: false, depthWrite: false,
+    });
+    const spinScene = new THREE.Scene();
+    const spinQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), spinMat);
+    spinQuad.frustumCulled = false;
+    spinScene.add(spinQuad);
     const tileMat = new THREE.ShaderMaterial({
       vertexShader: tileVert, fragmentShader: tileFrag,
       uniforms: { ...shared, uGlass: { value: new THREE.Color() }, uOpacity: { value: 1 }, uRungScale: { value: 0.7 },
-        uSpinP: { value: new THREE.Vector4(0, 9, 9, 0.45) }, uAspect: { value: 1 }, uAppearTwist: { value: 3.5 } },
+        tSpin: { value: spinRT[0].texture }, uAppearTwist: { value: 3.5 } },
       transparent: true, depthWrite: false, toneMapped: false,
     });
     const tube = tubeGeometry(700, 48, 8);
@@ -480,13 +544,15 @@ export function DnaCore({ appConfig }) {
       uniforms: { ...shared, uCoreness: { value: coreness }, uRadius: { value: 0.01 } },
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
     });
-    return { tileGeo, tileMat, tube, threadMat: mkTube(1), glowMat: mkTube(0), perStrand, perRung, instKey: '' };
+    return { tileGeo, tileMat, tube, threadMat: mkTube(1), glowMat: mkTube(0), perStrand, perRung, instKey: '',
+      S, tilesTex, spinRT, spinMat, spinScene, spinQuad, spinFresh: true };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geoKey, shared]);
 
   useEffect(() => () => {
     parts.tileGeo.dispose(); parts.tileMat.dispose(); parts.tube.dispose();
     parts.threadMat.dispose(); parts.glowMat.dispose();
+    parts.tilesTex.dispose(); parts.spinRT.forEach((t) => t.dispose()); parts.spinMat.dispose(); parts.spinQuad.geometry.dispose();
   }, [parts]);
   useEffect(() => () => { acc.rt.dispose(); acc.mat.dispose(); }, [acc]);
 
@@ -602,23 +668,37 @@ export function DnaCore({ appConfig }) {
       }
       parts.tileGeo.instanceCount = o;
       a.needsUpdate = true; ar.needsUpdate = true;
+      const td = parts.tilesTex.image.data;
+      td.fill(0);
+      for (let i = 0; i < o; i++) { td[i * 4] = a.array[i * 3]; td[i * 4 + 1] = a.array[i * 3 + 1]; td[i * 4 + 2] = ar.array[i]; td[i * 4 + 3] = 1; }
+      parts.tilesTex.needsUpdate = true;
     }
-    // pootočení tyčinek od myši: tlumená pružina (mírně podtlumená -> protočí a trochu se zhoupne zpět)
+    // otáčení tyčinek: simulace (1 texel = 1 tyčinka), proud vody je roztočí, dlouho dobíhají
     {
-      const p = state.pointer;
-      // skok kurzoru (vjetí do okna odjinud) není tah
-      const jump = s.px === undefined || dt <= 0 || Math.hypot(p.x - s.px, p.y - s.py) > Math.max(0.5, 40 * dt);
-      const vx = jump ? 0 : (p.x - s.px) / dt, vy = jump ? 0 : (p.y - s.py) / dt;
-      s.px = p.x; s.py = p.y;
-      const k = 1 - Math.exp(-dt / 0.2);   // myš vyhlazená ~0,2 s -> tyčinky se rozjíždějí s setrvačností
-      s.mvx = (s.mvx || 0) + (vx - (s.mvx || 0)) * k;
-      s.mvy = (s.mvy || 0) + (vy - (s.mvy || 0)) * k;
-      const drive = THREE.MathUtils.clamp((s.mvx + s.mvy * 0.6) * c.spinMouse, -c.spinMax, c.spinMax);
-      const w = 3.2, z = 0.28;             // pomalá, málo tlumená pružina -> dlouhý dojezd a zhoupnutí
-      s.kv = (s.kv || 0) + (w * w * (drive - (s.kick || 0)) - 2 * z * w * (s.kv || 0)) * dt;
-      s.kick = THREE.MathUtils.clamp((s.kick || 0) + s.kv * dt, -c.spinMax, c.spinMax);
-      parts.tileMat.uniforms.uSpinP.value.set(s.kick, p.x, p.y, c.spinRadius);
-      parts.tileMat.uniforms.uAspect.value = state.size.width / Math.max(1, state.size.height);
+      const sm = parts.spinMat.uniforms;
+      const cam = state.camera;
+      sm.uVP.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      sm.uAspect.value = state.size.width / Math.max(1, state.size.height);
+      sm.uDt.value = dt;
+      sm.uSpin.value.set(c.spinMouse, c.spinDamp, c.spinMax);
+      sm.tFluid.value = fl.velocity || null;
+      sm.uFluidOn.value = fl.velocity ? 1 : 0;
+      if (fl.texel) sm.uFluidTexel.value.copy(fl.texel);
+      const prev = gl.getRenderTarget();
+      if (parts.spinFresh) {
+        parts.spinFresh = false;
+        const col2 = gl.getClearColor(s.tmpCol2 || (s.tmpCol2 = new THREE.Color())), a2 = gl.getClearAlpha();
+        gl.setClearColor(0x000000, 0);
+        parts.spinRT.forEach((t) => { gl.setRenderTarget(t); gl.clear(true, false, false); });
+        gl.setClearColor(col2, a2);
+      }
+      sm.tPrev.value = parts.spinRT[0].texture;
+      gl.setRenderTarget(parts.spinRT[1]);
+      gl.render(parts.spinScene, acc.cam);
+      gl.setRenderTarget(prev);
+      parts.spinRT.reverse();
+      parts.tileMat.uniforms.tSpin.value = parts.spinRT[0].texture;
+      if (import.meta.env.DEV) s.spinRT = parts.spinRT;
     }
     shared.uLevels.value.set(c.lineFrom, Math.max(c.lineFrom + 0.01, c.lineTo), c.tileFrom, Math.max(c.tileFrom + 0.01, c.tileTo));
     shared.uTime.value = state.clock.elapsedTime;
