@@ -573,7 +573,7 @@ function mergeFluidCfg(prev, src) {
 // Klid DNA v ORBITu (config particlePhysics.dnaForce / dnaLeash, editor Uvnitř → Fyzika)
 export const DNA_HOLD_DEFAULTS = {
   dnaForce: 0.6,   // násobek síly vody jen v klidu DNA (projekt INSIDE má plnou)
-  dnaLeash: 0.35,  // world – jak daleko od místa v DNA smí particl odletět (každý 0.6–1.4×), 0 = bez vodítka
+  dnaLeash: 0.45,  // world – jak daleko od místa v DNA smí particl odletět (každý 0.6–1.4×), 0 = bez vodítka (0.35 -> 0.45: víc místa pro odhalení jádra)
   // návrat v klidu DNA pomalejší než v projektu -> particly chvíli „visí“ venku a je vidět jádro (Oliver: moc krátké)
   dnaReturnDelay: 0.7, // s – zdržení po strčení vodou (projekt: returnDelay 0.15)
   dnaReturnRamp: 1.3,  // s – rozjezd návratu (projekt: returnRamp 0.8)

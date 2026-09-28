@@ -22,7 +22,7 @@ import { portalFx } from './PortalTransition';
 export const DNA_CORE_DEFAULTS = {
   enabled: true,
   rest: 0,            // viditelnost v klidu (0 = jen kde particly odletěly)
-  intensity: 1.4,
+  intensity: 1.8,
   color: '#b8f2ff',   // energie (nit, pulzy, světlo v hranách skla)
   glass: '#c4d6e0',
   glassOpacity: 1,
@@ -47,10 +47,13 @@ export const DNA_CORE_DEFAULTS = {
   // dvě úrovně (t = 0..1 mezi revealFrom a revealFull): 1) linie se zhmotní z jisker, 2) tyčinky vyrostou 0 -> 1
   lineFrom: 0,
   lineTo: 0.5,
-  tileFrom: 0.35,
-  tileTo: 1,
+  tileFrom: 0,
+  tileTo: 0.7,
+  tileAwayMin: 0.24,  // world – tyčinky počítají particly až za touhle vzdáleností od domova (linie od awayMin)
+  tileAwayMax: 0.4,
+  appearTwist: 3.5,   // rad – o kolik se tyčinka při objevení zašroubuje (střídavě na obě strany)
   // tyčinky se kolem kurzoru pootočí podle pohybu myši (pružina s dozvukem)
-  spinMouse: 0.35,    // rad na (NDC/s) rychlosti myši
+  spinMouse: 0.5,     // rad na (NDC/s) rychlosti myši
   spinRadius: 0.45,   // NDC – dosah kolem kurzoru
   spinMax: 1.4,       // rad – strop pootočení
   settle: 4,          // s po posledním pohybu vody, kdy se odhalení ještě počítá (particly se vracejí)
@@ -94,18 +97,19 @@ const HELIX_GLSL = /* glsl */`
     U = vec3(0.0, 1.0, 0.0);
     V = normalize(cross(A, U));
   }
-  float revealRow(float x, float v) {
+  // x = linie (podíl particlů za awayMin..awayMax), y = tyčinky (podíl za větší tileAway…)
+  vec2 revealRow(float x, float v) {
     float o = uRevealP.w * 1.5;
     vec4 m = texture2D(tReveal, vec2(x, v)) + 0.5 * (texture2D(tReveal, vec2(x - o, v)) + texture2D(tReveal, vec2(x + o, v)));
     // úseky s málo particly (konce vláken) necitlivé – jeden odtržený particl by tam držel páteř viditelnou
-    float f = m.x / max(m.y, 48.0);
-    return max(clamp((f - uRevealP.x) / (uRevealP.y - uRevealP.x), 0.0, 1.0), uRevealP.z);
+    vec2 f = m.xz / max(m.y, 48.0);
+    return max(clamp((f - uRevealP.x) / (uRevealP.y - uRevealP.x), 0.0, 1.0), vec2(uRevealP.z));
   }
-  float revealAt(float y, float s) {
+  vec2 revealAt(float y, float s) {
     float x = (y - uYRange.x) / (uYRange.y - uYRange.x);
     return revealRow(x, (s < 0.5 ? 0.5 : 1.5) / REVEAL_ROWS);
   }
-  float revealRung(float y, float u) {
+  vec2 revealRung(float y, float u) {
     float x = (y - uYRange.x) / (uYRange.y - uYRange.x);
     float slot = clamp((u * 0.5 + 0.5) * RUNG_SLOTS - 0.5, 0.0, RUNG_SLOTS - 1.0);
     return revealRow(x, (2.5 + slot) / REVEAL_ROWS);
@@ -158,7 +162,7 @@ const tubeVert = HELIX_GLSL + /* glsl */`
       wp = C + dir * uRadius;
       vY = y;
       vCoord = y * 1.3 + position.z * 17.0;
-      t = revealAt(y, position.z);
+      t = revealAt(y, position.z).x;
     } else {
       int i = int(position.z - 2.0 + 0.5);
       float y = uRungY[i];
@@ -169,7 +173,7 @@ const tubeVert = HELIX_GLSL + /* glsl */`
       wp = C + dir * uRadius;
       vY = y - (1.0 - abs(u)) * uHelix.z;  // pulz z vlákna pokračuje příčkou ke středu
       vCoord = u * uHelix.z + float(i) * 5.31 + 40.0;
-      t = float(i) < uRungCount ? revealRung(y, u) : 0.0;
+      t = float(i) < uRungCount ? revealRung(y, u).x : 0.0;
     }
     vReveal = smoothstep(uLevels.x, uLevels.y, t);   // úroveň 1: linie
     vN = dir;
@@ -213,6 +217,7 @@ const tileVert = HELIX_GLSL + /* glsl */`
   attribute float aRung;
   uniform float uRungScale;
   uniform vec4 uSpinP;    // pootočení od myši, myš x, y (NDC), dosah
+  uniform float uAppearTwist; // rad – zašroubování při objevení
   uniform float uAspect;
   varying vec3 vP;        // pozice v destičce, -1..1 na každé ose
   varying vec3 vN;
@@ -225,23 +230,26 @@ const tileVert = HELIX_GLSL + /* glsl */`
     if (aInst.y < 1.5) {
       helixFrame(aInst.x, aInst.y, C, T, N, B);
       vY = aInst.x;
-      t = revealAt(aInst.x, aInst.y);
+      t = revealAt(aInst.x, aInst.y).y;
     } else {
       rungFrame(aInst.x, aRung, C, T, N, B);  // T = osa příčky, N = nahoru
       vY = aInst.x - (1.0 - abs(aRung)) * uHelix.z;
-      t = revealRung(aInst.x, aRung);
+      t = revealRung(aInst.x, aRung).y;
     }
     // úroveň 2: tyčinky vyrostou 0 -> 1 (každá trochu jindy, s přestřelením) a při tom se zašroubují
     float h = fract(sin(aInst.x * 12.9898 + aRung * 78.233 + aInst.y * 3.17) * 43758.5453);
     float lv = clamp(smoothstep(uLevels.z, uLevels.w, t) * 1.35 - h * 0.35, 0.0, 1.0);
-    float q = lv - 1.0;
+    // velikost doroste v první ~60 % (přestřelení), zašroubování dobíhá až do konce -> je vidět
+    float q = min(lv / 0.6, 1.0) - 1.0;
     float sc = 1.0 + 2.02 * q * q * q + 1.02 * q * q;   // ease-out-back (mírné přestřelení)
-    vReveal = smoothstep(0.0, 0.35, lv);
+    float rot = 1.0 - lv;
+    rot = rot * rot * (3.0 - 2.0 * rot);
+    vReveal = smoothstep(0.0, 0.25, lv);
     // pootočení od myši: jen kolem kurzoru (podle polohy středu tyčinky na obrazovce)
     vec4 cc = projectionMatrix * viewMatrix * vec4(C, 1.0);
     vec2 dm = (cc.xy / max(cc.w, 1e-4) - uSpinP.yz) * vec2(uAspect, 1.0);
     float fall = exp(-dot(dm, dm) / (uSpinP.w * uSpinP.w));
-    float spin = aInst.z + (1.0 - lv) * 2.2 + uSpinP.x * fall * (0.8 + 0.4 * h);
+    float spin = aInst.z + rot * uAppearTwist * (h > 0.5 ? 1.0 : -1.0) + uSpinP.x * fall * (0.8 + 0.4 * h);
     float cs = cos(spin), sn = sin(spin);
     vec3 W = cs * N + sn * B;
     vec3 D = -sn * N + cs * B;
@@ -295,7 +303,9 @@ const accVert = /* glsl */`
   uniform vec4 uHelix;
   uniform vec2 uYRange;
   uniform vec4 uAcc;      // band, awayMin, awayMax, v klidu DNA (1/0)
+  uniform vec2 uAcc2;     // tileAwayMin, tileAwayMax
   varying float vW;
+  varying float vW2;
   void main() {
     gl_PointSize = 1.0;
     vec4 dna = texture2D(tDna, aUv);
@@ -305,7 +315,9 @@ const accVert = /* glsl */`
     vec2 c0 = uHelix.z * dirT;
     float d0 = length(dna.xz - c0), d1 = length(dna.xz + c0);
     float x = (dna.y - uYRange.x) / (uYRange.y - uYRange.x);
-    vW = smoothstep(uAcc.y, uAcc.z, length(p.xyz - dna.xyz));
+    float dd = length(p.xyz - dna.xyz);
+    vW = smoothstep(uAcc.y, uAcc.z, dd);
+    vW2 = smoothstep(uAcc2.x, uAcc2.y, dd);
     float row;
     if (min(d0, d1) < uAcc.x) row = d0 < d1 ? 0.0 : 1.0;
     else {
@@ -318,7 +330,8 @@ const accVert = /* glsl */`
 `;
 const accFrag = /* glsl */`
   varying float vW;
-  void main() { gl_FragColor = vec4(vW, 1.0, 0.0, 1.0); }
+  varying float vW2;
+  void main() { gl_FragColor = vec4(vW, 1.0, vW2, 1.0); }
 `;
 
 // Šroubovice z DNA cílů: vlákna = particly na vnějším plášti (r > 0,85 × p90), úhel osy vláken po řezech Y
@@ -431,7 +444,7 @@ export function DnaCore({ appConfig }) {
     });
     const mat = new THREE.ShaderMaterial({
       vertexShader: accVert, fragmentShader: accFrag,
-      uniforms: { tPos: { value: null }, tDna: { value: null }, uHelix: shared.uHelix, uYRange: shared.uYRange, uAcc: { value: new THREE.Vector4() } },
+      uniforms: { tPos: { value: null }, tDna: { value: null }, uHelix: shared.uHelix, uYRange: shared.uYRange, uAcc: { value: new THREE.Vector4() }, uAcc2: { value: new THREE.Vector2() } },
       blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
       blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
       depthTest: false, depthWrite: false, transparent: true,
@@ -458,7 +471,7 @@ export function DnaCore({ appConfig }) {
     const tileMat = new THREE.ShaderMaterial({
       vertexShader: tileVert, fragmentShader: tileFrag,
       uniforms: { ...shared, uGlass: { value: new THREE.Color() }, uOpacity: { value: 1 }, uRungScale: { value: 0.7 },
-        uSpinP: { value: new THREE.Vector4(0, 9, 9, 0.45) }, uAspect: { value: 1 } },
+        uSpinP: { value: new THREE.Vector4(0, 9, 9, 0.45) }, uAspect: { value: 1 }, uAppearTwist: { value: 3.5 } },
       transparent: true, depthWrite: false, toneMapped: false,
     });
     const tube = tubeGeometry(700, 48, 8);
@@ -557,6 +570,7 @@ export function DnaCore({ appConfig }) {
       u.tPos.value = sys.gpuCompute.getCurrentRenderTarget(sys.posVar).texture;
       u.tDna.value = pu.tDnaPosition.value;
       u.uAcc.value.set(c.band, c.awayMin, c.awayMax, pu.uTransitionProgress.value < 0.001 ? 1 : 0);
+      u.uAcc2.value.set(c.tileAwayMin, Math.max(c.tileAwayMin + 0.01, c.tileAwayMax));
       acc.scene.add(sys.spinePoints);
       gl.render(acc.scene, acc.cam);
       acc.scene.remove(sys.spinePoints);
@@ -596,11 +610,11 @@ export function DnaCore({ appConfig }) {
       const jump = s.px === undefined || dt <= 0 || Math.hypot(p.x - s.px, p.y - s.py) > Math.max(0.5, 40 * dt);
       const vx = jump ? 0 : (p.x - s.px) / dt, vy = jump ? 0 : (p.y - s.py) / dt;
       s.px = p.x; s.py = p.y;
-      const k = 1 - Math.exp(-dt / 0.06);
+      const k = 1 - Math.exp(-dt / 0.2);   // myš vyhlazená ~0,2 s -> tyčinky se rozjíždějí s setrvačností
       s.mvx = (s.mvx || 0) + (vx - (s.mvx || 0)) * k;
       s.mvy = (s.mvy || 0) + (vy - (s.mvy || 0)) * k;
       const drive = THREE.MathUtils.clamp((s.mvx + s.mvy * 0.6) * c.spinMouse, -c.spinMax, c.spinMax);
-      const w = 7, z = 0.35;
+      const w = 3.2, z = 0.28;             // pomalá, málo tlumená pružina -> dlouhý dojezd a zhoupnutí
       s.kv = (s.kv || 0) + (w * w * (drive - (s.kick || 0)) - 2 * z * w * (s.kv || 0)) * dt;
       s.kick = THREE.MathUtils.clamp((s.kick || 0) + s.kv * dt, -c.spinMax, c.spinMax);
       parts.tileMat.uniforms.uSpinP.value.set(s.kick, p.x, p.y, c.spinRadius);
@@ -616,6 +630,7 @@ export function DnaCore({ appConfig }) {
     parts.tileMat.uniforms.uGlass.value.set(c.glass);
     parts.tileMat.uniforms.uOpacity.value = c.glassOpacity;
     parts.tileMat.uniforms.uRungScale.value = c.rungScale;
+    parts.tileMat.uniforms.uAppearTwist.value = c.appearTwist;
     parts.threadMat.uniforms.uRadius.value = c.threadRadius;
     parts.glowMat.uniforms.uRadius.value = c.glowRadius;
   });
