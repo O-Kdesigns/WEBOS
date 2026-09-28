@@ -41,7 +41,11 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
   const enableBloom = bl.enableBloom !== false;
   // Barva textu (šedá) je proti pozadí míchána pomocí color-dodge (Active Theory efekt) –
   // stejný text tak na světlém pozadí "vysvítí" a na tmavém zůstane tlumený, viz LIGHTING.md
-  const blendMode = bl.blendMode || 'color-dodge';
+  // ?hudblend=0 v URL = blend vypnutý (A/B test výkonu bez sahání do configu)
+  const blendOff = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('hudblend') === '0';
+  const blendMode = blendOff ? 'normal' : (bl.blendMode || 'color-dodge');
+  // krytí tiché kopie textu pod dodge vrstvou = minimální jas písmen na černém pozadí (viz .hud-dark-floor)
+  const darkFloor = Math.min(1, Math.max(0, bl.darkFloor ?? 0.14));
   const fontSize = bl.fontSize ?? 14;
   const fontWeight = bl.fontWeight ?? 400;
   const letterSpacing = bl.letterSpacing ?? 0;
@@ -107,6 +111,36 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
           fontWeight: fontWeight,
         }}
       >
+        <div className="hud-text-stack">
+        {/* Čitelnost na tmavém pozadí: color-dodge = pozadí / (1 − barva textu), na černé je tedy text
+            skoro černý. Tichá kopie textu POD dodge vrstvou (normální míchání, krytí darkFloor) dá písmenům
+            minimální jas – dodge ho pak rozsvítí; na světlejším pozadí dodge saturuje stejně jako dřív.
+            Jen vzhled, bez událostí (klikací je horní vrstva). ui2d.bottomLeft.darkFloor, 0 = vypnuto. */}
+        {blendMode !== 'normal' && darkFloor > 0 && (
+          <div className="hud-dark-floor" aria-hidden="true" style={{ opacity: darkFloor }}>
+            {bl.header && (
+              <div
+                className="hud-menu-header"
+                style={{ color: headerColor, fontSize: `${fontSize * 0.95}px`, letterSpacing: `${letterSpacing}px` }}
+              >
+                {bl.header}
+              </div>
+            )}
+            <div className="hud-menu-items" style={{ gap: `${lineSpacing}px` }}>
+              {items.map((item, idx) => {
+                const bulletStr = (item.bullet !== undefined && item.bullet !== '') ? item.bullet : defaultBullet;
+                return (
+                  <div key={item.id || `item-${idx}`} className={`hud-menu-item ${item.dimmed ? 'dimmed' : ''}`}>
+                    <div className={item.link ? 'hud-item-link' : 'hud-item-static'} style={{ color: textColor, letterSpacing: `${letterSpacing}px` }}>
+                      {bulletStr && <span className="hud-bullet">{bulletStr}</span>}
+                      <span className="hud-text">{item.text}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {/* Skutečný viditelný text (žádná duplicitní WebGL maska) – jeden zdroj pravdy pro
             layout i klikací plochu, takže se nemůže rozejít odkaz od viditelných písmen.
             mix-blend-mode: color-dodge = Active Theory efekt (text bere barvu/jas pozadí za sebou).
@@ -210,6 +244,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
               );
             })}
           </div>
+        </div>
         </div>
 
         {/* Spodní pilulkové tlačítko (např. ASK ME ANYTHING...) */}

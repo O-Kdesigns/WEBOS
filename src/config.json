@@ -198,6 +198,7 @@
       "textColor": "#c9c9c9",
       "hoverColor": "#ffffff",
       "blendMode": "color-dodge",
+      "darkFloor": 0.14,
       "bloomColor": "#cc0000",
       "enableBloom": false,
       "bloomIntensity": 3,

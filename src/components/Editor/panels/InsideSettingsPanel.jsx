@@ -146,6 +146,7 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
         </div>
         <DenseColor label="Barva záhlaví" value={appConfig.ui2d?.bottomLeft?.headerColor ?? '#ffffff'} onChange={v => updateUi2dBottomLeft('headerColor', v)} />
         <DenseColor label="Barva textu odkazů" value={appConfig.ui2d?.bottomLeft?.textColor ?? '#c9c9c9'} onChange={v => updateUi2dBottomLeft('textColor', v)} />
+        <DenseSlider desc="Color-dodge text na černém pozadí skoro mizí (pozadí ÷ (1 − barva textu)). Tichá kopie textu pod ním dá písmenům minimální jas; na světlejším pozadí se nic nemění. 0 = čistý Active Theory efekt." label="Čitelnost na tmavém" min={0} max={0.4} step={0.01} value={appConfig.ui2d?.bottomLeft?.darkFloor ?? 0.14} color="#f43f5e" onChange={v => updateUi2dBottomLeft('darkFloor', v)} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '12px' }}>
           {(appConfig.ui2d?.bottomLeft?.items || []).map((item, i) => (

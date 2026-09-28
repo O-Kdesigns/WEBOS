@@ -57,6 +57,26 @@
   pointer-events: none;
 }
 
+/* Obal textu: position bez z-indexu = žádný stacking context (color-dodge musí vidět canvas) */
+.hud-text-stack {
+  position: relative;
+}
+
+/* Tichá kopie textu pod dodge vrstvou (čitelnost na černém, HUD2D.jsx darkFloor). Vlastní vrstva
+   (z-index 24, opacity) je v pořádku – sama se nemíchá, jen zvedne jas pod písmeny pro .hud-blend-group. */
+.hud-dark-floor {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.hud-dark-floor * {
+  pointer-events: none !important;
+}
+
 /* Tady vzniká jediný stacking context HUD textu – je přímo v kořenovém kontextu stránky,
    takže color-dodge se počítá proti canvasu pod ním (kompozitor na GPU, žádné JS). */
 .hud-blend-group {
