@@ -58,6 +58,9 @@ export const DNA_CORE_DEFAULTS = {
   spinDamp: 0.6,      // 1/s – útlum otáčení (menší = delší dojezd)
   spinMax: 16,        // rad/s – strop úhlové rychlosti (25 = 0,42 rad/snímek -> stroboskop)
   settle: 4,          // s po posledním pohybu vody, kdy se odhalení ještě počítá (particly se vracejí)
+  // jak se měří odlet particlu: true = 2D z pohledu kamery (posun na obrazovce přepočtený na world v hloubce
+  // domova – particl, který odletěl hlavně dopředu ke kameře, páteř dál zakrývá), false = 3D vzdálenost od domova
+  reveal2d: true,
   // obálka rozvíření z rychlosti myši – už jen pro útlum god rays (VolumetricLight)
   stirMin: 0.03,
   stirMax: 0.6,
@@ -346,6 +349,8 @@ const accVert = /* glsl */`
   uniform vec2 uYRange;
   uniform vec4 uAcc;      // band, awayMin, awayMax, v klidu DNA (1/0)
   uniform vec2 uAcc2;     // tileAwayMin, tileAwayMax
+  uniform mat4 uVP;       // view-projection kamery (režim 2D)
+  uniform vec3 uMode2d;   // 1 = 2D, projectionMatrix[0][0], [1][1]
   varying float vW;
   varying float vW2;
   void main() {
@@ -358,6 +363,14 @@ const accVert = /* glsl */`
     float d0 = length(dna.xz - c0), d1 = length(dna.xz + c0);
     float x = (dna.y - uYRange.x) / (uYRange.y - uYRange.x);
     float dd = length(p.xyz - dna.xyz);
+    if (uMode2d.x > 0.5) {
+      // 2D: posun na obrazovce -> world v hloubce domova (stejné jednotky jako 3D prahy)
+      vec4 ch = uVP * vec4(dna.xyz, 1.0), cp = uVP * vec4(p.xyz, 1.0);
+      if (ch.w > 0.05 && cp.w > 0.05) {
+        vec2 dn = cp.xy / cp.w - ch.xy / ch.w;
+        dd = length(vec2(dn.x / uMode2d.y, dn.y / uMode2d.z)) * ch.w;
+      }
+    }
     vW = smoothstep(uAcc.y, uAcc.z, dd);
     vW2 = smoothstep(uAcc2.x, uAcc2.y, dd);
     float row;
@@ -486,7 +499,8 @@ export function DnaCore({ appConfig }) {
     });
     const mat = new THREE.ShaderMaterial({
       vertexShader: accVert, fragmentShader: accFrag,
-      uniforms: { tPos: { value: null }, tDna: { value: null }, uHelix: shared.uHelix, uYRange: shared.uYRange, uAcc: { value: new THREE.Vector4() }, uAcc2: { value: new THREE.Vector2() } },
+      uniforms: { tPos: { value: null }, tDna: { value: null }, uHelix: shared.uHelix, uYRange: shared.uYRange, uAcc: { value: new THREE.Vector4() }, uAcc2: { value: new THREE.Vector2() },
+        uVP: { value: new THREE.Matrix4() }, uMode2d: { value: new THREE.Vector3() } },
       blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
       blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
       depthTest: false, depthWrite: false, transparent: true,
@@ -618,6 +632,7 @@ export function DnaCore({ appConfig }) {
     gl.setRenderTarget(acc.rt);
     gl.setClearColor(0x000000, 0);
     gl.clear(true, false, false);
+    (s.vp || (s.vp = new THREE.Matrix4())).multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
     for (const sys of live) {
       const pu = sys.posVar.material.uniforms;
       if (!sys.spinePoints || sys.spinePoints.material.vertexShader !== accVert) {
@@ -637,6 +652,8 @@ export function DnaCore({ appConfig }) {
       u.tDna.value = pu.tDnaPosition.value;
       u.uAcc.value.set(c.band, c.awayMin, c.awayMax, pu.uTransitionProgress.value < 0.001 ? 1 : 0);
       u.uAcc2.value.set(c.tileAwayMin, Math.max(c.tileAwayMin + 0.01, c.tileAwayMax));
+      u.uVP.value.copy(s.vp);
+      u.uMode2d.value.set(c.reveal2d ? 1 : 0, state.camera.projectionMatrix.elements[0], state.camera.projectionMatrix.elements[5]);
       acc.scene.add(sys.spinePoints);
       gl.render(acc.scene, acc.cam);
       acc.scene.remove(sys.spinePoints);
