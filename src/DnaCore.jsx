@@ -5,6 +5,8 @@ import { getFluid } from './components/particles/ParticleFluid';
 import { particleSystems } from './components/particles/utils';
 import { portalFx } from './PortalTransition';
 import { TEX_LOD0 } from './glslTexLod0';
+import { dnaShape, MAX_RUNGS } from './dnaShape';
+import { prof } from './debug/GpuProfiler';
 
 // Jádro DNA (ORBIT): skleněná „páteř“ UVNITŘ obou vláken šroubovice a UVNITŘ příček mezi nimi – skleněné
 // destičky + energetická nit s pulzy. Schovaná v particlech; ukáže se jen tam, odkud particly odletěly,
@@ -61,6 +63,12 @@ export const DNA_CORE_DEFAULTS = {
   // jak se měří odlet particlu: true = 2D z pohledu kamery (posun na obrazovce přepočtený na world v hloubce
   // domova – particl, který odletěl hlavně dopředu ke kameře, páteř dál zakrývá), false = 3D vzdálenost od domova
   reveal2d: true,
+  // ZAKRYTÍ: páteř jen tam, kde ji z pohledu kamery nezakrývá žádný particl (i cizí, přiletěný na místo odletěných).
+  // Mapa nejbližšího particlu (1/hloubka) v malém rozlišení, particly jako kolečka své velikosti. Mobil: vypnout.
+  cover: true,
+  coverRes: 160,      // px – výška mapy zakrytí
+  coverFrom: 0.25,    // podíl nezakrytého okolí, od kterého se páteř ukazuje ...
+  coverFull: 0.75,    // ... a kdy naplno
   // obálka rozvíření z rychlosti myši – už jen pro útlum god rays (VolumetricLight)
   stirMin: 0.03,
   stirMax: 0.6,
@@ -73,7 +81,6 @@ const HELIX_DEFAULT = { th0: 9.3727, k: 0.4963, R: 1.599, yMin: -21.5, yMax: 6, 
 const REVEAL_BINS = 256;
 const RUNG_SLOTS = 8;                 // úseky podél příčky v textuře odhalení
 const REVEAL_ROWS = 2 + RUNG_SLOTS;
-const MAX_RUNGS = 48;
 
 export const dnaStir = { value: 0, hold: 0 };
 
@@ -85,6 +92,23 @@ const HELIX_GLSL = /* glsl */`
   uniform sampler2D tReveal;
   uniform vec4 uRevealP;    // revealFrom, revealFull, rest, texel x
   uniform vec4 uLevels;     // linie od/do, tyčinky od/do (v t odhalení)
+  uniform sampler2D tCover; // r = 1 / hloubka nejbližšího particlu (mapa zakrytí)
+  uniform vec4 uCoverP;     // zapnuto, texel x, texel y, -
+  uniform vec2 uCoverR;     // coverFrom, coverFull
+  // 0..1: jak moc je bod (clip) z pohledu kamery nezakrytý particly (5 vzorků okolí)
+  float uncoveredAt(vec4 clip) {
+    if (uCoverP.x < 0.5) return 1.0;
+    if (clip.w <= 0.05) return 0.0;
+    vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+    float w = clip.w, cov = 0.0;
+    vec2 tx = uCoverP.yz;
+    cov += smoothstep(0.0, 0.012, texture2D(tCover, uv).r * w - 1.0);
+    cov += smoothstep(0.0, 0.012, texture2D(tCover, uv + vec2(tx.x, 0.0)).r * w - 1.0);
+    cov += smoothstep(0.0, 0.012, texture2D(tCover, uv - vec2(tx.x, 0.0)).r * w - 1.0);
+    cov += smoothstep(0.0, 0.012, texture2D(tCover, uv + vec2(0.0, tx.y)).r * w - 1.0);
+    cov += smoothstep(0.0, 0.012, texture2D(tCover, uv - vec2(0.0, tx.y)).r * w - 1.0);
+    return smoothstep(uCoverR.x, uCoverR.y, 1.0 - cov * 0.2);
+  }
   void helixFrame(float y, float s, out vec3 C, out vec3 T, out vec3 N, out vec3 B) {
     float th = uHelix.x + uHelix.y * y + s * 3.14159265;
     vec2 cs = vec2(cos(th), sin(th));
@@ -179,11 +203,12 @@ const tubeVert = HELIX_GLSL + /* glsl */`
       vCoord = u * uHelix.z + float(i) * 5.31 + 40.0;
       t = float(i) < uRungCount ? revealRung(y, u).x : 0.0;
     }
-    vReveal = smoothstep(uLevels.x, uLevels.y, t);   // úroveň 1: linie
+    vec4 clip = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+    vReveal = smoothstep(uLevels.x, uLevels.y, t * uncoveredAt(clip));   // úroveň 1: linie
     vN = dir;
     vV = normalize(cameraPosition - wp);
     // (neschovávat po vrcholech: trojúhelník se smíšenými vrcholy by se roztáhl přes obrazovku – trubky jsou tenké, levné)
-    gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+    gl_Position = clip;
   }
 `;
 
@@ -240,6 +265,7 @@ const tileVert = HELIX_GLSL + /* glsl */`
       vY = aInst.x - (1.0 - abs(aRung)) * uHelix.z;
       t = revealRung(aInst.x, aRung).y;
     }
+    t *= uncoveredAt(projectionMatrix * viewMatrix * vec4(C, 1.0));
     // úroveň 2: tyčinky vyrostou 0 -> 1 (každá trochu jindy, s přestřelením) a při tom se zašroubují
     float h = fract(sin(aInst.x * 12.9898 + aRung * 78.233 + aInst.y * 3.17) * 43758.5453);
     float lv = clamp(smoothstep(uLevels.z, uLevels.w, t) * 1.35 - h * 0.35, 0.0, 1.0);
@@ -334,6 +360,32 @@ const spinFrag = TEX_LOD0 + HELIX_GLSL + /* glsl */`
     vel = clamp(vel * exp(-uSpin.y * uDt), -uSpin.z, uSpin.z);
     ang = mod(ang + vel * uDt + 3.14159265, 6.2831853) - 3.14159265;
     gl_FragColor = vec4(ang, vel, 0.0, 1.0);
+  }
+`;
+
+// Mapa zakrytí: 1 kolečko na particl (velikost = jeho poloměr na obrazovce), MAX blending -> nejbližší 1/hloubka
+const coverVert = /* glsl */`
+  attribute vec2 aUv;
+  uniform sampler2D tPos;
+  uniform sampler2D tDna;
+  uniform mat4 uVP;
+  uniform vec2 uCov;      // projectionMatrix[1][1], výška mapy (px)
+  varying float vInv;
+  void main() {
+    vec4 p = texture2D(tPos, aUv);
+    vec4 dna = texture2D(tDna, aUv);
+    vec4 c = uVP * vec4(p.xyz, 1.0);
+    vInv = 1.0 / max(c.w, 0.05);
+    gl_PointSize = clamp(abs(p.w) * uCov.x / max(c.w, 0.05) * uCov.y, 1.0, 64.0);
+    gl_Position = (dna.w <= 0.0 || c.w < 0.05) ? vec4(2.0, 2.0, 2.0, 1.0) : c;
+  }
+`;
+const coverFrag = /* glsl */`
+  varying float vInv;
+  void main() {
+    vec2 d = gl_PointCoord - 0.5;
+    if (dot(d, d) > 0.25) discard;
+    gl_FragColor = vec4(vInv, 0.0, 0.0, 1.0);
   }
 `;
 
@@ -489,6 +541,9 @@ export function DnaCore({ appConfig }) {
     uRungY: { value: new Array(MAX_RUNGS).fill(0) },
     uRungCount: { value: 0 },
     uLevels: { value: new THREE.Vector4(0, 0.5, 0.35, 1) },
+    tCover: { value: null },
+    uCoverP: { value: new THREE.Vector4() },
+    uCoverR: { value: new THREE.Vector2(0.25, 0.75) },
   }), []);
 
   // akumulace odhalení (malý HalfFloat target, aditivně)
@@ -505,7 +560,18 @@ export function DnaCore({ appConfig }) {
       blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
       depthTest: false, depthWrite: false, transparent: true,
     });
-    return { rt, mat, scene: new THREE.Scene(), cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) };
+    const coverRT = new THREE.WebGLRenderTarget(16, 16, {
+      type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+      depthBuffer: false, stencilBuffer: false,
+    });
+    const coverMat = new THREE.ShaderMaterial({
+      vertexShader: coverVert, fragmentShader: coverFrag,
+      uniforms: { tPos: { value: null }, tDna: { value: null }, uVP: { value: new THREE.Matrix4() }, uCov: { value: new THREE.Vector2() } },
+      blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+      blendEquationAlpha: THREE.MaxEquation, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
+      depthTest: false, depthWrite: false, transparent: true,
+    });
+    return { rt, mat, coverRT, coverMat, scene: new THREE.Scene(), cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) };
   }, [shared]);
   shared.tReveal.value = acc.rt.texture;
 
@@ -568,7 +634,7 @@ export function DnaCore({ appConfig }) {
     parts.threadMat.dispose(); parts.glowMat.dispose();
     parts.tilesTex.dispose(); parts.spinRT.forEach((t) => t.dispose()); parts.spinMat.dispose(); parts.spinQuad.geometry.dispose();
   }, [parts]);
-  useEffect(() => () => { acc.rt.dispose(); acc.mat.dispose(); }, [acc]);
+  useEffect(() => () => { acc.rt.dispose(); acc.mat.dispose(); acc.coverRT.dispose(); acc.coverMat.dispose(); }, [acc]);
 
   useFrame((state, delta) => {
     const c = mergeCfg(appConfig);
@@ -611,6 +677,8 @@ export function DnaCore({ appConfig }) {
         shared.uYRange.value.set(f.yMin, f.yMax);
         for (let i = 0; i < MAX_RUNGS; i++) shared.uRungY.value[i] = f.rungs[i] ?? 0;
         s.rungs = f.rungs;
+        // pro fyziku particlů (dojezd podél DNA)
+        Object.assign(dnaShape, { valid: true, th0: f.th0, k: f.k, R: f.R, rungs: f.rungs, version: dnaShape.version + 1 });
       }
       s.fit = f;
       if (import.meta.env.DEV) { s.rt = acc.rt; window.__dnaCore = s; }
@@ -626,6 +694,7 @@ export function DnaCore({ appConfig }) {
     if (!active) return;
 
     // 1) akumulace: kolik particlů každého úseku vlákna / příčky odletělo
+    prof.scope('jádro DNA: odhalení');
     const prevRT = gl.getRenderTarget(), prevAuto = gl.autoClear;
     const col = gl.getClearColor(s.tmpCol || (s.tmpCol = new THREE.Color())), alpha = gl.getClearAlpha();
     gl.autoClear = false;
@@ -658,6 +727,36 @@ export function DnaCore({ appConfig }) {
       gl.render(acc.scene, acc.cam);
       acc.scene.remove(sys.spinePoints);
     }
+    prof.end();
+    // 1b) zakrytí: mapa nejbližších particlů z pohledu kamery
+    if (c.cover) {
+      prof.scope('jádro DNA: zakrytí');
+      const H = Math.max(16, Math.round(c.coverRes)), W = Math.max(16, Math.round(H * state.size.width / Math.max(1, state.size.height)));
+      if (acc.coverRT.width !== W || acc.coverRT.height !== H) acc.coverRT.setSize(W, H);
+      gl.setRenderTarget(acc.coverRT);
+      gl.clear(true, false, false);
+      for (const sys of live) {
+        if (!sys.spinePoints) continue;
+        if (!sys.coverPoints || sys.coverPoints.material.vertexShader !== coverVert) {
+          sys.coverPoints?.material.dispose();
+          sys.coverPoints = new THREE.Points(sys.spinePoints.geometry, acc.coverMat.clone());
+          sys.coverPoints.frustumCulled = false;
+        }
+        const u = sys.coverPoints.material.uniforms;
+        u.tPos.value = sys.gpuCompute.getCurrentRenderTarget(sys.posVar).texture;
+        u.tDna.value = sys.posVar.material.uniforms.tDnaPosition.value;
+        u.uVP.value.copy(s.vp);
+        u.uCov.value.set(state.camera.projectionMatrix.elements[5], H * 0.5);
+        acc.scene.add(sys.coverPoints);
+        gl.render(acc.scene, acc.cam);
+        acc.scene.remove(sys.coverPoints);
+      }
+      prof.end();
+      shared.tCover.value = acc.coverRT.texture;
+      shared.uCoverP.value.set(1, 1 / W, 1 / H, 0);
+    } else shared.uCoverP.value.x = 0;
+    shared.uCoverR.value.set(c.coverFrom, Math.max(c.coverFrom + 0.01, c.coverFull));
+    if (import.meta.env.DEV) s.coverRT = acc.coverRT;
     gl.setClearColor(col, alpha);
     gl.setRenderTarget(prevRT);
     gl.autoClear = prevAuto;

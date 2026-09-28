@@ -6,6 +6,7 @@ import { FLUID_DEFAULTS, getFluid, createFrontPass, REST_TARGET_GLSL } from './P
 import { prof } from '../../debug/GpuProfiler';
 import { TEX_LOD0 } from '../../glslTexLod0';
 import { mark } from '../../debug/FrameProbe';
+import { dnaShape, MAX_RUNGS } from '../../dnaShape';
 
 // Pomocná funkce pro vygenerování palety
 export const getColors = () => [
@@ -71,6 +72,30 @@ uniform float uReturnPull;    // pružina k domovu (1/s²) – brzdí let od dom
 // (každý 0.6–1.4× náhodně) – dál měkká stěna pohltí rychlost ven a vrátí přesah. Vír myši tak vlákna jen
 // nafoukne do chlupaté trubice, šroubovice zůstane čitelná (bez vodítka odletěly vzdálené o celý poloměr DNA).
 uniform float uDnaLeash;      // 0 = vypnuto
+// Dojezd podél DNA: dokud je particl blízko struktury DNA (vlákna / příčky, do uDnaLeash), smí od domova
+// o uDnaSlide.x dál. U limitu BRZDA (celá rychlost, ne jen ven) -> zastaví se, neklouže po neviditelné stěně.
+uniform vec3 uDnaSlide;       // navíc (world), brzda (1/s), 1 = tvar DNA je znám
+uniform vec3 uDnaShape;       // th0, k, R (šroubovice os vláken)
+uniform float uDnaRungY[${MAX_RUNGS}];
+uniform float uDnaRungN;
+
+// vzdálenost od struktury DNA: osa bližšího vlákna (vodorovně × cos sklonu) nebo tyč příčky
+float dnaStructDist(vec3 p) {
+    float th = uDnaShape.x + uDnaShape.y * p.y;
+    vec2 c0 = uDnaShape.z * vec2(cos(th), sin(th));
+    float rk = uDnaShape.z * uDnaShape.y;
+    float d = min(length(p.xz - c0), length(p.xz + c0)) * inversesqrt(1.0 + rk * rk);
+    for (int i = 0; i < ${MAX_RUNGS}; i++) {
+        if (float(i) >= uDnaRungN) break;
+        float dy = abs(p.y - uDnaRungY[i]);
+        if (dy >= d) continue;
+        float thr = uDnaShape.x + uDnaShape.y * uDnaRungY[i];
+        vec2 A = vec2(cos(thr), sin(thr));
+        vec2 perp = p.xz - A * clamp(dot(p.xz, A), -uDnaShape.z, uDnaShape.z);
+        d = min(d, length(vec2(length(perp), dy)));
+    }
+    return d;
+}
 
 // síla návratu 0..1 podle "držení" (w): zpoždění, pak pomalý rozjezd (ease-in)
 float returnRampOf(float hold) {
@@ -225,18 +250,26 @@ void main() {
         // jen když ho právě odfoukla voda (w > 0) – ne při přeletu na nové místo po přepnutí projektu
         float lucky = fract(sin(dot(uv, vec2(63.7264, 10.873)) + uEscSeed * 7.31) * 43758.5453);
         if (dnaRest * uEscOn > 0.5 && vel.w > 0.0 && dist > uEscDist && lucky < uEscChance) vel.w = 2.0;
-        // VODÍTKO DNA: měkká stěna kolem domova (odtržený particl ji tento snímek ještě nemá – od příštího pluje volně)
+        // VODÍTKO DNA: limit vzdálenosti od domova (odtržený particl ho tento snímek ještě nemá – od příštího pluje volně)
         if (dnaRest > 0.5 && uDnaLeash > 0.0 && vel.w < 1.5) {
             float lim = uDnaLeash * (0.6 + 0.8 * fract(sin(dot(uv, vec2(27.619, 57.583))) * 43758.5453));
-            vec3 off = pos.xyz + vel.xyz - tgt;
+            vec3 nextP = pos.xyz + vel.xyz;
+            vec3 off = nextP - tgt;
             float ol = length(off);
+            // dojezd podél DNA: blízko struktury (do uDnaLeash) smí o uDnaSlide.x dál
+            if (uDnaSlide.x > 0.0 && uDnaSlide.z > 0.5 && ol > lim * 0.5)
+                lim += uDnaSlide.x * (1.0 - smoothstep(uDnaLeash * 0.5, uDnaLeash, dnaStructDist(nextP)));
             if (ol > lim * 0.5) {
                 vec3 n = off / ol;
+                float b = smoothstep(lim * 0.6, lim, ol);
+                // rychlost ven se u limitu pohltí
                 float vr = dot(vel.xyz, n);
-                // rychlost ven se u stěny postupně pohltí (do strany klouže dál -> víří kolem vlákna)
-                if (vr > 0.0) vel.xyz -= n * vr * smoothstep(lim * 0.5, lim, ol);
-                // přesah za stěnou vrátit (~12/s)
-                if (ol > lim) vel.xyz -= n * (ol - lim) * (1.0 - exp(-12.0 * uDt));
+                if (vr > 0.0) vel.xyz -= n * vr * b;
+                // BRZDA celé rychlosti (i do strany) – jen dokud ho strká voda, návrat nebrzdí (r = náběh návratu)
+                // -> zastaví se jako o brzdu, neklouže po limitu (dojem neviditelné stěny)
+                vel.xyz *= 1.0 - b * (1.0 - r) * (1.0 - exp(-uDnaSlide.y * uDt));
+                // přesah za limitem měkce vrátit (~6/s)
+                if (ol > lim) vel.xyz -= n * (ol - lim) * (1.0 - exp(-6.0 * uDt));
             }
         }
     }
@@ -469,6 +502,7 @@ export function useGPGPU(count, particlesData, gl) {
       uReturnK: { value: 0 }, uReturnDamp: { value: 0 }, uReturnTurn: { value: 10 },
       uEscOn: { value: 0 }, uEscDist: { value: 0.3 }, uEscChance: { value: 0.1 }, uEscSeed: { value: 0 }, uEscDrift: { value: 0.05 },
       uEscFriction: { value: 0.99 }, uEscLeash: { value: 1.5 }, uEscMouse: { value: 1 }, uEscScale: { value: 1.5 }, uEscLife: { value: 25 }, uReturnPull: { value: 0 }, uDnaLeash: { value: 0 },
+      uDnaSlide: { value: new THREE.Vector3() }, uDnaShape: { value: new THREE.Vector3() }, uDnaRungY: { value: new Array(MAX_RUNGS).fill(0) }, uDnaRungN: { value: 0 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -555,6 +589,7 @@ function disposeCompute(c) {
   particleSystems.delete(c);
   c.spinePoints?.geometry.dispose();
   c.spinePoints?.material.dispose();
+  c.coverPoints?.material.dispose();
   const u = c.posVar.material.uniforms;
   // Data textures that are not owned by GPUComputationRenderer
   u.tBasePosition.value?.dispose();
@@ -577,6 +612,8 @@ export const DNA_HOLD_DEFAULTS = {
   // návrat v klidu DNA pomalejší než v projektu -> particly chvíli „visí“ venku a je vidět jádro (Oliver: moc krátké)
   dnaReturnDelay: 0.7, // s – zdržení po strčení vodou (projekt: returnDelay 0.15)
   dnaReturnRamp: 1.3,  // s – rozjezd návratu (projekt: returnRamp 0.8)
+  dnaSlide: 0.6,       // world – o kolik dál smí particl od domova, dokud je blízko struktury DNA (0 = nic)
+  dnaBrake: 40,        // 1/s – brzda u limitu (celá rychlost -> zastaví se, neklouže po limitu)
 };
 
 // Odtržené particly (config particlePhysics.escape, editor Uvnitř → Odtržené particly)
@@ -643,7 +680,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       meshRef.current.position.y = posY;
     }
 
-    const phys = appConfig?.particlePhysics || {};
+    // DEV: window.__physOverride = { dnaSlide: 0, ... } přepíše particlePhysics živě
+    const phys = import.meta.env.DEV && window.__physOverride ? { ...(appConfig?.particlePhysics || {}), ...window.__physOverride } : (appConfig?.particlePhysics || {});
     const velUniforms = compute.velVar.material.uniforms;
     const posUniforms = compute.posVar.material.uniforms;
     
@@ -752,6 +790,13 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       velUniforms.uReturnTurn.value = omega * omega * 0.08 * Math.pow(40, 1 - 2 * arc);
     }
     velUniforms.uDnaLeash.value = Math.max(0, phys.dnaLeash ?? DNA_HOLD_DEFAULTS.dnaLeash);
+    velUniforms.uDnaSlide.value.set(Math.max(0, phys.dnaSlide ?? DNA_HOLD_DEFAULTS.dnaSlide), Math.max(0, phys.dnaBrake ?? DNA_HOLD_DEFAULTS.dnaBrake), dnaShape.valid ? 1 : 0);
+    if (compute.dnaShapeVer !== dnaShape.version) {
+      compute.dnaShapeVer = dnaShape.version;
+      velUniforms.uDnaShape.value.set(dnaShape.th0, dnaShape.k, dnaShape.R);
+      for (let i = 0; i < MAX_RUNGS; i++) velUniforms.uDnaRungY.value[i] = dnaShape.rungs[i] ?? 0;
+      velUniforms.uDnaRungN.value = Math.min(MAX_RUNGS, dnaShape.rungs.length);
+    }
     // odtržené particly (jen v klidu DNA)
     const esc = { ...ESCAPE_DEFAULTS, ...(phys.escape || {}) };
     velUniforms.uEscOn.value = esc.enabled ? 1 : 0;
