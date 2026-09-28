@@ -93,10 +93,12 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   const [segW, segH] = useMemo(() => getAdaptiveSphereSegments(count, settings), [count, settings]);
 
   const dnaBaseScaleCfg = appConfig?.dnaSettings?.baseSize ?? 0.08;
+  // Editor ORBIT "Náhodnost velikosti": jen zvětšování (0 = beze změny), většina trochu, pár kuliček až 3×
+  const dnaSizeRandCfg = appConfig?.dnaSettings?.sizeRandomness ?? 0;
   const particlesData = useMemo(() => {
     const cacheKey = [settings.customGeometry?.uuid, count, settings.baseSize, settings.sizeRandomness, settings.radius,
       settings.colorMode, settings.baseColor, settings.sizeMultiplier, dnaGeometry?.uuid,
-      dnaMatrix ? dnaMatrix.elements.join(',') : '-', dnaBaseScaleCfg].join('|');
+      dnaMatrix ? dnaMatrix.elements.join(',') : '-', dnaBaseScaleCfg, dnaSizeRandCfg].join('|');
     if (dataCache.has(cacheKey)) return dataCache.get(cacheKey);
     const tMark = performance.now();
     const data = [];
@@ -148,6 +150,8 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         
           let dnaX = 0, dnaY = 0, dnaZ = 0;
           let dScale = dnaBaseScale * (1.0 + (rand(i, 6) - 0.5) * 0.5);
+          const gr = rand(i, 10);
+          dScale *= 1.0 + dnaSizeRandCfg * gr * gr * gr * 2.0;
           
           if (dnaVertices.length > 0) {
               if (i < dnaVertices.length) {
@@ -181,7 +185,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         if (dataCache.size > DATA_CACHE_MAX) dataCache.delete(dataCache.keys().next().value);
       }
       return data;
-    }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier, settings.customGeometry, dnaGeometry, dnaMatrix, dnaBaseScaleCfg]);
+    }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier, settings.customGeometry, dnaGeometry, dnaMatrix, dnaBaseScaleCfg, dnaSizeRandCfg]);
 
   const compute = useGPGPU(count, particlesData, gl);
 
