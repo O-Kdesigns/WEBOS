@@ -574,6 +574,9 @@ function mergeFluidCfg(prev, src) {
 export const DNA_HOLD_DEFAULTS = {
   dnaForce: 0.6,   // násobek síly vody jen v klidu DNA (projekt INSIDE má plnou)
   dnaLeash: 0.35,  // world – jak daleko od místa v DNA smí particl odletět (každý 0.6–1.4×), 0 = bez vodítka
+  // návrat v klidu DNA pomalejší než v projektu -> particly chvíli „visí“ venku a je vidět jádro (Oliver: moc krátké)
+  dnaReturnDelay: 0.7, // s – zdržení po strčení vodou (projekt: returnDelay 0.15)
+  dnaReturnRamp: 1.3,  // s – rozjezd návratu (projekt: returnRamp 0.8)
 };
 
 // Odtržené particly (config particlePhysics.escape, editor Uvnitř → Odtržené particly)
@@ -649,8 +652,10 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     posUniforms.uFloatAmplitude.value = phys.floatAmplitude ?? 0.1;
     // Nové nastavení rychlosti návratu částic
     posUniforms.uReturnSpeed.value = phys.returnSpeed ?? 0.05;
-    posUniforms.uReturnDelay.value = Math.max(0, phys.returnDelay ?? 0.15);
-    posUniforms.uReturnRamp.value = Math.max(0, phys.returnRamp ?? 0.8);
+    // v klidu DNA (ORBIT) vlastní zdržení a rozjezd návratu (tp z minulého snímku stačí)
+    const dnaRest = posUniforms.uTransitionProgress.value < 0.001;
+    posUniforms.uReturnDelay.value = Math.max(0, dnaRest ? (phys.dnaReturnDelay ?? DNA_HOLD_DEFAULTS.dnaReturnDelay) : (phys.returnDelay ?? 0.15));
+    posUniforms.uReturnRamp.value = Math.max(0, dnaRest ? (phys.dnaReturnRamp ?? DNA_HOLD_DEFAULTS.dnaReturnRamp) : (phys.returnRamp ?? 0.8));
     velUniforms.uHoldDecay.value = 1 / Math.max(1e-3, posUniforms.uReturnDelay.value + posUniforms.uReturnRamp.value);
     velUniforms.uDt.value = Math.min(Math.max(delta, 1 / 240), 1 / 30);
     // unášení s rotací INSIDE (1 = particly drží se solidy, míň = zbytkový dozvuk)
