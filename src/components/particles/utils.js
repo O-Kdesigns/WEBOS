@@ -75,6 +75,7 @@ uniform float uDnaLeash;      // 0 = vypnuto
 // Dojezd podél DNA: dokud je particl blízko struktury DNA (vlákna / příčky, do uDnaLeash), smí od domova
 // o uDnaSlide.x dál. U limitu BRZDA (celá rychlost, ne jen ven) -> zastaví se, neklouže po neviditelné stěně.
 uniform vec3 uDnaSlide;       // navíc (world), brzda (1/s), 1 = tvar DNA je znám
+uniform float uDnaLimRand;    // 0..1 – náhodné rozhození limitu (vodítko i dojezd) pro každý particl zvlášť
 uniform vec3 uDnaShape;       // th0, k, R (šroubovice os vláken)
 uniform float uDnaRungY[${MAX_RUNGS}];
 uniform float uDnaRungN;
@@ -252,13 +253,17 @@ void main() {
         if (dnaRest * uEscOn > 0.5 && vel.w > 0.0 && dist > uEscDist && lucky < uEscChance) vel.w = 2.0;
         // VODÍTKO DNA: limit vzdálenosti od domova (odtržený particl ho tento snímek ještě nemá – od příštího pluje volně)
         if (dnaRest > 0.5 && uDnaLeash > 0.0 && vel.w < 1.5) {
-            float lim = uDnaLeash * (0.6 + 0.8 * fract(sin(dot(uv, vec2(27.619, 57.583))) * 43758.5453));
+            // každý particl má jiný limit (vodítko i dojezd, nezávislé losy) -> žádná společná „stěna“
+            // rozhození r: násobek 1 ± 0,85·r (r 0,85 -> 0,28–1,72×); dřív pevně 0,6–1,4× jen u vodítka
+            float hl = fract(sin(dot(uv, vec2(27.619, 57.583))) * 43758.5453);
+            float hs = fract(sin(dot(uv, vec2(91.137, 13.719))) * 24634.6345);
+            float lim = uDnaLeash * mix(1.0, 0.15 + 1.7 * hl, uDnaLimRand);
             vec3 nextP = pos.xyz + vel.xyz;
             vec3 off = nextP - tgt;
             float ol = length(off);
             // dojezd podél DNA: blízko struktury (do uDnaLeash) smí o uDnaSlide.x dál
             if (uDnaSlide.x > 0.0 && uDnaSlide.z > 0.5 && ol > lim * 0.5)
-                lim += uDnaSlide.x * (1.0 - smoothstep(uDnaLeash * 0.5, uDnaLeash, dnaStructDist(nextP)));
+                lim += uDnaSlide.x * mix(1.0, 0.15 + 1.7 * hs, uDnaLimRand) * (1.0 - smoothstep(uDnaLeash * 0.5, uDnaLeash, dnaStructDist(nextP)));
             if (ol > lim * 0.5) {
                 vec3 n = off / ol;
                 float b = smoothstep(lim * 0.6, lim, ol);
@@ -502,7 +507,7 @@ export function useGPGPU(count, particlesData, gl) {
       uReturnK: { value: 0 }, uReturnDamp: { value: 0 }, uReturnTurn: { value: 10 },
       uEscOn: { value: 0 }, uEscDist: { value: 0.3 }, uEscChance: { value: 0.1 }, uEscSeed: { value: 0 }, uEscDrift: { value: 0.05 },
       uEscFriction: { value: 0.99 }, uEscLeash: { value: 1.5 }, uEscMouse: { value: 1 }, uEscScale: { value: 1.5 }, uEscLife: { value: 25 }, uReturnPull: { value: 0 }, uDnaLeash: { value: 0 },
-      uDnaSlide: { value: new THREE.Vector3() }, uDnaShape: { value: new THREE.Vector3() }, uDnaRungY: { value: new Array(MAX_RUNGS).fill(0) }, uDnaRungN: { value: 0 },
+      uDnaSlide: { value: new THREE.Vector3() }, uDnaLimRand: { value: 0.85 }, uDnaShape: { value: new THREE.Vector3() }, uDnaRungY: { value: new Array(MAX_RUNGS).fill(0) }, uDnaRungN: { value: 0 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -614,6 +619,7 @@ export const DNA_HOLD_DEFAULTS = {
   dnaReturnRamp: 1.3,  // s – rozjezd návratu (projekt: returnRamp 0.8)
   dnaSlide: 0.6,       // world – o kolik dál smí particl od domova, dokud je blízko struktury DNA (0 = nic)
   dnaBrake: 40,        // 1/s – brzda u limitu (celá rychlost -> zastaví se, neklouže po limitu)
+  dnaLimitRandom: 0.85, // 0..1 – náhodné rozhození limitu pro každý particl (0,85 -> 0,28–1,72×), 0 = všichni stejně
 };
 
 // Odtržené particly (config particlePhysics.escape, editor Uvnitř → Odtržené particly)
@@ -790,6 +796,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       velUniforms.uReturnTurn.value = omega * omega * 0.08 * Math.pow(40, 1 - 2 * arc);
     }
     velUniforms.uDnaLeash.value = Math.max(0, phys.dnaLeash ?? DNA_HOLD_DEFAULTS.dnaLeash);
+    velUniforms.uDnaLimRand.value = Math.min(1, Math.max(0, phys.dnaLimitRandom ?? DNA_HOLD_DEFAULTS.dnaLimitRandom));
     velUniforms.uDnaSlide.value.set(Math.max(0, phys.dnaSlide ?? DNA_HOLD_DEFAULTS.dnaSlide), Math.max(0, phys.dnaBrake ?? DNA_HOLD_DEFAULTS.dnaBrake), dnaShape.valid ? 1 : 0);
     if (compute.dnaShapeVer !== dnaShape.version) {
       compute.dnaShapeVer = dnaShape.version;
