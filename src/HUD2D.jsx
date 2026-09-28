@@ -86,7 +86,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
             height: '280px',
             backgroundColor: bl.testPlateColor || '#0055ff',
             borderRadius: '16px',
-            zIndex: 24, // Z-index 24 leží přesně pod hud-2d-container (z-index 25), takže na něj blendMode reaguje
+            zIndex: 24, // těsně pod .hud-blend-group (z-index 25), takže na desku blendMode reaguje
             pointerEvents: 'none',
             boxShadow: '0 10px 40px rgba(0, 0, 0, 0.7), inset 0 0 20px rgba(255, 255, 255, 0.15)',
             border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -95,10 +95,7 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
         />
       )}
 
-      <div
-        className="hud-2d-container"
-        style={{ mixBlendMode: 'normal' }}
-      >
+      <div className="hud-2d-container">
       <div
         className="hud-bottom-left"
         style={{
@@ -112,7 +109,8 @@ export function HUD2D({ appConfig = {}, viewMode = 'ORBIT' }) {
       >
         {/* Skutečný viditelný text (žádná duplicitní WebGL maska) – jeden zdroj pravdy pro
             layout i klikací plochu, takže se nemůže rozejít odkaz od viditelných písmen.
-            mix-blend-mode: color-dodge = Active Theory efekt (text bere barvu/jas pozadí za sebou). */}
+            mix-blend-mode: color-dodge = Active Theory efekt (text bere barvu/jas pozadí za sebou).
+            Funguje jen dokud žádný předek nevytvoří stacking context – viz HUD2D.css. */}
         <div className="hud-blend-group" style={{ mixBlendMode: blendMode }}>
           {bl.header && (
             <div

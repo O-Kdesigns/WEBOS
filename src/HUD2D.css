@@ -38,25 +38,32 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 25;
+  /* ZÁMĚRNĚ bez z-index / opacity / transform / filter / will-change / isolation:
+     cokoli z toho udělá z kontejneru stacking context a mix-blend-mode uvnitř
+     (.hud-blend-group) se pak míchá jen s průhledným obsahem kontejneru, ne s WebGL
+     canvasem – text vypadá plochý (to byla chyba z 2026-09-28, viz LIGHTING.md P12).
+     Vrstvení nad canvasem (z-index 1) drží až .hud-blend-group a .hud-pill-button. */
   overflow: hidden;
 }
 
 /* Skupina vlevo dole – skutečný viditelný DOM text (žádná WebGL maska), .hud-blend-group
-   pod ním dělá Active Theory efekt (mix-blend-mode: color-dodge, viz inline style v HUD2D.jsx) */
+   pod ním dělá Active Theory efekt (mix-blend-mode: color-dodge, viz inline style v HUD2D.jsx).
+   Taky BEZ stacking contextu (žádný transform/opacity/z-index), viz .hud-2d-container. */
 .hud-bottom-left {
   user-select: none;
   line-height: 1.5;
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s ease;
   pointer-events: none;
 }
 
+/* Tady vzniká jediný stacking context HUD textu – je přímo v kořenovém kontextu stránky,
+   takže color-dodge se počítá proti canvasu pod ním (kompozitor na GPU, žádné JS). */
 .hud-blend-group {
   display: flex;
   flex-direction: column;
-  isolation: auto;
+  position: relative;
+  z-index: 25;
 }
 
 /* Nadpis menu (např. WHAT ARE YOU LOOKING FOR?) */
@@ -160,7 +167,7 @@
   background: rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  z-index: 2;
+  z-index: 25; /* nad canvasem (z-index 1); kontejner HUD vlastní z-index nemá */
 }
 
 .hud-pill-button:hover {
