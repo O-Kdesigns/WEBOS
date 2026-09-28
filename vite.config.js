@@ -86,11 +86,13 @@ function portfolioCMSPlugin() {
 
               const sessionFileName = `${data.sessionId || 'session_default'}.log`;
               const sessionFilePath = path.join(logsDir, sessionFileName);
-              const latestFilePath = path.join(logsDir, 'latest.log');
+              const latestFilePath = path.join(logsDir, data.kind === 'profile' ? 'latest_profile.log' : 'latest.log');
 
               const formattedContent = formatDiagnosticLog(data);
 
-              fs.writeFileSync(sessionFilePath, formattedContent, 'utf-8');
+              // profil: historie se přidává na konec (každé ~2 s jeden snímek), diagnostika se přepisuje
+              if (data.kind === 'profile') fs.appendFileSync(sessionFilePath, formattedContent + '\n', 'utf-8');
+              else fs.writeFileSync(sessionFilePath, formattedContent, 'utf-8');
               fs.writeFileSync(latestFilePath, formattedContent, 'utf-8');
 
               res.setHeader('Content-Type', 'application/json');
@@ -109,7 +111,20 @@ function portfolioCMSPlugin() {
   };
 }
 
+// GPU profiler (src/debug/GpuProfiler.js): ms na GPU za snímek po průchodech/objektech, nezávislé na focusu
+function formatProfileLog(data) {
+  const p = data.profile || {};
+  const f = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '-');
+  const rows = (p.rows || []).map(r =>
+    `${f(r.gpu, 3).padStart(8)} ms  ${String(Math.round(r.draws)).padStart(4)}x  ${String(Math.round(r.tris / 1000)).padStart(6)}k tri  ${r.label}`
+  ).join('\n');
+  return `GPU PROFIL ${data.sessionId}  (${p.time})\nKlient: ${data.userAgent}\n` +
+    `fps ${f(p.fps, 1)} | snímek ${f(p.frameMs)} ms (p99 ${f(p.frameP99)}) | GPU ${f(p.gpuMs)} ms | CPU render ${f(p.cpuMs)} ms | canvas ${p.size} | focus ${p.focus} | disjoint ${p.disjoint}\n` +
+    `----------------------------------------------------------------\n${rows}\n`;
+}
+
 function formatDiagnosticLog(data) {
+  if (data.kind === 'profile') return formatProfileLog(data);
   const m = data.metrics || {};
   const vids = (m.videos || []).map(v => 
     `- ${v.fileName}: ${v.isPlaying ? 'HRAJE' : 'PAUZA'} (${v.currentTime}s / ${v.duration}s) | Drop: ${v.dropped}f | Total: ${v.total}f | State: readyState=${v.readyState}`

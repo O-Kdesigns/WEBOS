@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TEX_LOD0 } from './glslTexLod0';
 
 // Fake pára nad tiskovou linkou 3D tisku. Jedna malá textura hustoty (výška `res` řádků), 1 průchod za snímek:
 // semi-Lagrangeova advekce hustoty polem = vztlak (rychlost roste s výškou nad linkou, v = sqrt(v0² + 2·a·h) –
@@ -9,7 +10,7 @@ import * as THREE from 'three';
 
 const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
-const STEP = `
+const STEP = `${TEX_LOD0}
 uniform sampler2D uSrc, uMask, uFluid;
 uniform vec2 uA, uB, uFluidTexel;
 uniform float uDt, uTime, uAspect, uRise, uLift, uTurb, uFade, uEmit, uHot, uMouse, uFluidOn;

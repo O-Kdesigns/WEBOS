@@ -3,6 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRenderer.js';
 import { FLUID_DEFAULTS, getFluid, createFrontPass, REST_TARGET_GLSL } from './ParticleFluid';
+import { prof } from '../../debug/GpuProfiler';
+import { TEX_LOD0 } from '../../glslTexLod0';
 
 // Pomocná funkce pro vygenerování palety
 export const getColors = () => [
@@ -14,7 +16,7 @@ export const getColors = () => [
 ];
 
 // --- GPGPU SHADERS ---
-const fragmentShaderVel = REST_TARGET_GLSL + `
+const fragmentShaderVel = TEX_LOD0 + REST_TARGET_GLSL + `
 uniform vec3 uMousePos;
 uniform vec3 uMouseDir;
 uniform vec3 uMouseVel;
@@ -224,7 +226,7 @@ void main() {
 }
 `;
 
-const fragmentShaderPos = `
+const fragmentShaderPos = TEX_LOD0 + `
 uniform float uTime;
 uniform float uFloatSpeed;
 uniform float uFloatAmplitude;
@@ -654,7 +656,9 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     let fluidOn = false;
     if (fluidCfg.enabled) {
       const fluid = getFluid(state.gl);
+      prof.scope('fluid (voda myši)');
       fluid.update(state, delta, fluidCfg);
+      prof.end();
       fluidOn = !!fluid.velocity;
       if (fluidOn) {
         const mesh = meshRef.current, cam = state.camera;
@@ -680,8 +684,10 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
         // mapa nejbližších particlů (klidový tvar)
         if (!compute.front) compute.front = createFrontPass(compute.size, compute.targetUniforms);
         const fh = Math.max(16, Math.round(fluidCfg.frontRes));
+        prof.scope(`fluid front mapa ${compute.size}²`);
         compute.front.render(state.gl, mvp,
           Math.max(16, Math.round(fh * state.size.width / state.size.height)), fh, fluidCfg.frontPointSize);
+        prof.end();
         velUniforms.tFront.value = compute.front.texture;
       }
     }
@@ -743,7 +749,9 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     }
     
     posUniforms.uCameraY.value = worldCameraPos.current.y;
+    prof.scope(`particly GPGPU ${compute.size}²`);
     compute.gpuCompute.compute();
+    prof.end();
     
     const tex = compute.gpuCompute.getCurrentRenderTarget(compute.posVar).texture;
     // vzhled odtržených (barva + záblesk) – materiál čte stav z textury rychlostí

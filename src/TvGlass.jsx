@@ -2,6 +2,7 @@ import { useMemo, useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { portalFx } from './PortalTransition';
+import { TEX_LOD0 } from './glslTexLod0';
 
 // Skleněná televize (nody z Blenderu s prefixem "TV_", dítě GlassDesk).
 // Sklo = vlastní shader:
@@ -39,7 +40,7 @@ const vertexShader = `
   }
 `;
 
-const fragmentShader = `
+const fragmentShader = `${TEX_LOD0}
   uniform sampler2D tScene;
   uniform sampler2D tVideo;
   uniform vec2 uRes;
@@ -227,7 +228,15 @@ function analysePart(key, node, deskNode) {
   };
 }
 
-// Díly skla + sdílený FBO se scénou bez skla (1 render ve 1/2 rozlišení, jen když je sklo vidět)
+// Když scénu kreslí VolumetricLightPass do vlastního render targetu (normální stav), sklo si scénu za sebou
+// NEkreslí znovu: v okamžiku, kdy hlavní render dojde ke sklu (onBeforeRender prvního dílu), je v targetu
+// už všechno, co je za sklem (neprůhledné + průhledné seřazené dřív), a jen se to zkopíruje (blit do 1/2
+// rozlišení, ~µs). Dřív se kvůli tomu celá scéna včetně ~3 M trojúhelníků particlů kreslila 2× (≈1,2 ms GPU).
+// Počítadlo nastavuje VolumetricLightPass (mount/unmount); 0 = starý samostatný render do FBO.
+export const tvGlassFx = { inline: 0 };
+if (import.meta.env.DEV && typeof window !== 'undefined') window.__tvGlassFx = tvGlassFx; // A/B: inline = 0 -> starý render
+
+// Díly skla + sdílená textura se scénou bez skla (1/2 rozlišení, jen když je sklo vidět)
 export function useTvGlass(nodes, deskNode, fade) {
   const gl = useThree(s => s.gl);
   const size = useThree(s => s.size);
@@ -247,6 +256,29 @@ export function useTvGlass(nodes, deskNode, fade) {
 
   const shared = useMemo(() => ({
     meshes: new Set(),
+    copyPending: false,
+    // voláno z onBeforeRender skleněného dílu uprostřed hlavního renderu (viz tvGlassFx)
+    copyScene(renderer) {
+      if (!this.copyPending) return;
+      this.copyPending = false;
+      const src = renderer.getRenderTarget();
+      if (!src || src.samples > 0) return;
+      const w = Math.max(1, Math.floor(src.width * FBO_SCALE));
+      const h = Math.max(1, Math.floor(src.height * FBO_SCALE));
+      if (fbo.width !== w || fbo.height !== h) fbo.setSize(w, h);
+      renderer.initRenderTarget(fbo);
+      const props = renderer.properties;
+      const srcFb = props.get(src).__webglFramebuffer;
+      const dstFb = props.get(fbo).__webglFramebuffer;
+      if (!srcFb || !dstFb) return;
+      const g = renderer.getContext();
+      g.bindFramebuffer(g.READ_FRAMEBUFFER, srcFb);
+      g.bindFramebuffer(g.DRAW_FRAMEBUFFER, dstFb);
+      g.blitFramebuffer(0, 0, src.width, src.height, 0, 0, w, h, g.COLOR_BUFFER_BIT, g.LINEAR);
+      g.bindFramebuffer(g.FRAMEBUFFER, srcFb); // = to, co má three.js v cache (READ i DRAW)
+      // sklo se kreslí do tohoto targetu -> gl_FragCoord / uRes musí být v jeho rozlišení
+      this.uniforms.uRes.value.set(src.width, src.height);
+    },
     uniforms: {
       tScene: { value: fbo.texture },
       uRes: { value: new THREE.Vector2(1, 1) },
@@ -273,6 +305,7 @@ export function useTvGlass(nodes, deskNode, fade) {
     u.uNear.value.set(portalFx.nearStart, portalFx.nearEnd);
     // aktivní deska zůstává vidět během průletu (po jeho konci je za kamerou -> skrýt)
     const keep = portalFx.progress < 1 ? 1 : 0;
+    shared.copyPending = false;
     let anyShown = false;
     for (const mesh of shared.meshes) {
       const k = mesh.userData.tvActive ? keep : 0;
@@ -292,6 +325,8 @@ export function useTvGlass(nodes, deskNode, fade) {
       if (mesh.visible && frustum.intersectsObject(mesh)) { anyVisible = true; break; }
     }
     if (!anyVisible) return;
+
+    if (tvGlassFx.inline > 0) { shared.copyPending = true; return; }
 
     gl.getDrawingBufferSize(buf);
     u.uRes.value.copy(buf);
@@ -367,7 +402,8 @@ function TvGlassMesh({ part, shared, videoTexture, active }) {
     mesh.userData.tvPart = part;
     shared.meshes.add(mesh);
     tvRegistry.add(mesh);
-    return () => { shared.meshes.delete(mesh); tvRegistry.delete(mesh); };
+    mesh.onBeforeRender = (renderer) => shared.copyScene(renderer);
+    return () => { shared.meshes.delete(mesh); tvRegistry.delete(mesh); mesh.onBeforeRender = () => {}; };
   }, [shared, active, part]);
 
   return (

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { shaderMaterial } from '@react-three/drei';
 import { extend } from '@react-three/fiber';
+import { TEX_LOD0 } from '../../../glslTexLod0';
 import { PARTICLE_DECL } from '../../../SolidLink';
 import { ESC_VERTEX } from './escapeGlsl';
 import { DNA_RAINBOW_GLSL, DNA_PALETTE_MAX } from './dnaRainbow';
@@ -94,7 +95,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vScale = computedScale;
   }
   `,
-  `
+  `${TEX_LOD0}
   uniform sampler2D tVideo;
   uniform vec3 uColor;
   uniform float uDistortion;

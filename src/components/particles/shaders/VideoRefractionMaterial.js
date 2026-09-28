@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { shaderMaterial } from '@react-three/drei';
 import { extend } from '@react-three/fiber';
+import { TEX_LOD0 } from '../../../glslTexLod0';
 
 export const VideoRefractionMaterialImpl = shaderMaterial(
   {
@@ -48,7 +49,7 @@ export const VideoRefractionMaterialImpl = shaderMaterial(
     vScale = computedScale;
   }
   `,
-  `
+  `${TEX_LOD0}
   uniform sampler2D tVideo;
   uniform float uDistortion;
   uniform float uOpacity;

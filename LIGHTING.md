@@ -112,7 +112,18 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 - `window.__postMat` → materiál postu (uniformy P1–P12 přímo, přepisují se každý snímek z configu)
 - `window.__r3f.get().scene.traverse(o => o.isLight && console.log(o.type, o.intensity))` → výpis skutečných světel (kontrola, jestli nepřibylo nějaké z GLB)
 
+### ⏱ GPU profiler (výkon po průchodech, od 2026-09-28)
+- `?prof=1` v URL nebo **F9** → panel vpravo nahoře: ms na GPU za snímek pro každý průchod/objekt (timer query `EXT_disjoint_timer_query_webgl2`). Na rozdíl od fps **nezávisí na focusu okna, fps zámku ani vsyncu**. `window.__prof.table()` = text, `window.__prof.last` = data. Log na disk: `debug_logs/profile_*.log` (historie, každé ~2 s) + `latest_profile.log`.
+- Kód: `src/debug/GpuProfiler.js` (obalí `renderer.renderBufferDirect`/`clear`, jen když běží – vypnutý = nulová cena), `src/debug/GpuProfilerPanel.jsx`. Štítky: `prof.scope('název')` … `prof.end()` kolem vlastních průchodů (fluid, GPGPU, tisk, post), jinak jméno objektu/materiálu `@ render target` (hlavní scéna = `@ scéna`).
+- A/B z konzole: `window.__tvGlassFx.inline = 0` (starý render skla), `?glaa=1` / `?glpdb=1` (starý MSAA / preserveDrawingBuffer canvasu).
+- Hodnoty jsou přibližné (GPU jede v pipeline – malé průchody hned za velkým můžou „zdědit“ čekání), porovnávat součty a A/B, ne jednotlivé setiny.
+
 ## 4. Známé slabiny / nápady
 - L2 bez útlumu (decay 0) přepaluje nejbližší objekty. U solidů se to kompenzuje přes `directLight`, u ostatních GLB meshů ne.
 - L4 a L5 jsou natvrdo v `App.jsx` (bez configu a Editoru).
 - `insideBloom` je 0 → žhavá vrstva tisku nemá bloom, záři dělá jen P11.
+- **Výkon – poučení z 2026-09-28** (ORBIT, panel 1286×1422, GPU ms/snímek: **4,8 → 1,8**, bez změny vzhledu):
+  1. **Zploštěné větve na Windows (ANGLE → Direct3D):** `texture2D()` uvnitř `if`/smyčky nutí HLSL překladač spočítat větev VŽDY. Post (P1–P13) tak počítal všechny smyčky (god rays 48, stíny myši 48, prach 24×2, video 32, tisk 40) na každém pixelu, i vypnuté a v ORBITu → 1,40 ms, i se vším vypnutým. Oprava `src/glslTexLod0.js` (`TEX_LOD0` = `textureLod(…, 0.0)`, stejné pixely, textury nemají mipmapy) → 0,68 ms; vše vypnuto 0,03 ms. Použito i v TvGlass, PrintSteam, GPGPU particlů, Jelly/VideoRefraction. **Nové shadery s texturou v if/smyčce: vždy `${TEX_LOD0}` na začátek fragment shaderu** (jen pro textury bez mipmap). Cena částí postu po opravě: god rays ~0,45 ms, prach + TV světlo ~0,27 ms, bloom/DOF ~0,04 ms.
+  2. **Sklo TV kreslilo celou scénu 2×** (vlastní FBO, všechny particly ~3 M trojúhelníků) ≈ 1,2 ms + zdržení GPGPU. Teď si pozadí zkopíruje (blit) z hlavního renderu v okamžiku, kdy se kreslí první díl skla (`tvGlassFx` v `TvGlass.jsx`). Zároveň opraveno `uRes` = rozlišení targetu, do kterého se sklo kreslí (dřív drawing buffer → při DPR > 1,25 lom ukazoval posunutý výřez scény).
+  3. Canvas bez MSAA a bez `preserveDrawingBuffer` (na obrazovku jde jen fullscreen quad postu; nic canvas nečte).
+  - Zbývá: particly ~1,0 ms (3 M trojúhelníků, vertex-bound – `nodeQuality` 2 z 2026-09-27), post ~0,65 ms, voda při pohybu myši ~0,25 ms.

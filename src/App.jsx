@@ -22,6 +22,19 @@ import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
 import { CanvasDebugTracker, DebugMonitorHUD } from './DebugMonitor';
+import { GpuProfilerHook, GpuProfilerPanel } from './debug/GpuProfilerPanel';
+
+// Na obrazovku se kreslí jen fullscreen quad postprocessu (scéna jde do vlastního render targetu),
+// takže MSAA výchozího framebufferu nemá co vyhlazovat a preserveDrawingBuffer nic nečte –
+// obojí jen stálo GPU čas každý snímek (viz LIGHTING.md). A/B v DEV: ?glaa=1 / ?glpdb=1 vrátí staré chování.
+const CANVAS_GL = (() => {
+  const q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  return {
+    antialias: q?.get('glaa') === '1',
+    preserveDrawingBuffer: q?.get('glpdb') === '1',
+    powerPreference: 'high-performance',
+  };
+})();
 import { Preloader } from './Preloader';
 import { HUD2D } from './HUD2D';
 import './App.css';
@@ -1069,12 +1082,13 @@ function App() {
         <Canvas 
           shadows 
           frameloop={isSuspended ? 'never' : 'always'}
-          gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
+          gl={CANVAS_GL}
           onCreated={(state) => { if (import.meta.env.DEV) window.__r3f = state; }}
         >
           <RenderRestorationHandler isSuspended={isSuspended} />
           <DnaHeightDetector setDnaHeight360={setDetectedDnaHeight360} />
           <CanvasDebugTracker />
+          {import.meta.env.DEV && <GpuProfilerHook />}
           <FluidView />
           <Environment preset="city" environmentIntensity={appConfig.environmentIntensity ?? 0.8} />
           
@@ -1227,6 +1241,8 @@ function App() {
         volume={appConfig.musicVolume ?? 0.4} 
         isSuspended={isSuspended && !!appConfig.powerSaving?.pauseAudioOnBlur}
       />
+
+      {import.meta.env.DEV && <GpuProfilerPanel />}
 
       <DebugMonitorHUD 
         videoTextureCache={videoTextureCache}

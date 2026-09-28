@@ -4,9 +4,11 @@ import * as THREE from 'three';
 import { portalFx } from './PortalTransition';
 import { debugMetrics } from './DebugMonitor';
 import { printFx } from './SolidPrint';
-import { tvRegistry } from './TvGlass';
+import { tvRegistry, tvGlassFx } from './TvGlass';
 import { getFluid } from './components/particles/ParticleFluid';
 import { PrintSteam } from './PrintSteam';
+import { prof } from './debug/GpuProfiler';
+import { TEX_LOD0 } from './glslTexLod0';
 
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 dummyTexture.needsUpdate = true;
@@ -170,6 +172,8 @@ const VolumetricLightShader = {
     }
   `,
   fragmentShader: `
+    // výkon: větve se smyčkami (god rays, stíny myši, prach, tisk, video) se jinak na Windows počítají vždy
+    ${TEX_LOD0}
     uniform sampler2D tDiffuse;
     uniform sampler2D tDepth;
     uniform float uTime;
@@ -1054,6 +1058,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     });
     target.texture.colorSpace = gl.outputColorSpace;
     target.texture.generateMipmaps = false;
+    target.texture.name = 'scéna';
     return target;
   }, [width, height, gl.outputColorSpace]);
 
@@ -1142,6 +1147,13 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
   const vl = appConfig?.volumetricLight || {};
   const fog = appConfig?.insideFog || {};
   const enabled = vl.enabled ?? true;
+
+  // scéna jde do sceneTarget -> sklo TV si z něj zkopíruje pozadí místo vlastního renderu celé scény (TvGlass.jsx)
+  useEffect(() => {
+    if (!enabled) return;
+    tvGlassFx.inline++;
+    return () => { tvGlassFx.inline--; };
+  }, [enabled]);
 
   // Hladké animování přechodu mezi ORBIT (0.0) a INSIDE (1.0)
   const transitionRef = useRef(viewMode === 'INSIDE' ? 1.0 : 0.0);
@@ -1384,7 +1396,9 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     pu.uPrintFog.value.set(mat.uniforms.uFogNear.value, mat.uniforms.uFogFar.value, mat.uniforms.uFogCurve.value,
       mat.uniforms.uFogDensity.value * masterMult);
     pu.uPrintFogMax.value = Math.min(1, Math.max(0, mat.uniforms.uFogDensity.value)) * mat.uniforms.uEnableDepthFog.value * masterMult;
+    prof.scope('tisk: maska');
     const printMask = printFx.renderMask ? printFx.renderMask(gl, camera) : null;
+    prof.end();
     mat.uniforms.uPrintRays.value = printMask ? printFx.rays : 0;
     mat.uniforms.tPrintMask.value = printMask || dummyTexture;
     mat.uniforms.uPrintRayLen.value = printFx.rayLength;
@@ -1407,11 +1421,13 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     const stc = printFx.steam;
     if (lineOn && stc.strength > 0) {
       const fl = getFluid(gl);
+      prof.scope('tisk: pára');
       mat.uniforms.tSteam.value = steam.step(gl, {
         a: printFx.lineA, b: printFx.lineB, mask: printMask, fluid: fl.velocity, fluidTexel: mat.uniforms.uFluidTexel.value,
         dt: Math.min(Math.max(delta, 1 / 240), 1 / 30), time: state.clock.getElapsedTime(), aspect: size.width / Math.max(1, size.height),
         res: stc.res, rise: stc.rise, lift: 0.02, turb: stc.turb, fade: stc.fade, emit: 5 * printFx.lineVis, hot: 1, mouse: stc.mouse,
       });
+      prof.end();
       mat.uniforms.uSteamOn.value = stc.strength * printFx.heat;
       mat.uniforms.uSmokeOpacity.value = Math.min(1, stc.smoke) * printFx.heat;
       if (steam.smokeColor !== stc.smokeColor) { steam.smokeColor = stc.smokeColor; mat.uniforms.uSmokeColor.value.set(stc.smokeColor); }
@@ -1473,6 +1489,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       bu.tInput.value = sceneTarget.texture;
       bu.uTexel.value.set(1 / width, 1 / height);
       bu.uMode.value = 0;
+      prof.scope('post: cine blur 1/4');
       gl.setRenderTarget(a);
       gl.render(blurPass.scene, quadCamera);
       bu.uMode.value = 1;
@@ -1487,6 +1504,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         bu.tInput.value = b.texture; bu.uDir.value.set(0, r);
         gl.setRenderTarget(a); gl.render(blurPass.scene, quadCamera);
       }
+      prof.end();
       mat.uniforms.tBlur.value = a.texture;
       mat.uniforms.uBlurTexel.value.set(1 / bw, 1 / bh);
 
@@ -1516,7 +1534,9 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     gl.setRenderTarget(null);
     mat.uniforms.tDiffuse.value = sceneTarget.texture;
     mat.uniforms.tDepth.value = sceneTarget.depthTexture;
+    prof.scope('post: mlha + god rays + DOF (fullscreen)');
     gl.render(quadScene, quadCamera);
+    prof.end();
 
   }, 1);
 

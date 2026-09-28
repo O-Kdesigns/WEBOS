@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { getFluid } from './components/particles/ParticleFluid';
+import { prof } from './debug/GpuProfiler';
 
 // Slider "2D voda" vedle AI živého renderu: průhlednost náhledu neviditelné simulace vody,
 // ze které particly berou proud myši (ParticleFluid.js). 0 = komponenta se vůbec nepřipojí -> nulová cena.
@@ -30,7 +31,7 @@ export function useFluidView() {
 // Kreslí se po postprocessingu (VolumetricLightPass má prioritu 1) přímo na obrazovku.
 function FluidViewPass({ opacity }) {
   const gl = useThree((s) => s.gl);
-  useFrame(() => { getFluid(gl).drawView(opacity); }, 2);
+  useFrame(() => { prof.scope('náhled 2D vody'); getFluid(gl).drawView(opacity); prof.end(); }, 2);
   return null;
 }
 
