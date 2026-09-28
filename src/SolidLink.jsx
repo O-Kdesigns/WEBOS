@@ -241,7 +241,7 @@ const AVG_FRAG = /* glsl */`
 
 const DEFAULT_PL = { enabled: false, color: '#ffffff', useVideoColor: true, intensity: 1.5, radius: 0.35, wrap: 0.5 };
 // bez klíče bakedLight platí výchozí (solid se zapečeným světlem ho má vždy, jinak by emise svítila plochou září)
-const DEFAULT_BL = { enabled: true, intensity: 1, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.03, live: 1, liveCell: 0.04, lift: 0 };
+const DEFAULT_BL = { enabled: true, intensity: 1, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.012, live: 1, liveCell: 0.04, lift: 0 };
 const _findBaked = (m) => { if (!linkFx.bakedMesh && m.material?.emissiveMap) linkFx.bakedMesh = m; };
 const DEFAULT_SL = { enabled: false, color: '#ff7a3a', intensity: 0.5, radius: 0.4, printHeat: 1.0, selfGlow: 0 };
 

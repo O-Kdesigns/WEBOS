@@ -8,6 +8,12 @@ RES = int(argv[0]) if len(argv) > 0 else 2048
 LSAMPLES = int(argv[1]) if len(argv) > 1 else 256
 OUT_BLEND = argv[2] if len(argv) > 2 and argv[2] != '-' else ''
 OUT_GLB = argv[3] if len(argv) > 3 and argv[3] != '-' else ''
+# dozvuk kolem světel: druhý průchod s emisními díly odsazenými o HALO_OFFSET m od povrchu (světlo pak padá i na okolní
+# kov, ne jen pod díl) a víc odrazy; výsledek = max(přímý bake, dozvuk × HALO_GAIN). 0 = jen přímý bake.
+HALO_OFFSET = float(argv[4]) if len(argv) > 4 else 0.0
+HALO_GAIN = float(argv[5]) if len(argv) > 5 else 1.0
+# strop dozvuku (podíl plného jasu textury): světlá místa (panely, diamanty) zůstanou ostrá, dozvuk jen doplní okolí
+HALO_CAP = float(argv[6]) if len(argv) > 6 else 1.0
 AO_DIST = 0.12
 BAKE_DIR = r'C:\WEBOS\ASSETS\bake'
 os.makedirs(BAKE_DIR, exist_ok=True)
@@ -204,6 +210,34 @@ nz = mx[mx > 1e-5]
 print('light max-channel p50/p90/p99/p99.5/p99.9', np.percentile(nz, [50, 90, 99, 99.5, 99.9]))
 scale = 1.0 / max(1e-6, float(np.percentile(nz, 99.5)))
 print('light scale', scale, '-> emissive strength', 1 / scale)
+np.save(os.path.join(BAKE_DIR, '_raw_light_direct.npy'), lit.astype(np.float16))
+
+if HALO_OFFSET > 0:
+    disp = o0.modifiers.new('_bake_halo', 'DISPLACE')
+    disp.direction = 'NORMAL'
+    disp.mid_level = 0.0
+    disp.strength = HALO_OFFSET / max(1e-6, o0.matrix_world.to_scale()[0])
+    sc.cycles.diffuse_bounces = 3
+    sc.cycles.max_bounces = 5
+    bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'})
+    halo = pix(f_lit)[:, :, :3]
+    o0.modifiers.remove(disp)
+    np.save(os.path.join(BAKE_DIR, '_raw_light_halo.npy'), halo.astype(np.float16))
+    # kde už světlo je (panely, diamanty + ~8 px okolí), dozvuk nepřidávat: jinak zaplní mezery mezi pixely panelu
+    # a vzor se slije do fleků. Maska = rozšířená (max) a rozmazaná (průměr) oblast jasu přímého bake.
+    bright = (lit.max(2) * scale > 0.35).astype(np.float32)
+    def box(a, r, fn):
+        out = a.copy()
+        for ax in (0, 1):
+            acc = out.copy()
+            for k in range(1, r + 1):
+                acc = fn(acc, np.roll(out, k, ax)); acc = fn(acc, np.roll(out, -k, ax))
+            out = acc if fn is np.maximum else acc / (2 * r + 1)
+        return out
+    keep = box(box(bright, 8, np.maximum), 4, np.add)
+    halo_add = np.minimum(halo * HALO_GAIN, HALO_CAP / scale) * (1.0 - np.clip(keep, 0, 1))[:, :, None]
+    lit = np.maximum(lit, halo_add)
+    print('halo p50/p90/p99', np.percentile(halo.max(2)[halo.max(2) > 1e-5], [50, 90, 99]))
 
 # 2) AO (stínění ve spárách, na webu tlumí odrazy okolí)
 f_ao = make_image('_f_ao', True, 'Linear Rec.709')

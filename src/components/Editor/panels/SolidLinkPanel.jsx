@@ -9,7 +9,7 @@ export const SOLID_LINK_PRESET = {
   solidMaterial: { enabled: true, color: '#3c3b3d', metalness: 0.92, roughness: 0.28, reflections: 0.6, directLight: 0.02, layerLines: 0, grain: 0.35, rim: 0.8 },
   particleLight: { enabled: true, useVideoColor: true, color: '#ffffff', intensity: 4, radius: 0.3, wrap: 0.5 },
   solidLight: { enabled: true, color: '#ff6a2a', intensity: 1, radius: 0.35, printHeat: 1, selfGlow: 0 },
-  bakedLight: { enabled: true, intensity: 4, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.03, live: 1, liveCell: 0.04, lift: 2 }
+  bakedLight: { enabled: true, intensity: 4, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.012, live: 1, liveCell: 0.04, lift: 2 }
 };
 
 const SubTitle = ({ color, children }) => (

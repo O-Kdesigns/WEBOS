@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { portalFx } from './PortalTransition';
 import { patchSolidLook } from './SolidLink';
-import { buildSlices, sliceLine } from './printSlices';
+import { buildSlices, sliceLine, sliceSpan } from './printSlices';
 
 // 3D tisk solidů při vstupu do projektu (INSIDE).
 // Až particly doletí do tvaru projektu, solidy "vyrostou" odspodu nahoru: vše nad řezem (uPrintY, world Y)
@@ -49,6 +49,9 @@ export const printFx = {
   hot: new THREE.Color('#fff0c8'),
   // pára nad linkou (PrintSteam.js): strength 0 = vypnuto
   steam: { strength: 2, rise: 0.15, turb: 1.5, fade: 1.1, mouse: 1, res: 160, smoke: 0.6, smokeColor: '#a4a4aa' },
+  // trvalý kouř po dotištění: linka nad celou skupinou solidů (sliceSpan), idle 0..1 náběh, idleSmoke = síla kouře
+  idle: 0,
+  idleSmoke: 0,
   frame: false,         // true = paprsky se sbíhají k okrajům rámu (obrazovka zmenšená frameScale), přebíjí center
   frameScale: 1,        // 1 = rám = okraje obrazovky, 0 = smrskne se do středu obrazovky
   bevel: 0.3,           // zaoblení rohů rámu
@@ -347,6 +350,16 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     stm.strength = cfg.steam ?? 2; stm.rise = cfg.steamRise ?? 0.15; stm.turb = cfg.steamTurb ?? 1.5;
     stm.fade = cfg.steamFade ?? 1.1; stm.mouse = cfg.steamMouse ?? 1;
     stm.smoke = cfg.smoke ?? 0.6; stm.smokeColor = cfg.smokeColor ?? '#a4a4aa';
+    // trvalý kouř nad dotištěnými solidy: najede, jak dohasíná žár tisku (p > 0.85), při odchodu zmizí
+    printFx.idleSmoke = cfg.idleSmoke ?? 0;
+    const idleWant = viewMode === 'INSIDE' && !leaving && p > 0.85 && printFx.idleSmoke > 0 ? 1 : 0;
+    printFx.idle = THREE.MathUtils.damp(printFx.idle, idleWant, 1.2, dt);
+    if (printFx.idle < 0.002 && !idleWant) printFx.idle = 0;
+    if (printFx.idle > 0 && !printFx.lineOn) {
+      // výška zdroje = podíl výšky solidů od spodku (vršek = nejvyšší, nejvzdálenější robot -> kouř by byl mimo obraz)
+      const topY = s.yMin + (s.yMax - s.yMin) * (cfg.idleSmokeHeight ?? 0.7);
+      if (!sliceSpan(s.slices, topY, state.camera, printFx.lineA, printFx.lineB)) printFx.idle = 0;
+    }
     // raysFrame (experiment, vypnuto): paprsky se sbíhají k okrajům obrazovky zmenšené na raysFrameScale, rohy zaoblené raysBevel
     printFx.frame = (cfg.raysFrame ?? false) && printFx.inward;
     printFx.frameScale = cfg.raysFrameScale ?? 1;

@@ -78,7 +78,17 @@ export const JellyVideoMaterialImpl = shaderMaterial(
 
     // zapečené světlo solidu v místě, kde particl na solidu sedí (mip 2 = průměr okolí ~1 cm, ne jeden texel)
     vec4 surfUV = texture2D(tSurfUV, aComputeUV);
-    vBake = surfUV.w > 0.5 ? bakeLift(textureLod(tBakeLight, surfUV.xy, 2.0).rgb, 1.0, uBakeLift) * (uBakeOn * uBakePart) : vec3(0.0);
+    // particly obsahu = svítící díly -> všechny svítí naplno; z textury se bere jen odstín. Kde je solid pod particlem
+    // tmavý (černý kov), odstín z širšího okolí (mip 6 ≈ 30 texelů), jinak rudá emisních dílů.
+    float bkOn = surfUV.w > 0.5 ? uBakeOn : 0.0;
+    vBake = vec3(0.0);
+    if (bkOn > 0.0) {
+      vec3 bkT = bakeLift(textureLod(tBakeLight, surfUV.xy, 2.0).rgb, 1.0, uBakeLift);
+      vec3 bkW = textureLod(tBakeLight, surfUV.xy, 6.0).rgb;
+      float bkP = max(bkT.r, max(bkT.g, bkT.b)), bkPW = max(bkW.r, max(bkW.g, bkW.b));
+      vec3 bkHue = bkP > 0.03 ? bkT / bkP : (bkPW > 1e-4 ? bkW / bkPW : vec3(1.0, 0.03, 0.01));
+      vBake = bkHue * (bkOn * uBakePart);
+    }
 
     // náhoda na particl (stabilní, z UV v compute textuře)
     vRand = fract(sin(vec3(dot(aComputeUV, vec2(127.1, 311.7)), dot(aComputeUV, vec2(269.5, 183.3)), dot(aComputeUV, vec2(419.2, 371.9)))) * 43758.5453);

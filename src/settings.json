@@ -99,7 +99,7 @@
           "glow": 0.08,
           "sheen": 1,
           "particleTint": 0.9,
-          "particleGlow": 0.03,
+          "particleGlow": 0.012,
           "live": 1,
           "liveCell": 0.04,
           "lift": 2

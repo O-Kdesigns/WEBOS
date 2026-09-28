@@ -89,3 +89,25 @@ export function sliceLine(sl, y, camera, outA, outB) {
   }
   return minX < Infinity;
 }
+
+// Rozpětí všech solidů na obrazovce promítnuté do výšky y (world): nejlevější / nejpravější bod ze všech vrstev.
+// Pro trvalý kouř po dotištění – linka nad celou skupinou solidů, ne jen řez v jedné výšce. step = každá n-tá vrstva.
+export function sliceSpan(sl, y, camera, outA, outB, step = 4) {
+  if (!sl.list.length) return false;
+  let minX = Infinity, maxX = -Infinity;
+  for (let e = 0; e < sl.list.length; e++) {
+    const it = sl.list[e];
+    it.m.multiplyMatrices(it.mesh.matrixWorld, it.inv);
+    for (let b = 0; b < sl.NB; b += step) {
+      if (!it.has[b]) continue;
+      const o = b * 12;
+      for (let k = 0; k < 12; k += 3) {
+        tmp.set(it.ext[o + k], y, it.ext[o + k + 2]).applyMatrix4(it.m).project(camera);
+        if (tmp.z > 1) continue;
+        if (tmp.x < minX) { minX = tmp.x; outA.set(tmp.x * 0.5 + 0.5, tmp.y * 0.5 + 0.5); }
+        if (tmp.x > maxX) { maxX = tmp.x; outB.set(tmp.x * 0.5 + 0.5, tmp.y * 0.5 + 0.5); }
+      }
+    }
+  }
+  return minX < Infinity;
+}
