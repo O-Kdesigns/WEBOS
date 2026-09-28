@@ -5,18 +5,19 @@ import { getFluid } from './components/particles/ParticleFluid';
 import { particleSystems } from './components/particles/utils';
 import { portalFx } from './PortalTransition';
 
-// Jádro DNA (ORBIT): skleněná „páteř“ UVNITŘ obou vláken šroubovice – skleněné destičky stočené kolem
-// středové linky vlákna + energetická nit s pulzy. Schovaná v particlech; ukáže se jen tam, odkud
-// particly odletěly, a zhasne dřív, než se úplně vrátí (Oliver: „musí to stihnout, jinak není vidět, že mizí“).
+// Jádro DNA (ORBIT): skleněná „páteř“ UVNITŘ obou vláken šroubovice a UVNITŘ příček mezi nimi – skleněné
+// destičky + energetická nit s pulzy. Schovaná v particlech; ukáže se jen tam, odkud particly odletěly,
+// a zhasne dřív, než se úplně vrátí (Oliver: „musí to stihnout, jinak není vidět, že mizí“).
 //
-// Středová linka: šroubovice nafitovaná z DNA cílů particlů (vlákna = pás na r ≈ 1,6, příčky přes střed se
-// ignorují). Změřeno 2026-09-28: R 1,599, θ = 9,373 + 0,4963·y (atan2(z,x)), druhé vlákno +π, odchylka < 3°.
-// Geometrie je v „prostoru šroubovice“ (y, vlákno, úhel) -> pozici počítá vertex shader, fit = jen uniformy.
+// Tvar z DNA cílů particlů (fitHelix): vlákna = šroubovice (pás na r ≈ 1,6), změřeno 2026-09-28:
+// R 1,599, θ = 9,373 + 0,4963·y (atan2(z,x)), druhé vlákno +π, odchylka < 3°. Příčky = vodorovné tyče přes osu
+// ve směru θ(y) (22 ks, rozestup ~1,26, tloušťka ~0,2; shluky na koncích DNA > 0,45 na výšku se vynechají).
+// Geometrie je v „prostoru šroubovice“ -> pozici počítá vertex shader, fit = jen uniformy / atributy instancí.
 //
-// Odhalení: každý snímek (jen když se voda hýbe / particly se vracejí) se všechny DNA particly vykreslí jako
-// body do malé textury REVEAL_BINS × 2 (úseky podél vlákna × vlákno): R += „odletěl“ (smoothstep vzdálenosti
-// od domova), G += 1. Páteř v úseku = smoothstep(podíl odletěných). Při návratu podíl klesá -> páteř zhasne
-// dřív, než jsou particly doma. Config `dnaCore`, DEV `window.__coreOverride`, `window.__dnaCore` (stav).
+// Odhalení: každý snímek (jen když se voda hýbe / particly se vracejí) se DNA particly vykreslí jako body
+// do textury REVEAL_BINS × REVEAL_ROWS: řádky 0–1 = vlákna (sloupec = y domova), řádky 2.. = příčky
+// (sloupec = y, řádek = poloha podél příčky). R += „odletěl“ (smoothstep vzdálenosti od domova), G += 1.
+// Páteř v úseku = smoothstep(podíl odletěných). Config `dnaCore`, DEV `window.__coreOverride`, `window.__dnaCore`.
 
 export const DNA_CORE_DEFAULTS = {
   enabled: true,
@@ -28,17 +29,20 @@ export const DNA_CORE_DEFAULTS = {
   width: 0.22,        // world – šířka destičky (vlákno particlů má poloměr ~0,15–0,2; 0,22 je v klidu ještě schovaná)
   depth: 0.05,
   thick: 0.014,
-  spacing: 0.06,      // world Y – rozestup destiček
-  spin: 2.2,          // rad / world Y – stočení destiček kolem vlákna
+  spacing: 0.06,      // world – rozestup destiček (vlákna po výšce, příčky po délce)
+  spin: 2.2,          // rad / world – stočení destiček kolem vlákna / příčky
+  rungs: true,        // páteř i v příčkách
+  rungScale: 0.7,     // destičky v příčkách menší (tyče z particlů jsou tenčí než vlákna, ~0,15–0,2 na výšku)
   threadRadius: 0.006,
   glowRadius: 0.035,
-  pulseSpeed: 2.2,    // world/s – pulzy tečou dolů
+  pulseSpeed: 2.2,    // world/s – pulzy tečou dolů a z vláken do příček ke středu
   pulseGap: 5,
   // odhalení podle particlů
   band: 0.4,          // world – particl patří k vláknu, když má domov blíž než tohle od středové linky
-  awayMin: 0.06,      // world – odchylka od domova, od které se particl počítá jako „odletěl“ ...
-  awayMax: 0.25,      // ... naplno (vyšší = páteř zhasne dřív, než jsou particly doma)
-  revealFrom: 0.1,    // podíl odletěných v úseku, od kterého se páteř ukazuje ...
+  awayMin: 0.15,      // world – odchylka od domova, od které se particl počítá jako „odletěl“ ...
+  awayMax: 0.32,      // ... naplno (vyšší = páteř se ukáže až při větším odletu a zhasne dřív;
+                      // 0,15–0,32: zmizí ~1,5 s po tahu, poslední particly doma ~2,1 s – dřív 0,06–0,25 = 2,1 s)
+  revealFrom: 0.12,   // podíl odletěných v úseku, od kterého se páteř ukazuje ...
   revealFull: 0.35,   // ... a kdy je vidět naplno
   settle: 4,          // s po posledním pohybu vody, kdy se odhalení ještě počítá (particly se vracejí)
   // obálka rozvíření z rychlosti myši – už jen pro útlum god rays (VolumetricLight)
@@ -49,12 +53,17 @@ export const DNA_CORE_DEFAULTS = {
   release: 0.35,
 };
 
-const HELIX_DEFAULT = { th0: 9.3727, k: 0.4963, R: 1.599, yMin: -21.5, yMax: 6 };
+const HELIX_DEFAULT = { th0: 9.3727, k: 0.4963, R: 1.599, yMin: -21.5, yMax: 6, rungs: [] };
 const REVEAL_BINS = 256;
+const RUNG_SLOTS = 8;                 // úseky podél příčky v textuře odhalení
+const REVEAL_ROWS = 2 + RUNG_SLOTS;
+const MAX_RUNGS = 48;
 
 export const dnaStir = { value: 0, hold: 0 };
 
 const HELIX_GLSL = /* glsl */`
+  #define RUNG_SLOTS ${RUNG_SLOTS}.0
+  #define REVEAL_ROWS ${REVEAL_ROWS}.0
   uniform vec4 uHelix;      // th0, k, R, -
   uniform vec2 uYRange;
   uniform sampler2D tReveal;
@@ -67,14 +76,29 @@ const HELIX_GLSL = /* glsl */`
     T = normalize(vec3(-uHelix.z * uHelix.y * cs.y, 1.0, uHelix.z * uHelix.y * cs.x));
     B = normalize(cross(T, N));
   }
-  float revealAt(float y, float s) {
-    float x = (y - uYRange.x) / (uYRange.y - uYRange.x);
-    float v = s < 0.5 ? 0.25 : 0.75;
+  // příčka ve výšce y, poloha u podél ní (-1..1 = od vlákna 0 k vláknu 1): osa A, kolmice U (nahoru), V
+  void rungFrame(float y, float u, out vec3 C, out vec3 A, out vec3 U, out vec3 V) {
+    float th = uHelix.x + uHelix.y * y;
+    A = vec3(cos(th), 0.0, sin(th));
+    C = A * (u * uHelix.z) + vec3(0.0, y, 0.0);
+    U = vec3(0.0, 1.0, 0.0);
+    V = normalize(cross(A, U));
+  }
+  float revealRow(float x, float v) {
     float o = uRevealP.w * 1.5;
     vec4 m = texture2D(tReveal, vec2(x, v)) + 0.5 * (texture2D(tReveal, vec2(x - o, v)) + texture2D(tReveal, vec2(x + o, v)));
     // úseky s málo particly (konce vláken) necitlivé – jeden odtržený particl by tam držel páteř viditelnou
     float f = m.x / max(m.y, 48.0);
     return max(smoothstep(uRevealP.x, uRevealP.y, f), uRevealP.z);
+  }
+  float revealAt(float y, float s) {
+    float x = (y - uYRange.x) / (uYRange.y - uYRange.x);
+    return revealRow(x, (s < 0.5 ? 0.5 : 1.5) / REVEAL_ROWS);
+  }
+  float revealRung(float y, float u) {
+    float x = (y - uYRange.x) / (uYRange.y - uYRange.x);
+    float slot = clamp((u * 0.5 + 0.5) * RUNG_SLOTS - 0.5, 0.0, RUNG_SLOTS - 1.0);
+    return revealRow(x, (2.5 + slot) / REVEAL_ROWS);
   }
 `;
 
@@ -83,7 +107,7 @@ const PULSE_GLSL = /* glsl */`
   uniform float uPulseSpeed;
   uniform float uPulseGap;
   float h11(float n) { return fract(sin(n * 91.3458) * 47453.5453); }
-  // pulzy tekoucí po vlákně dolů: 2 vrstvy s různou rychlostí + drobné jiskření (elektrický proud)
+  // pulzy tekoucí po vlákně dolů (a z vlákna do příčky ke středu): 2 vrstvy s různou rychlostí + jiskření
   float pulses(float y) {
     float p = 0.0;
     for (int k = 0; k < 2; k++) {
@@ -103,23 +127,38 @@ const PULSE_GLSL = /* glsl */`
   }
 `;
 
-// trubka po středové lince vlákna: position = (t podél 0..1, úhel kolem, vlákno)
+// trubky: position = (t podél 0..1, úhel kolem, kind) – kind 0/1 = vlákno, 2+i = příčka i (t = -1..1 přes osu)
 const tubeVert = HELIX_GLSL + /* glsl */`
   uniform float uRadius;
+  uniform float uRungY[${MAX_RUNGS}];
+  uniform float uRungCount;
   varying vec3 vN;
   varying vec3 vV;
   varying float vY;
   varying float vReveal;
   void main() {
-    float y = mix(uYRange.x, uYRange.y, position.x);
-    vec3 C, T, N, B;
-    helixFrame(y, position.z, C, T, N, B);
-    vec3 dir = cos(position.y) * N + sin(position.y) * B;
-    vec3 wp = C + dir * uRadius;
+    vec3 wp, dir;
+    if (position.z < 1.5) {
+      float y = mix(uYRange.x, uYRange.y, position.x);
+      vec3 C, T, N, B;
+      helixFrame(y, position.z, C, T, N, B);
+      dir = cos(position.y) * N + sin(position.y) * B;
+      wp = C + dir * uRadius;
+      vY = y;
+      vReveal = revealAt(y, position.z);
+    } else {
+      int i = int(position.z - 2.0 + 0.5);
+      float y = uRungY[i];
+      float u = position.x * 2.0 - 1.0;
+      vec3 C, A, U, V;
+      rungFrame(y, u, C, A, U, V);
+      dir = cos(position.y) * U + sin(position.y) * V;
+      wp = C + dir * uRadius;
+      vY = y - (1.0 - abs(u)) * uHelix.z;  // pulz z vlákna pokračuje příčkou ke středu
+      vReveal = float(i) < uRungCount ? revealRung(y, u) : 0.0;
+    }
     vN = dir;
     vV = normalize(cameraPosition - wp);
-    vY = y;
-    vReveal = revealAt(y, position.z);
     gl_Position = vReveal < 0.002 ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * viewMatrix * vec4(wp, 1.0);
   }
 `;
@@ -140,9 +179,12 @@ const tubeFrag = PULSE_GLSL + /* glsl */`
   }
 `;
 
+// destičky: aInst = (y, kind, stočení), aRung.x = poloha podél příčky (-1..1); kind 0/1 vlákno, 2 příčka
 const tileVert = HELIX_GLSL + /* glsl */`
   attribute vec3 aHalf;
-  attribute vec3 aInst;   // y, vlákno, stočení
+  attribute vec3 aInst;
+  attribute float aRung;
+  uniform float uRungScale;
   varying vec3 vP;        // pozice v destičce, -1..1 na každé ose
   varying vec3 vN;
   varying vec3 vV;
@@ -150,16 +192,23 @@ const tileVert = HELIX_GLSL + /* glsl */`
   varying float vReveal;
   void main() {
     vec3 C, T, N, B;
-    helixFrame(aInst.x, aInst.y, C, T, N, B);
+    if (aInst.y < 1.5) {
+      helixFrame(aInst.x, aInst.y, C, T, N, B);
+      vY = aInst.x;
+      vReveal = revealAt(aInst.x, aInst.y);
+    } else {
+      rungFrame(aInst.x, aRung, C, T, N, B);  // T = osa příčky, N = nahoru
+      vY = aInst.x - (1.0 - abs(aRung)) * uHelix.z;
+      vReveal = revealRung(aInst.x, aRung);
+    }
     float cs = cos(aInst.z), sn = sin(aInst.z);
     vec3 W = cs * N + sn * B;
     vec3 D = -sn * N + cs * B;
-    vec3 wp = C + W * position.x + T * position.y + D * position.z;
+    vec3 lp = position * (aInst.y > 1.5 ? uRungScale : 1.0);
+    vec3 wp = C + W * lp.x + T * lp.y + D * lp.z;
     vN = normalize(W * normal.x + T * normal.y + D * normal.z);
     vP = position / aHalf;
     vV = normalize(cameraPosition - wp);
-    vY = aInst.x;
-    vReveal = revealAt(aInst.x, aInst.y);
     gl_Position = vReveal < 0.002 ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * viewMatrix * vec4(wp, 1.0);
   }
 `;
@@ -194,8 +243,11 @@ const tileFrag = PULSE_GLSL + /* glsl */`
   }
 `;
 
-// Akumulace odhalení: 1 bod na particl -> úsek vlákna podle DOMOVA (DNA cíle), R += odletěl, G += 1
+// Akumulace odhalení: 1 bod na particl -> úsek podle DOMOVA (DNA cíle), R += odletěl, G += 1.
+// Vlákno: domov blíž než band od středové linky. Příčka: zbytek uvnitř poloměru (příčky vyplňují střed).
 const accVert = /* glsl */`
+  #define RUNG_SLOTS ${RUNG_SLOTS}.0
+  #define REVEAL_ROWS ${REVEAL_ROWS}.0
   attribute vec2 aUv;
   uniform sampler2D tPos;
   uniform sampler2D tDna;
@@ -208,12 +260,19 @@ const accVert = /* glsl */`
     vec4 dna = texture2D(tDna, aUv);
     vec4 p = texture2D(tPos, aUv);
     float th = uHelix.x + uHelix.y * dna.y;
-    vec2 c0 = uHelix.z * vec2(cos(th), sin(th));
+    vec2 dirT = vec2(cos(th), sin(th));
+    vec2 c0 = uHelix.z * dirT;
     float d0 = length(dna.xz - c0), d1 = length(dna.xz + c0);
     float x = (dna.y - uYRange.x) / (uYRange.y - uYRange.x);
     vW = smoothstep(uAcc.y, uAcc.z, length(p.xyz - dna.xyz));
-    bool skip = dna.w <= 0.0 || min(d0, d1) > uAcc.x || x < 0.0 || x > 1.0 || uAcc.w < 0.5;
-    gl_Position = skip ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(x * 2.0 - 1.0, d0 < d1 ? -0.5 : 0.5, 0.0, 1.0);
+    float row;
+    if (min(d0, d1) < uAcc.x) row = d0 < d1 ? 0.0 : 1.0;
+    else {
+      float u = clamp(dot(dna.xz, dirT) / uHelix.z, -1.0, 1.0);
+      row = 2.0 + min(floor((u * 0.5 + 0.5) * RUNG_SLOTS), RUNG_SLOTS - 1.0);
+    }
+    bool skip = dna.w <= 0.0 || length(dna.xz) > uHelix.z + uAcc.x || x < 0.0 || x > 1.0 || uAcc.w < 0.5;
+    gl_Position = skip ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(x * 2.0 - 1.0, (row + 0.5) / REVEAL_ROWS * 2.0 - 1.0, 0.0, 1.0);
   }
 `;
 const accFrag = /* glsl */`
@@ -222,7 +281,8 @@ const accFrag = /* glsl */`
 `;
 
 // Šroubovice z DNA cílů: vlákna = particly na vnějším plášti (r > 0,85 × p90), úhel osy vláken po řezech Y
-// (zdvojený úhel spojí obě vlákna), lineární fit úhlu. Řídce (každý 5. particl) – běží jen při změně cílů.
+// (zdvojený úhel spojí obě vlákna), lineární fit úhlu. Příčky = shluky vnitřních particlů po výšce.
+// Řídce (každý 5. particl) – běží jen při změně cílů.
 function fitHelix(systems) {
   const pts = [];
   for (const c of systems) {
@@ -259,7 +319,24 @@ function fitHelix(systems) {
   let sxy = 0, sxx = 0;
   for (let i = 0; i < ys.length; i++) { sxy += (ys[i] - my) * (as[i] - ma); sxx += (ys[i] - my) ** 2; }
   const k = sxy / sxx;
-  return { th0: ma - k * my, k, R: rSum / m, yMin, yMax };
+  const R = rSum / m;
+
+  // příčky: vnitřní particly (r < 0,7 R) po výšce po 0,05 -> souvislé shluky; vysoké (> 0,45) = čepičky na koncích
+  const hb = 0.05, hn = Math.ceil((yMax - yMin + 2) / hb) + 1, hy0 = yMin - 1;
+  const hist = new Float32Array(hn), hsum = new Float32Array(hn);
+  for (let i = 0; i < n; i++) {
+    if (rs[i] > R * 0.7) continue;
+    const y = pts[i * 3 + 1], b = Math.floor((y - hy0) / hb);
+    if (b >= 0 && b < hn) { hist[b]++; hsum[b] += y; }
+  }
+  const rungs = [];
+  for (let b = 0; b < hn;) {
+    if (!hist[b]) { b++; continue; }
+    let cnt = 0, sy = 0, b0 = b;
+    while (b < hn && hist[b]) { cnt += hist[b]; sy += hsum[b]; b++; }
+    if ((b - b0) * hb <= 0.45 && cnt >= 5 && rungs.length < MAX_RUNGS) rungs.push(sy / cnt);
+  }
+  return { th0: ma - k * my, k, R, yMin, yMax, rungs };
 }
 
 function mergeCfg(appConfig) {
@@ -267,16 +344,19 @@ function mergeCfg(appConfig) {
   return { ...DNA_CORE_DEFAULTS, ...(appConfig?.dnaCore || {}), ...(ov || {}) };
 }
 
-function tubeGeometry(seg, rad) {
+// 2 vlákna (t 0..1) + MAX_RUNGS příček (t 0..1 -> -1..1 přes osu)
+function tubeGeometry(seg, rungSeg, rad) {
   const pos = [], idx = [];
-  for (let s = 0; s < 2; s++) {
+  const strip = (kind, segs) => {
     const base = pos.length / 3;
-    for (let i = 0; i <= seg; i++) for (let j = 0; j <= rad; j++) pos.push(i / seg, (j / rad) * Math.PI * 2, s);
-    for (let i = 0; i < seg; i++) for (let j = 0; j < rad; j++) {
+    for (let i = 0; i <= segs; i++) for (let j = 0; j <= rad; j++) pos.push(i / segs, (j / rad) * Math.PI * 2, kind);
+    for (let i = 0; i < segs; i++) for (let j = 0; j < rad; j++) {
       const a = base + i * (rad + 1) + j, b = a + rad + 1;
       idx.push(a, b, a + 1, b, b + 1, a + 1);
     }
-  }
+  };
+  strip(0, seg); strip(1, seg);
+  for (let r = 0; r < MAX_RUNGS; r++) strip(2 + r, rungSeg);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
@@ -286,9 +366,9 @@ function tubeGeometry(seg, rad) {
 export function DnaCore({ appConfig }) {
   const { gl } = useThree();
   const groupRef = useRef(null);
-  const st = useRef({ lastActive: -1e9, fitKey: '', ids: new WeakMap(), nextId: 1, cleared: true });
+  const st = useRef({ lastActive: -1e9, fitKey: '', ids: new WeakMap(), nextId: 1 });
   const base = mergeCfg(appConfig);
-  const geoKey = [base.width, base.depth, base.thick, base.spacing, base.spin].join(',');
+  const geoKey = [base.width, base.depth, base.thick, base.spacing].join(',');
 
   const shared = useMemo(() => ({
     uTime: { value: 0 }, uPulseSpeed: { value: 2 }, uPulseGap: { value: 3 }, uColor: { value: new THREE.Color() },
@@ -297,11 +377,13 @@ export function DnaCore({ appConfig }) {
     uYRange: { value: new THREE.Vector2(HELIX_DEFAULT.yMin, HELIX_DEFAULT.yMax) },
     tReveal: { value: null },
     uRevealP: { value: new THREE.Vector4(0.06, 0.3, 0, 1 / REVEAL_BINS) },
+    uRungY: { value: new Array(MAX_RUNGS).fill(0) },
+    uRungCount: { value: 0 },
   }), []);
 
   // akumulace odhalení (malý HalfFloat target, aditivně)
   const acc = useMemo(() => {
-    const rt = new THREE.WebGLRenderTarget(REVEAL_BINS, 2, {
+    const rt = new THREE.WebGLRenderTarget(REVEAL_BINS, REVEAL_ROWS, {
       type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
       wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, depthBuffer: false, stencilBuffer: false,
     });
@@ -324,28 +406,25 @@ export function DnaCore({ appConfig }) {
     box.setAttribute('aHalf', new THREE.BufferAttribute(half, 3));
     const tileGeo = new THREE.InstancedBufferGeometry().copy(box);
     box.dispose();
-    // destičky v rozsahu 0..1 podél vlákna (y se dopočítá z uYRange -> fit nemění geometrii)
-    const perStrand = Math.max(1, Math.round((HELIX_DEFAULT.yMax - HELIX_DEFAULT.yMin) / c.spacing));
-    const inst = new Float32Array(perStrand * 2 * 3);
-    for (let s = 0; s < 2; s++) for (let i = 0; i < perStrand; i++) {
-      const o = (s * perStrand + i) * 3;
-      inst[o] = (i + 0.5) / perStrand; inst[o + 1] = s; inst[o + 2] = 0;
-    }
-    tileGeo.setAttribute('aInstT', new THREE.InstancedBufferAttribute(inst, 3));
-    tileGeo.setAttribute('aInst', new THREE.InstancedBufferAttribute(new Float32Array(inst.length), 3));
+    // vlákna: pevný počet na vlákno (y z fitu), příčky: pevný počet na příčku × MAX_RUNGS (y z fitu)
+    const perStrand = Math.max(1, Math.round((HELIX_DEFAULT.yMax - HELIX_DEFAULT.yMin + 2) / c.spacing));
+    const perRung = Math.max(2, Math.round(2 * HELIX_DEFAULT.R / c.spacing));
+    const total = perStrand * 2 + perRung * MAX_RUNGS;
+    tileGeo.setAttribute('aInst', new THREE.InstancedBufferAttribute(new Float32Array(total * 3), 3));
+    tileGeo.setAttribute('aRung', new THREE.InstancedBufferAttribute(new Float32Array(total), 1));
     tileGeo.instanceCount = perStrand * 2;
     const tileMat = new THREE.ShaderMaterial({
       vertexShader: tileVert, fragmentShader: tileFrag,
-      uniforms: { ...shared, uGlass: { value: new THREE.Color() }, uOpacity: { value: 1 } },
+      uniforms: { ...shared, uGlass: { value: new THREE.Color() }, uOpacity: { value: 1 }, uRungScale: { value: 0.7 } },
       transparent: true, depthWrite: false, toneMapped: false,
     });
-    const tube = tubeGeometry(700, 8);
+    const tube = tubeGeometry(700, 48, 8);
     const mkTube = (coreness) => new THREE.ShaderMaterial({
       vertexShader: tubeVert, fragmentShader: tubeFrag,
       uniforms: { ...shared, uCoreness: { value: coreness }, uRadius: { value: 0.01 } },
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
     });
-    return { tileGeo, tileMat, tube, threadMat: mkTube(1), glowMat: mkTube(0), instKey: '' };
+    return { tileGeo, tileMat, tube, threadMat: mkTube(1), glowMat: mkTube(0), perStrand, perRung, instKey: '' };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geoKey, shared]);
 
@@ -381,7 +460,7 @@ export function DnaCore({ appConfig }) {
     const live = [];
     for (const sys of particleSystems) if (!sys.disposed && tickNow - (sys.tick || 0) < 250) live.push(sys);
 
-    // fit šroubovice při změně DNA cílů
+    // fit šroubovice + příček při změně DNA cílů
     let key = '';
     for (const sys of live) {
       const w = sys.writtenData;
@@ -391,10 +470,17 @@ export function DnaCore({ appConfig }) {
     if (key !== s.fitKey && live.length) {
       s.fitKey = key;
       const f = fitHelix(live);
-      if (f) { shared.uHelix.value.set(f.th0, f.k, f.R, 0); shared.uYRange.value.set(f.yMin, f.yMax); }
+      if (f) {
+        shared.uHelix.value.set(f.th0, f.k, f.R, 0);
+        shared.uYRange.value.set(f.yMin, f.yMax);
+        for (let i = 0; i < MAX_RUNGS; i++) shared.uRungY.value[i] = f.rungs[i] ?? 0;
+        s.rungs = f.rungs;
+      }
       s.fit = f;
       if (import.meta.env.DEV) { s.rt = acc.rt; window.__dnaCore = s; }
     }
+    const rungs = c.rungs ? (s.rungs || []) : [];
+    shared.uRungCount.value = rungs.length;
 
     if (fl.velocity) s.lastActive = now;
     const anyRest = live.some((sys) => sys.posVar.material.uniforms.uTransitionProgress.value < 0.001);
@@ -403,7 +489,7 @@ export function DnaCore({ appConfig }) {
     if (g) g.visible = active;
     if (!active) return;
 
-    // 1) akumulace: kolik particlů každého úseku vlákna odletělo
+    // 1) akumulace: kolik particlů každého úseku vlákna / příčky odletělo
     const prevRT = gl.getRenderTarget(), prevAuto = gl.autoClear;
     const col = gl.getClearColor(s.tmpCol || (s.tmpCol = new THREE.Color())), alpha = gl.getClearAlpha();
     gl.autoClear = false;
@@ -412,7 +498,8 @@ export function DnaCore({ appConfig }) {
     gl.clear(true, false, false);
     for (const sys of live) {
       const pu = sys.posVar.material.uniforms;
-      if (!sys.spinePoints) {
+      if (!sys.spinePoints || sys.spinePoints.material.vertexShader !== accVert) {
+        sys.spinePoints?.geometry.dispose(); sys.spinePoints?.material.dispose();
         const n = sys.size * sys.size, uv = new Float32Array(n * 2);
         for (let i = 0; i < n; i++) { uv[i * 2] = ((i % sys.size) + 0.5) / sys.size; uv[i * 2 + 1] = (Math.floor(i / sys.size) + 0.5) / sys.size; }
         const geo = new THREE.BufferGeometry();
@@ -435,18 +522,29 @@ export function DnaCore({ appConfig }) {
     gl.setRenderTarget(prevRT);
     gl.autoClear = prevAuto;
 
-    // 2) páteř
-    const instKey = shared.uYRange.value.x + ',' + shared.uYRange.value.y + ',' + c.spin;
+    // 2) páteř: instance destiček (y + stočení) jen při změně fitu / příček / stočení
+    const y0 = shared.uYRange.value.x, y1 = shared.uYRange.value.y;
+    const instKey = y0 + ',' + y1 + ',' + c.spin + ',' + rungs.join(',');
     if (instKey !== parts.instKey) {
-      // y + stočení z aktuálního fitu (jen při změně fitu / stočení)
       parts.instKey = instKey;
-      const t = parts.tileGeo.attributes.aInstT.array, a = parts.tileGeo.attributes.aInst;
-      const y0 = shared.uYRange.value.x, y1 = shared.uYRange.value.y;
-      for (let i = 0; i < t.length; i += 3) {
-        const y = y0 + (y1 - y0) * t[i];
-        a.array[i] = y; a.array[i + 1] = t[i + 1]; a.array[i + 2] = y * c.spin + t[i + 1] * 1.7;
+      const a = parts.tileGeo.attributes.aInst, ar = parts.tileGeo.attributes.aRung;
+      const ps = parts.perStrand, pr = parts.perRung, R = shared.uHelix.value.z;
+      const nS = Math.min(ps, Math.max(1, Math.round((y1 - y0) / c.spacing)));
+      let o = 0;
+      for (let sI = 0; sI < 2; sI++) for (let i = 0; i < nS; i++, o++) {
+        const y = y0 + (y1 - y0) * (i + 0.5) / nS;
+        a.array[o * 3] = y; a.array[o * 3 + 1] = sI; a.array[o * 3 + 2] = y * c.spin + sI * 1.7;
+        ar.array[o] = 0;
       }
-      a.needsUpdate = true;
+      // příčky: od vlákna k vláknu, konce kousek uvnitř vlákna (spojení s páteří vlákna)
+      const uMax = (R - c.width * 0.25) / R;
+      for (let r = 0; r < rungs.length; r++) for (let i = 0; i < pr; i++, o++) {
+        const u = -uMax + 2 * uMax * (i + 0.5) / pr;
+        a.array[o * 3] = rungs[r]; a.array[o * 3 + 1] = 2; a.array[o * 3 + 2] = u * R * c.spin + r * 0.9;
+        ar.array[o] = u;
+      }
+      parts.tileGeo.instanceCount = o;
+      a.needsUpdate = true; ar.needsUpdate = true;
     }
     shared.uTime.value = state.clock.elapsedTime;
     shared.uPulseSpeed.value = c.pulseSpeed;
@@ -456,6 +554,7 @@ export function DnaCore({ appConfig }) {
     shared.uRevealP.value.set(c.revealFrom, Math.max(c.revealFrom + 0.01, c.revealFull), c.rest, 1 / REVEAL_BINS);
     parts.tileMat.uniforms.uGlass.value.set(c.glass);
     parts.tileMat.uniforms.uOpacity.value = c.glassOpacity;
+    parts.tileMat.uniforms.uRungScale.value = c.rungScale;
     parts.threadMat.uniforms.uRadius.value = c.threadRadius;
     parts.glowMat.uniforms.uRadius.value = c.glowRadius;
   });
