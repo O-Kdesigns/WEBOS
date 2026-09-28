@@ -162,7 +162,11 @@ const VolumetricLightShader = {
     uFogRim: { value: 0.35 },
     uWaterStreak: { value: 0.25 },
     uCoverRadius: { value: 0.025 },
-    uDustLightPos: { value: new THREE.Vector2(0.5, 1.15) } // ORBIT: odkud svítí mlha z prachu (nebe nad obrazovkou)
+    uDustLightPos: { value: new THREE.Vector2(0.5, 1.15) }, // ORBIT: odkud svítí mlha z prachu (nebe nad obrazovkou)
+    // Předpočet pro smyčky P1 a P13 (PostPrepassShader): 1× na pixel scény místo 48×/24× na pixel obrazovky
+    tRaysSrc: { value: dummyTexture },   // světlo nad prahem pro god rays (R11G11B10F, rozlišení scény)
+    tDustSrc: { value: dummyTexture },   // prach × maska pozadí / uDustCap (RGBA8, nearest = stejné pixely masky)
+    uPrepass: { value: 1.0 }             // 0 = původní výpočet ve smyčkách (DEV A/B: window.__postPrepass = false)
   },
   vertexShader: `
     varying vec2 vUv;
@@ -241,6 +245,9 @@ const VolumetricLightShader = {
     uniform float uCenterRayDensity;
 
     uniform sampler2D tBlur;
+    uniform sampler2D tRaysSrc;
+    uniform sampler2D tDustSrc;
+    uniform float uPrepass;
     uniform vec2 uBlurTexel;
     // rozmazaný buffer je ve 1/4 rozlišení -> 4 posunuté vzorky, jinak je u silného DOF vidět mřížka (kostičky)
     vec3 blurSmooth(vec2 uv) {
@@ -569,13 +576,23 @@ const VolumetricLightShader = {
       vec2 uv = vUv + st * getDither(gl_FragCoord.xy);
       vec3 acc = vec3(0.0);
       float dec = 1.0;
-      for (int i = 0; i < 24; i++) {
-        vec2 cu = clamp(uv, vec2(0.0), vec2(1.0));
-        float bg = step(0.9999, texture2D(tDepth, cu).r);
-        // jen tečky prachu (nad tmavou barvou pozadí), strop = jasné věci nepřepálí mlhu
-        acc += clamp(texture2D(tBlur, cu).rgb - 0.02, 0.0, uDustCap) * bg * dec;
-        dec *= uDustDecay;
-        uv += st;
+      if (uPrepass > 0.5) {
+        // tDustSrc = to samé, co počítá větev níž, jen předem 1× na pixel scény (1 čtení místo 2 na krok)
+        for (int i = 0; i < 24; i++) {
+          acc += texture2D(tDustSrc, clamp(uv, vec2(0.0), vec2(1.0))).rgb * dec;
+          dec *= uDustDecay;
+          uv += st;
+        }
+        acc *= uDustCap;
+      } else {
+        for (int i = 0; i < 24; i++) {
+          vec2 cu = clamp(uv, vec2(0.0), vec2(1.0));
+          float bg = step(0.9999, texture2D(tDepth, cu).r);
+          // jen tečky prachu (nad tmavou barvou pozadí), strop = jasné věci nepřepálí mlhu
+          acc += clamp(texture2D(tBlur, cu).rgb - 0.02, 0.0, uDustCap) * bg * dec;
+          dec *= uDustDecay;
+          uv += st;
+        }
       }
       vec3 light = acc * 0.12 * uDustRays + clamp(blurSmooth(vUv) - 0.02, 0.0, uDustCap) * uDustHaze;
       float lum = dot(light, vec3(0.299, 0.587, 0.114));
@@ -674,17 +691,28 @@ const VolumetricLightShader = {
           float tMin = max(0.0, uThreshold - uSmoothThreshold);
           float tMax = min(1.0, uThreshold + uSmoothThreshold + 0.0001);
 
-          for (int i = 0; i < NUM_SAMPLES; i++) {
-            curUv -= deltaTexCoord;
-            vec2 clampedUv = clamp(curUv, vec2(0.0), vec2(1.0));
-            vec4 sampleCol = texture2D(tDiffuse, clampedUv);
+          if (uPrepass > 0.5) {
+            // tRaysSrc = kopie scény v R11G11B10F (4 B/pixel místo 8) – smyčka je brzděná čtením paměti
+            for (int i = 0; i < NUM_SAMPLES; i++) {
+              curUv -= deltaTexCoord;
+              // × půl kroku mantisy: zápis do R11G11B10F zaokrouhluje dolů (6/6/5 bitů) -> jinak o ~0,7 % tmavší
+              vec3 sc = texture2D(tRaysSrc, clamp(curUv, vec2(0.0), vec2(1.0))).rgb * vec3(1.0078, 1.0078, 1.0156);
+              accumRays += sc * (smoothstep(tMin, tMax, dot(sc, vec3(0.299, 0.587, 0.114))) * illuminationDecay * normWeight);
+              illuminationDecay *= sampleStepDecay;
+            }
+          } else {
+            for (int i = 0; i < NUM_SAMPLES; i++) {
+              curUv -= deltaTexCoord;
+              vec2 clampedUv = clamp(curUv, vec2(0.0), vec2(1.0));
+              vec4 sampleCol = texture2D(tDiffuse, clampedUv);
 
-            float lum = dot(sampleCol.rgb, vec3(0.299, 0.587, 0.114));
-            float factor = smoothstep(tMin, tMax, lum);
-            vec3 lightExtracted = sampleCol.rgb * factor;
+              float lum = dot(sampleCol.rgb, vec3(0.299, 0.587, 0.114));
+              float factor = smoothstep(tMin, tMax, lum);
+              vec3 lightExtracted = sampleCol.rgb * factor;
 
-            accumRays += lightExtracted * illuminationDecay * normWeight;
-            illuminationDecay *= sampleStepDecay;
+              accumRays += lightExtracted * illuminationDecay * normWeight;
+              illuminationDecay *= sampleStepDecay;
+            }
           }
 
           accumRays *= uExposure * uLightColor * uVisibility * distFade;
@@ -1000,6 +1028,46 @@ export function CenterLight({ appConfig }) {
   );
 }
 
+// Předpočet pro smyčky postu (výkon, stejný vzhled): 1× na pixel scény místo v každém ze 48 (P1) / 24 (P13)
+// kroků na každém pixelu obrazovky. uMode 0 = světlo nad prahem pro god rays (dřív ve smyčce z tDiffuse),
+// 1 = prach × maska pozadí / uDustCap (dřív 2 čtení na krok: tDepth + tBlur). Změřeno 2026-09-28, LIGHTING.md.
+const PostPrepassShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    tDepth: { value: null },
+    tBlur: { value: dummyTexture },
+    uThreshold: { value: 0.4 },
+    uSmoothThreshold: { value: 0.15 },
+    uDustCap: { value: 0.15 },
+    uMode: { value: 0 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+  `,
+  fragmentShader: `${TEX_LOD0}
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
+    uniform sampler2D tBlur;
+    uniform float uThreshold;
+    uniform float uSmoothThreshold;
+    uniform float uDustCap;
+    uniform float uMode;
+    varying vec2 vUv;
+    void main() {
+      if (uMode < 0.5) {
+        // jen kopie barvy do úspornějšího formátu (práh jasu dál počítá smyčka – stejně jako dřív, po
+        // bilineárním filtrování; předem aplikovaný práh dával kolem jasných hran o ~1,4 % silnější paprsky)
+        gl_FragColor = vec4(texture2D(tDiffuse, vUv).rgb, 1.0);
+      } else {
+        float bg = step(0.9999, texture2D(tDepth, vUv).r);
+        vec3 d = clamp(texture2D(tBlur, vUv).rgb - 0.02, 0.0, uDustCap) * bg;
+        gl_FragColor = vec4(d / max(uDustCap, 1e-5), 1.0);
+      }
+    }
+  `
+};
+
 // Rozmazání pro cinematic vrstvu (DOF + bloom) ve 1/4 rozlišení.
 // uMode 0 = downsample (4 bilineární vzorky = průměr 4x4 pixelů, bez blikání malých particlů), 1 = 9-tap gauss podél uDir.
 const CineBlurShader = {
@@ -1084,6 +1152,36 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
   }, [width, height]);
 
   useEffect(() => () => { blurTargets.a.dispose(); blurTargets.b.dispose(); }, [blurTargets]);
+
+  // Předpočet pro smyčky god rays (P1) a mlhy z prachu (P13) v rozlišení scény – viz PostPrepassShader
+  const prepass = useMemo(() => {
+    // R11G11B10F: HDR, 4 B/pixel místo 8 – renderovat do něj jde jen s EXT_color_buffer_float (jinak HalfFloat)
+    const r111110 = gl.extensions.has('EXT_color_buffer_float');
+    const rays = new THREE.WebGLRenderTarget(width, height, {
+      format: r111110 ? THREE.RGBFormat : THREE.RGBAFormat, type: r111110 ? THREE.UnsignedInt101111Type : THREE.HalfFloatType,
+      minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false
+    });
+    const dust = new THREE.WebGLRenderTarget(width, height, {
+      type: THREE.UnsignedByteType, // nearest: vzorek trefí stejný pixel jako dřív maska z hloubky (ta je nearest)
+      minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false
+    });
+    rays.texture.generateMipmaps = false;
+    dust.texture.generateMipmaps = false;
+    const material = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.clone(PostPrepassShader.uniforms),
+      vertexShader: PostPrepassShader.vertexShader,
+      fragmentShader: PostPrepassShader.fragmentShader,
+      depthTest: false,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    const scene = new THREE.Scene();
+    scene.add(mesh);
+    return { rays, dust, material, mesh, scene };
+  }, [width, height, gl]);
+  useEffect(() => () => {
+    prepass.rays.dispose(); prepass.dust.dispose(); prepass.material.dispose(); prepass.mesh.geometry.dispose();
+  }, [prepass]);
   const steam = useMemo(() => new PrintSteam(), []);
   useEffect(() => () => steam.dispose(), [steam]);
 
@@ -1530,6 +1628,41 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       mat.uniforms.uCineVignette.value = cine.vignette ?? 0.45;
     }
 
+    drawPost(!(import.meta.env.DEV && window.__postPrepass === false));
+    // DEV: znovu vykreslit jen post nad stejným snímkem scény (přesné A/B porovnání pixelů předpočtu)
+    if (import.meta.env.DEV) window.__postRedraw = drawPost;
+  }, 1);
+
+  // 1c + 2: předpočet pro smyčky god rays / mlhy z prachu a fullscreen post na obrazovku
+  function drawPost(usePrepass) {
+    const mat = materialRef.current;
+    const U = mat.uniforms;
+    U.uPrepass.value = usePrepass ? 1 : 0;
+    if (usePrepass) {
+      const pu = prepass.material.uniforms;
+      pu.tDiffuse.value = sceneTarget.texture;
+      pu.tDepth.value = sceneTarget.depthTexture;
+      pu.tBlur.value = U.tBlur.value;
+      pu.uThreshold.value = U.uThreshold.value;
+      pu.uSmoothThreshold.value = U.uSmoothThreshold.value;
+      pu.uDustCap.value = U.uDustCap.value;
+      const orbit = U.uInsideTransition.value < 0.999;
+      prof.scope('post: předpočet paprsků + prachu');
+      if (orbit && U.uVisibility.value > 0.001) {
+        pu.uMode.value = 0;
+        gl.setRenderTarget(prepass.rays);
+        gl.render(prepass.scene, quadCamera);
+      }
+      if (orbit && U.uTvStrength.value > 0.001 && U.uDustFog.value > 0.001) {
+        pu.uMode.value = 1;
+        gl.setRenderTarget(prepass.dust);
+        gl.render(prepass.scene, quadCamera);
+      }
+      prof.end();
+      U.tRaysSrc.value = prepass.rays.texture;
+      U.tDustSrc.value = prepass.dust.texture;
+    }
+
     // 2. Vykreslení fullscreen quadu s postprocessingem na obrazovku
     gl.setRenderTarget(null);
     mat.uniforms.tDiffuse.value = sceneTarget.texture;
@@ -1537,8 +1670,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     prof.scope('post: mlha + god rays + DOF (fullscreen)');
     gl.render(quadScene, quadCamera);
     prof.end();
-
-  }, 1);
+  }
 
   return null;
 }

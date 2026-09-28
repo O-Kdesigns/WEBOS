@@ -78,15 +78,16 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec3 p = position * (1.0 + uWobble * 0.14 * w * smoothstep(0.0, 1.0, uTransitionProgress));
 
     // minimální vzdálenost od kamery: kulička těsně u objektivu se zmenší do ztracena (jinak zakryje půl obrazu)
-    vec4 centerView = viewMatrix * modelMatrix * instanceMatrix * vec4(computedPos, 1.0);
+    // modelViewMatrix = viewMatrix * modelMatrix spočítaná jednou na CPU; závorky = jen matice × vektor
+    // (dřív 2× násobení matic 4×4 na každý vrchol, ~2,6 M vrcholů za snímek)
+    vec4 centerView = modelViewMatrix * (instanceMatrix * vec4(computedPos, 1.0));
     float nearFade = smoothstep(0.12, 0.4, -centerView.z);
 
     vec3 transformed = p * computedScale * nearFade + computedPos;
     vec4 instancePosition = instanceMatrix * vec4(transformed, 1.0);
-    vec4 mvPosition = viewMatrix * modelMatrix * instancePosition;
+    vec4 mvPosition = modelViewMatrix * instancePosition;
     
-    mat3 m = mat3(instanceMatrix);
-    vNormal = normalize(normalMatrix * m * normal);
+    vNormal = normalize(normalMatrix * (mat3(instanceMatrix) * normal));
     
     gl_Position = projectionMatrix * mvPosition;
     vScreenPos = gl_Position;

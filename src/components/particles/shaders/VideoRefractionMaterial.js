@@ -37,10 +37,9 @@ export const VideoRefractionMaterialImpl = shaderMaterial(
     
     vec3 transformed = position * computedScale + computedPos;
     vec4 instancePosition = instanceMatrix * vec4(transformed, 1.0);
-    vec4 mvPosition = viewMatrix * modelMatrix * instancePosition;
+    vec4 mvPosition = modelViewMatrix * instancePosition; // = viewMatrix * modelMatrix, bez násobení matic na vrchol
     
-    mat3 m = mat3(instanceMatrix);
-    vNormal = normalize(normalMatrix * m * normal);
+    vNormal = normalize(normalMatrix * (mat3(instanceMatrix) * normal));
     
     gl_Position = projectionMatrix * mvPosition;
     vScreenPos = gl_Position;

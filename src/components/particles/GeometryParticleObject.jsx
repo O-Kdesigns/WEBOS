@@ -34,6 +34,7 @@ const rand = (i, k) => {
 const vertexCache = new WeakMap();   // geometry -> { vertices, center }
 const dataCache = new Map();         // klíč nastavení -> particlesData
 const DATA_CACHE_MAX = 24;
+const RESERVE_SETTLE = 4; // s klidu DNA, než se přestanou kreslit particly v rezervní kostce (návrat trvá ~1–2 s)
 
 export function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex }) {
   const meshRef = useRef();
@@ -252,8 +253,25 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   const worldGroupRef = useRef();
   const prevMatRef = useRef({ m: new THREE.Matrix4(), compute: null });
   const inverseGroupRef = useRef();
-  
-  useFrame(() => {
+
+  // Rezervní kostka: particly s indexem >= počet vrcholů DNA v ORBITu čekají mimo obrazovku (±12–16 j. od kamery).
+  // Když je DNA v klidu (přechod 0, žádný scatter) déle než RESERVE_SETTLE s, nekreslí se (instance jsou na konci
+  // rozsahu, stačí zkrátit mesh.count) – GPGPU je dál počítá, takže při odchodu do INSIDE vyletí odkud mají.
+  // Obsah0 Xelithu: 18 k z 34,5 k particlů = ~0,9 M trojúhelníků za snímek navíc úplně zbytečně.
+  const dnaCount = dnaGeometry ? dnaGeometry.attributes.position.count : count;
+  const orbitSinceRef = useRef(-1);
+
+  useFrame((state) => {
+    const mesh = meshRef.current;
+    if (mesh && compute && !compute.disposed && dnaCount < count) {
+      const pu = compute.posVar.material.uniforms;
+      const calm = pu.uTransitionProgress.value < 1e-4 && pu.uScatter.value < 1e-4;
+      const now = state.clock.elapsedTime;
+      if (!calm) orbitSinceRef.current = -1;
+      else if (orbitSinceRef.current < 0) orbitSinceRef.current = now;
+      const cut = calm && now - orbitSinceRef.current > RESERVE_SETTLE && !(import.meta.env.DEV && window.__reserveDraw);
+      mesh.count = cut ? dnaCount : count;
+    }
     if (worldGroupRef.current && inverseGroupRef.current && compute) {
       // matrixWorld is only refreshed during render (after useFrame). On a project switch the parent
       // pivot jumps (yStep + rotation) at commit -> a stale matrix shifted the whole DNA + reserve cube
