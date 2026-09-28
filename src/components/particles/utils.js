@@ -67,6 +67,10 @@ uniform float uEscMouse;      // násobek síly vody na volné particly
 uniform float uEscScale;      // velikost víření proudu, po kterém plují (1/world)
 uniform float uEscLife;       // s od zlomu, po kterých se volný sám připojí zpět
 uniform float uReturnPull;    // pružina k domovu (1/s²) – brzdí let od domova, ne jen stáčí směr
+// Vodítko DNA (jen v klidu DNA, ne odtržené): particl smí od svého místa v DNA nejvýš ~uDnaLeash world
+// (každý 0.6–1.4× náhodně) – dál měkká stěna pohltí rychlost ven a vrátí přesah. Vír myši tak vlákna jen
+// nafoukne do chlupaté trubice, šroubovice zůstane čitelná (bez vodítka odletěly vzdálené o celý poloměr DNA).
+uniform float uDnaLeash;      // 0 = vypnuto
 
 // síla návratu 0..1 podle "držení" (w): zpoždění, pak pomalý rozjezd (ease-in)
 float returnRampOf(float hold) {
@@ -221,6 +225,20 @@ void main() {
         // jen když ho právě odfoukla voda (w > 0) – ne při přeletu na nové místo po přepnutí projektu
         float lucky = fract(sin(dot(uv, vec2(63.7264, 10.873)) + uEscSeed * 7.31) * 43758.5453);
         if (dnaRest * uEscOn > 0.5 && vel.w > 0.0 && dist > uEscDist && lucky < uEscChance) vel.w = 2.0;
+        // VODÍTKO DNA: měkká stěna kolem domova (odtržený particl ji tento snímek ještě nemá – od příštího pluje volně)
+        if (dnaRest > 0.5 && uDnaLeash > 0.0 && vel.w < 1.5) {
+            float lim = uDnaLeash * (0.6 + 0.8 * fract(sin(dot(uv, vec2(27.619, 57.583))) * 43758.5453));
+            vec3 off = pos.xyz + vel.xyz - tgt;
+            float ol = length(off);
+            if (ol > lim * 0.5) {
+                vec3 n = off / ol;
+                float vr = dot(vel.xyz, n);
+                // rychlost ven se u stěny postupně pohltí (do strany klouže dál -> víří kolem vlákna)
+                if (vr > 0.0) vel.xyz -= n * vr * smoothstep(lim * 0.5, lim, ol);
+                // přesah za stěnou vrátit (~12/s)
+                if (ol > lim) vel.xyz -= n * (ol - lim) * (1.0 - exp(-12.0 * uDt));
+            }
+        }
     }
     
     gl_FragColor = vel;
@@ -447,7 +465,7 @@ export function useGPGPU(count, particlesData, gl) {
       uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
       uReturnK: { value: 0 }, uReturnDamp: { value: 0 }, uReturnTurn: { value: 10 },
       uEscOn: { value: 0 }, uEscDist: { value: 0.3 }, uEscChance: { value: 0.1 }, uEscSeed: { value: 0 }, uEscDrift: { value: 0.05 },
-      uEscFriction: { value: 0.99 }, uEscLeash: { value: 1.5 }, uEscMouse: { value: 1 }, uEscScale: { value: 1.5 }, uEscLife: { value: 25 }, uReturnPull: { value: 0 },
+      uEscFriction: { value: 0.99 }, uEscLeash: { value: 1.5 }, uEscMouse: { value: 1 }, uEscScale: { value: 1.5 }, uEscLife: { value: 25 }, uReturnPull: { value: 0 }, uDnaLeash: { value: 0 },
     });
     
     posVar.material.uniforms.uTime = { value: 0 };
@@ -545,17 +563,23 @@ function mergeFluidCfg(prev, src) {
   return { ...FLUID_DEFAULTS, ...(src || {}), ...(ov || {}), src, ov };
 }
 
+// Klid DNA v ORBITu (config particlePhysics.dnaForce / dnaLeash, editor Uvnitř → Fyzika)
+export const DNA_HOLD_DEFAULTS = {
+  dnaForce: 0.6,   // násobek síly vody jen v klidu DNA (projekt INSIDE má plnou)
+  dnaLeash: 0.35,  // world – jak daleko od místa v DNA smí particl odletět (každý 0.6–1.4×), 0 = bez vodítka
+};
+
 // Odtržené particly (config particlePhysics.escape, editor Uvnitř → Odtržené particly)
 export const ESCAPE_DEFAULTS = {
   enabled: true,
-  distance: 0.4,     // world – jak daleko od domova musí být odfouknutý, aby se utrhl (bod zlomu)
-  chance: 0.12,      // podíl particlů, které se utrhnout můžou
+  distance: 0.3,     // world – jak daleko od domova musí být odfouknutý, aby se utrhl (bod zlomu; < dnaLeash, jinak ho vodítko nepustí)
+  chance: 0.05,      // podíl particlů, které se utrhnout můžou (0.12 -> 0.05: méně bordelu kolem DNA)
   drift: 0.2,        // world/s – rychlost pomalého plutí
   friction: 0.975,   // za snímek při 60 fps – jak dlouho dojíždí strčení myší
-  leash: 2.0,        // world – jak daleko od domova smí odplout
+  leash: 1.0,        // world – jak daleko od domova smí odplout (2.0 -> 1.0: drží se u DNA)
   mouse: 1,          // násobek síly vody na volné
   flowScale: 2.2,    // velikost víření proudu (větší = drobnější víry -> sousedé se víc rozejdou)
-  life: 25,          // s od zlomu, po kterých se sám připojí zpět
+  life: 12,          // s od zlomu, po kterých se sám připojí zpět
   color: '#ffb347',
   tint: 0.7,         // jak moc převezmou barvu
   flash: 1.2,        // jas záblesku v bodě zlomu (přičte se k barvě; ~1 = jen o trochu přes normál)
@@ -680,8 +704,9 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
         velUniforms.uWaveCStep.value = fluid.waveCStep ?? 0.5;
         velUniforms.uFluidTexel.value.copy(fluid.texel);
         velUniforms.uDt.value = Math.min(Math.max(delta, 1 / 240), 1 / 30);
-        // celková síla: násobí vše, co voda particlům dává (proud i vlny)
-        velUniforms.uFluidForce.value = mouseMult * Math.max(0, fluidCfg.strength ?? 1);
+        // celková síla: násobí vše, co voda particlům dává (proud i vlny); v klidu DNA (ORBIT) × dnaForce
+        const inDna = posUniforms.uTransitionProgress.value < 0.001;
+        velUniforms.uFluidForce.value = mouseMult * Math.max(0, fluidCfg.strength ?? 1) * (inDna ? Math.max(0, phys.dnaForce ?? DNA_HOLD_DEFAULTS.dnaForce) : 1);
         velUniforms.uCoupling.value = fluidCfg.coupling;
         velUniforms.uFriction.value = fluidCfg.friction;
         velUniforms.uFrontShell.value = fluidCfg.frontShell;
@@ -697,7 +722,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     }
     velUniforms.uFluidOn.value = fluidOn ? 1 : 0;
     // vodní režim: návrat jako tlumená pružina v rychlosti (ne během emerge letu ani scatteru – ty jedou po dráze)
-    const emergeBusy = posUniforms.uEmerge.value > 0.5 && posUniforms.uPrintY.value <= 1e3;
+    // (v klidu DNA emerge nic nedělá – cíl je DNA; dřív tu obsah se solidem v ORBITu jel bez fyziky i vodítka)
+    const emergeBusy = posUniforms.uEmerge.value > 0.5 && posUniforms.uPrintY.value <= 1e3 && posUniforms.uTransitionProgress.value >= 0.001;
     posUniforms.uPhysReturn.value = fluidOn && !emergeBusy && posUniforms.uScatter.value < 1e-4 ? 1 : 0;
     {
       // rychlost návratu (podíl za snímek při 60 fps) -> vlastní frekvence pružiny se stejně dlouhým návratem
@@ -713,6 +739,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       const arc = Math.min(1, Math.max(0, phys.returnArc ?? 0.5));
       velUniforms.uReturnTurn.value = omega * omega * 0.08 * Math.pow(40, 1 - 2 * arc);
     }
+    velUniforms.uDnaLeash.value = Math.max(0, phys.dnaLeash ?? DNA_HOLD_DEFAULTS.dnaLeash);
     // odtržené particly (jen v klidu DNA)
     const esc = { ...ESCAPE_DEFAULTS, ...(phys.escape || {}) };
     velUniforms.uEscOn.value = esc.enabled ? 1 : 0;

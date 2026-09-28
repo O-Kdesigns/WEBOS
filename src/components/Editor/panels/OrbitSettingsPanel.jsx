@@ -1,5 +1,7 @@
 ﻿import React from 'react';
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
+import { DNA_CORE_DEFAULTS } from '../../../DnaCore';
+import { DNA_HOLD_DEFAULTS } from '../../particles/utils';
 
 export const DenseSlider = ({ label, desc, min, max, step, value, onChange, unit = '', color = '#10b981' }) => (
   <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 45px', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
@@ -45,6 +47,13 @@ export const DashboardCard = ({ title, icon, color, span = 1, children }) => (
 
 export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving, updateBackground, updateCameraSpotLight, updateDnaSettings, updatePhysics, assets, openSections, toggleSection, touchSection }) {
   const p = appConfig.dnaSettings || {};
+  const core = { ...DNA_CORE_DEFAULTS, ...(appConfig.dnaCore || {}) };
+  const updateCore = (field, value) => updateConfig('dnaCore', { ...(appConfig.dnaCore || {}), [field]: value });
+  const pp = appConfig.particlePhysics || {};
+  const updatePP = (field, value) => updateConfig('particlePhysics', { ...pp, [field]: value });
+  const vl = appConfig.volumetricLight || {};
+  const updateVL = (field, value) => updateConfig('volumetricLight', { ...vl, [field]: value });
+  const updateTvLight = (field, value) => updateConfig('tvLight', { ...(appConfig.tvLight || {}), [field]: value });
   
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
@@ -55,6 +64,31 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
         <div style={{ height: '10px' }} />
         <DenseToggle desc="Zobrazí vnější dekorativní sloupec částic simulující DNA." label="Zobrazit částice DNA" checked={p.hasParticles ?? true} onChange={v => updateDnaSettings('hasParticles', v)} />
         <DenseSlider desc="Šířka oblouku (rádius) obíhajících částic." label="Poloměr oblaku" min={5} max={50} step={1} value={p.radius ?? 20} onChange={v => updateDnaSettings('radius', v)} />
+      </DashboardCard>
+
+      <DashboardCard title="Rozvíření DNA (myš v ORBITu)" icon="🌀" color="#22d3ee">
+        <DenseSlider desc="Násobek síly vody (myši) jen v klidu DNA v ORBITu. Projekt uvnitř má plnou sílu. Menší = menší bordel při kroužení." label="Síla myši na DNA" min={0} max={2} step={0.05} color="#22d3ee" value={pp.dnaForce ?? DNA_HOLD_DEFAULTS.dnaForce} onChange={v => updatePP('dnaForce', v)} />
+        <DenseSlider desc="Jak daleko smí particl DNA odletět od svého místa (world, každý náhodně 0.6–1.4×). Dál ho měkká stěna nepustí – šroubovice zůstane čitelná i při silném kroužení. 0 = bez omezení (starý stav: odletěly až o poloměr DNA)." label="Vodítko DNA" min={0} max={1.5} step={0.01} color="#22d3ee" value={pp.dnaLeash ?? DNA_HOLD_DEFAULTS.dnaLeash} onChange={v => updatePP('dnaLeash', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#22d3ee', marginBottom: '8px' }}>Jádro DNA (skleněná páteř)</div>
+        <DenseToggle desc="Skleněné destičky naskládané po ose DNA (jako páry bází) + energetická nit s pulzy. V klidu skryté, ukáže se, když myš rozvíří particly." label="Jádro DNA" checked={core.enabled} color="#22d3ee" onChange={v => updateCore('enabled', v)} />
+        <DenseSlider desc="Celkový jas jádra při plném rozvíření." label="Síla jádra" min={0} max={3} step={0.05} color="#22d3ee" value={core.intensity} onChange={v => updateCore('intensity', v)} />
+        <DenseSlider desc="Viditelnost jádra v klidu (0 = jen při rozvíření, 1 = pořád)." label="Viditelnost v klidu" min={0} max={1} step={0.01} color="#22d3ee" value={core.rest} onChange={v => updateCore('rest', v)} />
+        <DenseSlider desc="Jak dlouho jádro po zastavení myši drží, než zhasne (s). Particly jsou zpět ~1,4 s po tahu." label="Podržení" min={0} max={3} step={0.05} color="#22d3ee" value={core.hold} onChange={v => updateCore('hold', v)} />
+        <DenseColor desc="Barva energie – nit, pulzy a světlo v hranách skla." label="Barva energie" value={core.color} onChange={v => updateCore('color', v)} />
+        <DenseColor desc="Barva skla destiček." label="Barva skla" value={core.glass} onChange={v => updateCore('glass', v)} />
+        <DenseSlider desc="Krytí skleněných destiček." label="Krytí skla" min={0} max={1.5} step={0.05} color="#22d3ee" value={core.glassOpacity} onChange={v => updateCore('glassOpacity', v)} />
+        <DenseSlider desc="Šířka destiček napříč osou (world)." label="Šířka destiček" min={0.1} max={1} step={0.01} color="#22d3ee" value={core.width} onChange={v => updateCore('width', v)} />
+        <DenseSlider desc="Rozestup destiček po ose (world)." label="Rozestup destiček" min={0.04} max={0.5} step={0.01} color="#22d3ee" value={core.spacing} onChange={v => updateCore('spacing', v)} />
+        <DenseSlider desc="Stočení páteře: násobek otáčení šroubovice DNA (1 = destičky sledují příčky DNA)." label="Stočení" min={0} max={8} step={0.1} color="#22d3ee" value={core.twist} onChange={v => updateCore('twist', v)} />
+        <DenseSlider desc="Rychlost pulzů, které tečou po niti dolů (world/s)." label="Rychlost pulzů" min={0} max={8} step={0.1} color="#22d3ee" value={core.pulseSpeed} onChange={v => updateCore('pulseSpeed', v)} />
+        <DenseSlider desc="Průměrná vzdálenost pulzů (world). Víc = řidší pulzy." label="Rozestup pulzů" min={0.5} max={15} step={0.1} color="#22d3ee" value={core.pulseGap} onChange={v => updateCore('pulseGap', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#22d3ee', marginBottom: '8px' }}>Paprsky (god rays ze středu)</div>
+        <DenseSlider desc="Základní síla god rays v ORBITu (paprsky z jasných míst scény)." label="Síla paprsků" min={0} max={3} step={0.05} color="#22d3ee" value={vl.exposure ?? 1} onChange={v => updateVL('exposure', v)} />
+        <DenseSlider desc="O kolik paprsky zeslábnou při rozvíření DNA myší (rozházené svítící particly jinak dělají paprsky přes celou obrazovku)." label="Útlum při víření" min={0} max={1} step={0.05} color="#22d3ee" value={vl.stirCut ?? 0.6} onChange={v => updateVL('stirCut', v)} />
+        <DenseSlider desc="O kolik paprsky zeslábnou při scrollu (podle rychlosti jízdy kamery)." label="Útlum při scrollu" min={0} max={1} step={0.05} color="#22d3ee" value={vl.scrollCut ?? 0.5} onChange={v => updateVL('scrollCut', v)} />
+        <DenseSlider desc="O kolik paprsky (i mlha z prachu) slábnou přes sklo aktivní televize – jinak kladou závoj přes video. 0 = jako dřív." label="Paprsky přes sklo TV" min={0} max={1} step={0.05} color="#22d3ee" value={appConfig.tvLight?.rayMask ?? 0.85} onChange={v => updateTvLight('rayMask', v)} />
       </DashboardCard>
 
       <DashboardCard title="Pohyb a Kamera" icon="🚀" color="#f43f5e">

@@ -9,6 +9,7 @@ import { getFluid } from './components/particles/ParticleFluid';
 import { PrintSteam } from './PrintSteam';
 import { prof } from './debug/GpuProfiler';
 import { TEX_LOD0 } from './glslTexLod0';
+import { dnaStir } from './DnaCore';
 
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
 dummyTexture.needsUpdate = true;
@@ -144,6 +145,7 @@ const VolumetricLightShader = {
     uTvAxB: { value: new THREE.Vector2(0.0, 0.1) },   // půl výšky TV na obrazovce
     uTvInv: { value: new THREE.Vector4(10, 0, 0, 10) }, // inverze [A B] -> lokální souřadnice obdélníku TV
     uTvHalo: { value: 0.35 },
+    uTvRayMask: { value: 0.85 },                        // o kolik paprsky (P1 + prach P13) slábnou přes sklo aktivní TV
     uFluidTexel: { value: new THREE.Vector2(1 / 228, 1 / 128) },
     tDye: { value: null },                              // barvivo Pavlovy vody (vířící kouř) -> INSIDE voda
     uDyeOn: { value: 0.0 },
@@ -406,6 +408,7 @@ const VolumetricLightShader = {
     uniform vec2 uTvAxB;
     uniform vec4 uTvInv;
     uniform float uTvHalo;
+    uniform float uTvRayMask;
     uniform vec2 uFluidTexel;
     uniform sampler2D tDye;
     uniform float uDyeOn;
@@ -600,12 +603,20 @@ const VolumetricLightShader = {
       float lum = dot(light, vec3(0.299, 0.587, 0.114));
       return mix(light, uTvColor * lum * 2.0, uDustTint) * uDustFog;
     }
+    // Paprsky přes sklo aktivní TV: závoj přes video (Oliver 2026-09-28) -> na ploše skla ztlumit
+    float tvRayMask() {
+      if (uTvRayMask < 0.001 || uTvVis < 0.01) return 1.0;
+      vec2 d = (vUv - uTvPos) * vec2(uAspect, 1.0);
+      vec2 ab = abs(vec2(dot(uTvInv.xy, d), dot(uTvInv.zw, d)));
+      float inside = 1.0 - smoothstep(0.86, 1.02, max(ab.x, ab.y));
+      return 1.0 - uTvRayMask * inside * smoothstep(0.05, 0.5, uTvVis);
+    }
     vec3 tvLight(bool isBg) {
       float w = uTvClip > 0.001 && uInsideTransition < 0.999 ? waterMask() : 0.0;
       vec2 asp = vec2(uAspect, 1.0);
       vec3 L = vec3(0.0);
       float orbitOn = uTvStrength * (1.0 - uInsideTransition);
-      if (orbitOn > 0.001 && uDustFog > 0.001) L += dustFog() * orbitOn * (1.0 - uTvClip * w);
+      if (orbitOn > 0.001 && uDustFog > 0.001) L += dustFog() * orbitOn * (1.0 - uTvClip * w) * tvRayMask();
       float orbitAmt = uTvVis * orbitOn * uTvAnchor;
       if (orbitAmt > 0.001) {
         vec2 d = (vUv - uTvPos) * asp;
@@ -717,7 +728,7 @@ const VolumetricLightShader = {
             }
           }
 
-          accumRays *= uExposure * uLightColor * uVisibility * distFade;
+          accumRays *= uExposure * uLightColor * uVisibility * distFade * tvRayMask();
           orbitColor += accumRays;
         }
       }
@@ -1273,6 +1284,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
   // Předalokované vektory pro nulové alokace v useFrame (Pravidlo #3 GEMINI.md)
   const lightPosRef = useRef(new THREE.Vector3());
   const camWorldPosRef = useRef(new THREE.Vector3());
+  const scrollCutRef = useRef({ y: null, v: 0 }); // obálka rychlosti scrollu (kamera ve world Y) pro útlum god rays
   const projRef = useRef(new THREE.Vector3());
   const camDirRef = useRef(new THREE.Vector3());
   const toLightRef = useRef(new THREE.Vector3());
@@ -1312,7 +1324,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uCameraFar.value = camera.far;
 
     // Dynamická aktualizace parametrů z config.json
-    const vl = appConfig?.volumetricLight || {};
+    // DEV: window.__volOverride = { exposure: 0, ... } přepíše god rays (P1) živě
+    const vl = { ...(appConfig?.volumetricLight || {}), ...(import.meta.env.DEV ? window.__volOverride : null) };
     const fog = appConfig?.insideFog || {};
 
     // Master Fog Intensity přepočtená na násobič 0.0 až 1.0 (slider 0 až 100)
@@ -1373,6 +1386,14 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
 
     camera.updateMatrixWorld();
     camera.getWorldPosition(camWorldPosRef.current);
+    {
+      // scroll = kamera jede po ose DNA; při jízdě particly přelétají a paprsky z nich přepalují scénu
+      const sc = scrollCutRef.current, y = camWorldPosRef.current.y;
+      const vy = sc.y === null || safeDelta <= 0 ? 0 : Math.abs(y - sc.y) / safeDelta;
+      sc.y = y;
+      const target = THREE.MathUtils.smoothstep(vy, 1, 8);
+      sc.v += (target - sc.v) * (1 - Math.exp(-safeDelta / (target > sc.v ? 0.15 : 0.8)));
+    }
 
     // Screen-space projection
     projRef.current.copy(lightPosRef.current).project(camera);
@@ -1392,7 +1413,12 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
 
     mat.uniforms.uLightScreenPos.value.set(screenX, screenY);
     mat.uniforms.uVisibility.value = visibility;
-    mat.uniforms.uExposure.value = vl.exposure ?? 1.0;
+    // při rozvíření DNA (DnaCore.dnaStir) a při scrollu paprsky slábnou – rozházené/přelétající svítící particly
+    // jinak dělají paprsky přes celou obrazovku
+    const rayCut = Math.max(Math.min(1, Math.max(0, vl.stirCut ?? 0.6)) * dnaStir.value,
+      Math.min(1, Math.max(0, vl.scrollCut ?? 0.5)) * scrollCutRef.current.v);
+    mat.uniforms.uExposure.value = (vl.exposure ?? 1.0) * (1 - rayCut);
+    if (import.meta.env.DEV) window.__rayCut = rayCut;
     mat.uniforms.uDecay.value = vl.decay ?? 0.92;
     mat.uniforms.uDensity.value = vl.density ?? 0.9;
     mat.uniforms.uWeight.value = vl.weight ?? 0.5;
@@ -1466,6 +1492,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uTvStrength.value = tl.enabled === false ? 0 : (tl.strength ?? 1);
       u.uTvRays.value = tl.rays ?? 0.45;
       u.uTvHalo.value = tl.halo ?? 0.12;
+      u.uTvRayMask.value = tl.rayMask ?? 0.85;
       u.uTvRayLen.value = tl.rayLength ?? 3.5;
       u.uTvGlow.value = tl.glow ?? 0.6;
       u.uTvAnchor.value = tl.tvAnchor ?? 0;

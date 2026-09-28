@@ -35,7 +35,7 @@
     "hasAura": true,
     "auraSize": 2.2,
     "auraOpacity": 0.35,
-    "exposure": 1,
+    "exposure": 0.8,
     "decay": 0.92,
     "density": 0.9,
     "weight": 0.5,
