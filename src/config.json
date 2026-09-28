@@ -306,9 +306,5 @@
   "dnaSettings": {
     "sizeRandomness": 1,
     "baseSize": 0.034
-  },
-  "solidPrint": {
-    "smoke": 1.4,
-    "idleSmoke": 0.6
   }
 }

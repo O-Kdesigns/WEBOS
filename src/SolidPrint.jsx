@@ -49,9 +49,13 @@ export const printFx = {
   hot: new THREE.Color('#fff0c8'),
   // pára nad linkou (PrintSteam.js): strength 0 = vypnuto
   steam: { strength: 2, rise: 0.15, turb: 1.5, fade: 1.1, mouse: 1, res: 160, smoke: 0.6, smokeColor: '#a4a4aa' },
-  // trvalý kouř po dotištění: linka nad celou skupinou solidů (sliceSpan), idle 0..1 náběh, idleSmoke = síla kouře
+  // horká pára nad dotištěnými solidy (celou dobu v INSIDE): stoupá ze svítících míst solidů (maska ze zapečeného
+  // světla, renderGlowMask), idle = náběh 0..1, hotSmoke = síla, idleA/idleB = spodek solidů na obrazovce (výška páry)
   idle: 0,
-  idleSmoke: 0,
+  hotSmoke: 0,
+  idleA: new THREE.Vector2(),
+  idleB: new THREE.Vector2(),
+  renderGlowMask: null,
   frame: false,         // true = paprsky se sbíhají k okrajům rámu (obrazovka zmenšená frameScale), přebíjí center
   frameScale: 1,        // 1 = rám = okraje obrazovky, 0 = smrskne se do středu obrazovky
   bevel: 0.3,           // zaoblení rohů rámu
@@ -176,6 +180,32 @@ const MASK_FRAG = /* glsl */`
   }
 `;
 
+// maska svítících míst solidu pro horkou páru po dotištění: jas zapečeného světla (emissiveMap) × viditelnost v mlze
+const GLOW_VERT = /* glsl */`
+  varying vec2 vUv;
+  varying float vViewZ;
+  void main() {
+    vUv = uv;
+    vec4 vp = viewMatrix * modelMatrix * vec4(position, 1.0);
+    vViewZ = -vp.z;
+    gl_Position = projectionMatrix * vp;
+  }
+`;
+const GLOW_FRAG = /* glsl */`
+  uniform sampler2D tBake;
+  uniform vec4 uPrintFog;
+  uniform float uPrintFogMax;
+  varying vec2 vUv;
+  varying float vViewZ;
+  void main() {
+    vec3 b = texture2D(tBake, vUv).rgb;
+    float g = max(b.r, max(b.g, b.b));
+    float nz = clamp((vViewZ - uPrintFog.x) / max(0.001, uPrintFog.y - uPrintFog.x), 0.0, 1.0);
+    float fogA = nz >= 1.0 ? uPrintFogMax : clamp(pow(nz, uPrintFog.z) * uPrintFog.w, 0.0, uPrintFogMax);
+    gl_FragColor = vec4(vec3(g * (1.0 - fogA)), 1.0);
+  }
+`;
+
 const ease = (t) => { const s = t * t * (3 - 2 * t); return t * 0.4 + s * 0.6; };
 
 // leaving = uživatel odchází z projektu: nejdřív se odtiskne, pak onUnprinted() (App přepne na ORBIT)
@@ -192,7 +222,13 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
       side: THREE.DoubleSide
     });
     const scene = new THREE.Scene();
-    return { material, scene, proxies: new Map() };
+    const glowMaterial = new THREE.ShaderMaterial({
+      uniforms: { tBake: { value: null }, uPrintFog: shared.uPrintFog, uPrintFogMax: shared.uPrintFogMax },
+      vertexShader: GLOW_VERT,
+      fragmentShader: GLOW_FRAG,
+      side: THREE.DoubleSide
+    });
+    return { material, glowMaterial, scene, proxies: new Map() };
   }, []);
 
   const dpr = Math.min(gl.getPixelRatio(), 1.25);
@@ -207,7 +243,7 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
   }, [size.width, size.height, dpr]);
 
   useEffect(() => () => target.dispose(), [target]);
-  useEffect(() => () => { gpu.material.dispose(); gpu.scene.clear(); gpu.proxies.clear(); }, [gpu]);
+  useEffect(() => () => { gpu.material.dispose(); gpu.glowMaterial.dispose(); gpu.scene.clear(); gpu.proxies.clear(); }, [gpu]);
 
   const st = useRef({ wait: 0, yMin: 0, yMax: 1, box: new THREE.Box3(), clear: new THREE.Color(), v: new THREE.Vector3(), slices: buildSlices([], 0, 0), la: new THREE.Vector2(), lb: new THREE.Vector2() });
 
@@ -251,7 +287,28 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
       renderer.setClearColor(s.clear, alpha);
       return target.texture;
     };
-    return () => { printFx.renderMask = null; printFx.maskTarget = null; };
+    // po dotištění: maska svítících míst (jen solidy se zapečeným světlem), stejný render target
+    const glowShow = (p, mesh) => {
+      const map = mesh.material?.emissiveMap;
+      p.visible = !!map;
+      if (map) { p.material = gpu.glowMaterial; gpu.glowMaterial.uniforms.tBake.value = map; }
+    };
+    const maskBack = (p) => { p.visible = true; p.material = gpu.material; };
+    printFx.renderGlowMask = (renderer, camera) => {
+      if (printFx.idle <= 0.001 || printFx.meshes.size === 0) return null;
+      sync();
+      gpu.proxies.forEach(glowShow);
+      renderer.getClearColor(s.clear);
+      const alpha = renderer.getClearAlpha();
+      renderer.setClearColor(0x000000, 1);
+      renderer.setRenderTarget(target);
+      renderer.clear();
+      renderer.render(gpu.scene, camera);
+      renderer.setClearColor(s.clear, alpha);
+      gpu.proxies.forEach(maskBack);
+      return target.texture;
+    };
+    return () => { printFx.renderMask = null; printFx.renderGlowMask = null; printFx.maskTarget = null; };
   }, [gpu, target, sync]);
 
   // předvázané callbacky pro forEach (žádné closures v useFrame)
@@ -350,16 +407,13 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     stm.strength = cfg.steam ?? 2; stm.rise = cfg.steamRise ?? 0.15; stm.turb = cfg.steamTurb ?? 1.5;
     stm.fade = cfg.steamFade ?? 1.1; stm.mouse = cfg.steamMouse ?? 1;
     stm.smoke = cfg.smoke ?? 0.6; stm.smokeColor = cfg.smokeColor ?? '#a4a4aa';
-    // trvalý kouř nad dotištěnými solidy: najede, jak dohasíná žár tisku (p > 0.85), při odchodu zmizí
-    printFx.idleSmoke = cfg.idleSmoke ?? 0;
-    const idleWant = viewMode === 'INSIDE' && !leaving && p > 0.85 && printFx.idleSmoke > 0 ? 1 : 0;
+    // horká pára nad dotištěnými solidy: najede, jak dohasíná tisk (p > 0.85), při odchodu zmizí
+    printFx.hotSmoke = cfg.hotSmoke ?? 1;
+    const idleWant = viewMode === 'INSIDE' && !leaving && p > 0.85 && printFx.hotSmoke > 0 ? 1 : 0;
     printFx.idle = THREE.MathUtils.damp(printFx.idle, idleWant, 1.2, dt);
     if (printFx.idle < 0.002 && !idleWant) printFx.idle = 0;
-    if (printFx.idle > 0 && !printFx.lineOn) {
-      // výška zdroje = podíl výšky solidů od spodku (vršek = nejvyšší, nejvzdálenější robot -> kouř by byl mimo obraz)
-      const topY = s.yMin + (s.yMax - s.yMin) * (cfg.idleSmokeHeight ?? 0.7);
-      if (!sliceSpan(s.slices, topY, state.camera, printFx.lineA, printFx.lineB)) printFx.idle = 0;
-    }
+    // spodek solidů na obrazovce = odkud se měří výška páry (rychlost stoupání, mizení)
+    if (printFx.idle > 0 && !sliceSpan(s.slices, s.yMin, state.camera, printFx.idleA, printFx.idleB)) printFx.idle = 0;
     // raysFrame (experiment, vypnuto): paprsky se sbíhají k okrajům obrazovky zmenšené na raysFrameScale, rohy zaoblené raysBevel
     printFx.frame = (cfg.raysFrame ?? false) && printFx.inward;
     printFx.frameScale = cfg.raysFrameScale ?? 1;

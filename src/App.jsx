@@ -315,13 +315,14 @@ function ProjectParticleNode({ node, nodeName, settings, appConfig, videoTexture
     mouseMultiplier: mouseMultiplier,
     emerge,
     collisionSolids,
+    nodeName,
     ...(sphereSegments ? { sphereSegments } : {}),
     transform: {
       position: [0, 0, 0],
       quaternion: [0, 0, 0, 1],
       scale: transforms ? transforms.scale : [1, 1, 1]
     }
-  }), [settings, node.geometry, multiplier, mouseMultiplier, sphereSegments, transforms, emerge, collisionSolids]);
+  }), [settings, node.geometry, multiplier, mouseMultiplier, sphereSegments, transforms, emerge, collisionSolids, nodeName]);
 
   if (!transforms) return null;
 

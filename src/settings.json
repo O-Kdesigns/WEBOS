@@ -102,7 +102,10 @@
           "particleGlow": 0.012,
           "live": 1,
           "liveCell": 0.04,
-          "lift": 2
+          "lift": 2,
+          "glowNodes": [
+            "Particles_Xelith_Backround"
+          ]
         }
       },
       "videoUrl": "video/reklama xelith.mp4"

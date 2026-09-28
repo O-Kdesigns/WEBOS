@@ -120,6 +120,7 @@ const VolumetricLightShader = {
     uSteamOn: { value: 0.0 },
     uSteamGlow: { value: new THREE.Color(0, 0, 0) },
     uSteamHot: { value: new THREE.Color(0, 0, 0) },
+    uSteamArea: { value: 0.0 },
     uSmokeColor: { value: new THREE.Color('#a4a4aa') },  // šedá kouře nahoře (dole se míchá do červena)
     uSmokeOpacity: { value: 0.6 },
     uPrintSolo: { value: 0.0 },                          // DEV window.__printSolo: jen linka + lasery + pára na černé
@@ -364,8 +365,9 @@ const VolumetricLightShader = {
     uniform vec3 uSmokeColor;
     uniform float uSmokeOpacity;
     uniform float uPrintSolo;
+    uniform float uSteamArea;                // 1 = horká pára ze svítících míst solidů po dotištění (bez linky)
     vec3 printSteam(vec3 base, vec2 uv) {
-      if (uSteamOn <= 0.0 && uSmokeOpacity <= 0.0) return base;
+      if (uSteamOn <= 0.0) return base;
       vec2 st = texture2D(tSteam, uv).rg;
       // jemné chomáče navíc (textura páry je malá): vertikálně natažený šum stoupající s párou
       vec2 wp = vec2(uv.x * uAspect * 38.0, uv.y * 16.0 - uTime * 1.6);
@@ -375,16 +377,15 @@ const VolumetricLightShader = {
       float ex = uPrintLineB.x - uPrintLineA.x;
       float s = clamp((uv.x - uPrintLineA.x) / (abs(ex) > 1e-5 ? ex : 1e-5), 0.0, 1.0);
       float h = max(uv.y - mix(uPrintLineA.y, uPrintLineB.y, s), 0.0);
-      float nearL = exp(-h / 0.06);
+      float nearL = exp(-h / 0.06) * (1.0 - uSteamArea);
       // kouř: závoj, dole červeno-šedý, nahoře šedý
-      // síla do 1 = krytí, nad 1 = hustší kouř (víc v exponentu, strop krytí 0,85 -> 0,95)
-      float a = (1.0 - exp(-st.r * (1.2 + 2.4 * wisp * wisp) * max(1.0, uSmokeOpacity))) * min(1.0, uSmokeOpacity);
+      float a = (1.0 - exp(-st.r * (1.2 + 2.4 * wisp * wisp))) * uSmokeOpacity;
       vec3 red = uSmokeColor * 0.45 + uSteamGlow * 0.35;
       vec3 sc = mix(uSmokeColor, red, nearL);
-      vec3 col = mix(base, sc, clamp(a, 0.0, mix(0.85, 0.95, clamp(uSmokeOpacity - 1.0, 0.0, 1.0))));
+      vec3 col = mix(base, sc, clamp(a, 0.0, 0.85));
       col += uSteamGlow * st.r * nearL * 0.12 * uSteamOn;   // žár prosvítá kouřem těsně nad linkou
       // horká pára z tištěných míst (aditivní)
-      float lit = 0.2 + 0.8 * exp(-h / 0.07);
+      float lit = mix(0.2 + 0.8 * exp(-h / 0.07), 0.9, uSteamArea);
       col += mix(uSteamGlow, uSteamHot, 0.3) * st.g * wm * 0.7 * lit * uSteamOn;
       return col;
     }
@@ -974,8 +975,10 @@ const VolumetricLightShader = {
         finalColor += printRays(vUv, dither);
         finalColor += printLineRays(vUv);
         finalColor += printLineGlow(vUv);
-        finalColor = printSteam(finalColor, vUv);
       }
+      // pára/kouř mimo podmínku paprsků: dřív zmizela naráz, jakmile dohasly paprsky tisku (i když v simulaci ještě byla);
+      // po dotištění ji drží horká pára ze svítících míst solidů (uSteamOn = 0 -> printSteam nic nedělá)
+      finalColor = printSteam(finalColor, vUv);
 
       gl_FragColor = vec4(cinematicFinish(finalColor + tvLight(cineBg), cineBg), baseColor.a);
     }
@@ -1515,22 +1518,25 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     const lk = lineOn ? printFx.heat * printFx.lineVis : 0;
     mat.uniforms.uPrintLineGlow.value.copy(printFx.glow).multiplyScalar(lk);
     mat.uniforms.uPrintLineHot.value.copy(printFx.hot).multiplyScalar(lk);
-    mat.uniforms.uSteamGlow.value.copy(printFx.glow).multiplyScalar(lineOn ? printFx.heat : 0);
-    mat.uniforms.uSteamHot.value.copy(printFx.hot).multiplyScalar(lineOn ? printFx.heat : 0);
+    // po dotištění: horká pára ze svítících míst solidů (maska ze zapečeného světla, SolidPrint.renderGlowMask)
+    const glowMask = !lineOn && printFx.idle > 0.001 && printFx.renderGlowMask ? printFx.renderGlowMask(gl, camera) : null;
+    const steamK = lineOn ? printFx.heat : (glowMask ? printFx.idle : 0);
+    mat.uniforms.uSteamGlow.value.copy(printFx.glow).multiplyScalar(steamK);
+    mat.uniforms.uSteamHot.value.copy(printFx.hot).multiplyScalar(steamK);
+    mat.uniforms.uSteamArea.value = glowMask ? 1 : 0;
     const stc = printFx.steam;
-    // po dotištění: trvalý kouř (printFx.idle, linka nad solidy z SolidPrintDriveru), bez horké páry a žáru
-    const idleOn = !lineOn && printFx.idle > 0;
-    if ((lineOn && stc.strength > 0) || idleOn) {
+    if ((lineOn || glowMask) && stc.strength > 0) {
       const fl = getFluid(gl);
       prof.scope('tisk: pára');
       mat.uniforms.tSteam.value = steam.step(gl, {
-        a: printFx.lineA, b: printFx.lineB, mask: printMask || dummyTexture, fluid: fl.velocity, fluidTexel: mat.uniforms.uFluidTexel.value,
+        a: glowMask ? printFx.idleA : printFx.lineA, b: glowMask ? printFx.idleB : printFx.lineB, mask: glowMask || printMask, fluid: fl.velocity, fluidTexel: mat.uniforms.uFluidTexel.value,
         dt: Math.min(Math.max(delta, 1 / 240), 1 / 30), time: state.clock.getElapsedTime(), aspect: size.width / Math.max(1, size.height),
-        res: stc.res, rise: stc.rise, lift: 0.02, turb: stc.turb, fade: stc.fade, emit: 5 * (idleOn ? printFx.idle : printFx.lineVis), hot: idleOn ? 0 : 1, mouse: stc.mouse,
+        res: stc.res, rise: stc.rise, lift: 0.02, turb: stc.turb, fade: stc.fade, emit: glowMask ? 0 : 5 * printFx.lineVis, hot: 1, mouse: stc.mouse,
+        area: glowMask ? 4 * printFx.hotSmoke * printFx.idle : 0, hfade: glowMask ? 2.5 : 7,
       });
       prof.end();
-      mat.uniforms.uSteamOn.value = lineOn ? stc.strength * printFx.heat : 0;
-      mat.uniforms.uSmokeOpacity.value = Math.max(lineOn ? stc.smoke * printFx.heat : 0, printFx.idleSmoke * printFx.idle);
+      mat.uniforms.uSteamOn.value = stc.strength * steamK;
+      mat.uniforms.uSmokeOpacity.value = Math.min(1, stc.smoke) * steamK * (glowMask ? 0.6 : 1);
       if (steam.smokeColor !== stc.smokeColor) { steam.smokeColor = stc.smokeColor; mat.uniforms.uSmokeColor.value.set(stc.smokeColor); }
     } else {
       if (steam.live) steam.clear(gl);

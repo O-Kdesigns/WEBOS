@@ -6,6 +6,7 @@ import { TEX_LOD0 } from './glslTexLod0';
 // "gravitace nahoru") + víření z šumu (sílí s výškou) + proud myši z 2D vody (ParticleFluid, jen když je vzhůru).
 // Zdroj: tenký pás nad linkou A–B, nerovnoměrné obláčky + víc tam, kde maska tisku opravdu žhne.
 // R = pára, G = horká pára (z masky) – VolumetricLight ji nasvítí barvou žáru, u linky víc.
+// Po dotištění (area > 0): zdroj není linka, ale celá maska (svítící místa solidů) -> horká pára stoupá ze solidů.
 // Nic se neřeší (tlak, divergence) -> cena ~ jeden fullscreen pass v malém rozlišení.
 
 const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
@@ -13,7 +14,7 @@ const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(positi
 const STEP = `${TEX_LOD0}
 uniform sampler2D uSrc, uMask, uFluid;
 uniform vec2 uA, uB, uFluidTexel;
-uniform float uDt, uTime, uAspect, uRise, uLift, uTurb, uFade, uEmit, uHot, uMouse, uFluidOn;
+uniform float uDt, uTime, uAspect, uRise, uLift, uTurb, uFade, uEmit, uHot, uMouse, uFluidOn, uArea, uHFade;
 varying vec2 vUv;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -47,7 +48,7 @@ void main() {
   vec2 back = vUv - vel * uDt;
   vec2 dens = texture2D(uSrc, back).rg;
   // výš = rychleji mizí (kouř se nahoře ztrácí, sloupy se ke konci zmenšují)
-  dens *= exp(-(uFade + hp * 7.0) * uDt);
+  dens *= exp(-(uFade + hp * uHFade) * uDt);
   // okraje textury nerecyklovat
   dens *= step(0.0, back.x) * step(back.x, 1.0) * step(back.y, 1.0);
 
@@ -67,6 +68,14 @@ void main() {
     // kouř z celé linky (rovnoměrně, jen jemně po obláčcích) + víc tam, kde se tiskne
     dens.r += e * (0.55 + 0.45 * puff + hot * 0.5);
     dens.g += e * hot * uHot * puff;
+  }
+  // zdroj z plochy: svítící místa solidů (maska), obláčky se pomalu mění
+  if (uArea > 0.0) {
+    float g = dot(texture2D(uMask, vUv).rgb, vec3(0.33)) * 3.0;
+    float puffA = vnoise(vec2(vUv.x * uAspect * 45.0, vUv.y * 30.0 - uTime * 1.4)) * vnoise(vec2(vUv.x * uAspect * 13.0 + 5.0, uTime * 0.5));
+    float e = clamp(g, 0.0, 1.5) * uArea * uDt * (0.3 + 1.4 * puffA);
+    dens.g += e;
+    dens.r += e * 0.25;
   }
   gl_FragColor = vec4(min(dens, vec2(4.0)), 0.0, 1.0);
 }`;
@@ -89,6 +98,7 @@ export class PrintSteam {
         uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uFluidTexel: { value: new THREE.Vector2() },
         uDt: { value: 0 }, uTime: { value: 0 }, uAspect: { value: 1 }, uRise: { value: 0.25 }, uLift: { value: 0.03 },
         uTurb: { value: 1 }, uFade: { value: 1.2 }, uEmit: { value: 6 }, uHot: { value: 1 }, uMouse: { value: 1 }, uFluidOn: { value: 0 },
+        uArea: { value: 0 }, uHFade: { value: 7 },
       },
     });
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat);
@@ -113,7 +123,7 @@ export class PrintSteam {
     this.live = false;
   }
 
-  // p: {a, b, mask, fluid, fluidTexel, dt, time, aspect, res, rise, lift, turb, fade, emit, hot, mouse}
+  // p: {a, b, mask, fluid, fluidTexel, dt, time, aspect, res, rise, lift, turb, fade, emit, hot, mouse, area, hfade}
   step(gl, p) {
     const H = Math.max(32, Math.round(p.res));
     this.resize(gl, Math.max(32, Math.round(H * p.aspect)), H);
@@ -125,6 +135,7 @@ export class PrintSteam {
     u.uDt.value = p.dt; u.uTime.value = p.time; u.uAspect.value = p.aspect;
     u.uRise.value = p.rise; u.uLift.value = p.lift; u.uTurb.value = p.turb; u.uFade.value = p.fade;
     u.uEmit.value = p.emit; u.uHot.value = p.hot; u.uMouse.value = p.mouse;
+    u.uArea.value = p.area ?? 0; u.uHFade.value = p.hfade ?? 7;
     const prev = gl.getRenderTarget(), ac = gl.autoClear;
     gl.autoClear = false;
     gl.setRenderTarget(this.rt[1]);

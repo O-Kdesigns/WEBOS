@@ -333,12 +333,15 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       u.uSurfMaxPen.value = collisionCfg.band / Math.max(1e-6, nodeMatrix?.getMaxScaleOnAxis() ?? 1);
       u.uPrintY.value = printFx.uniforms.uPrintY.value;
     }
-    // barva ze zapečeného světla solidu: jen obsah spárovaný se solidem (emerge = "X0" k "X1"), ne pozadí okolo
+    // svítící particly v barvě zapečeného světla: obsah spárovaný se solidem (emerge = "X0" k "X1") + nody
+    // ze seznamu bakedLight.glowNodes (Xelith: pozadí – louže a shluky kolem robotů, ve videu taky svítily).
+    // Particl s místem na solidu bere odstín z textury, ostatní rudou emisních dílů.
     const mu = mesh?.material?.uniforms;
     if (mu && mu.tSurfUV) {
-      const st = settings.emerge ? surfRef.current.surfTex : null;
-      mu.tSurfUV.value = st;
-      mu.uBakeOn.value = st && compute && st.image.width === compute.size ? 1 : 0;
+      const glow = settings.emerge || (settings.bakedLight?.glowNodes || []).includes(settings.nodeName);
+      const st = surfRef.current.surfTex;
+      mu.tSurfUV.value = glow && st && compute && st.image.width === compute.size ? st : null;
+      mu.uBakeOn.value = glow ? 1 : 0;
     }
     if (compute && !compute.disposed && compute.posVar.material.uniforms.uEmerge) {
       const u = compute.posVar.material.uniforms;
