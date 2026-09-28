@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, Suspense, useMemo, useEffect, useCallback } from 'react';
+﻿import React, { useState, useRef, Suspense, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Box, Text, Environment, useGLTF, PerspectiveCamera } from '@react-three/drei';
 import { a, useSpring, useTransition } from '@react-spring/three';
@@ -23,6 +23,9 @@ import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
 import { CanvasDebugTracker, DebugMonitorHUD } from './DebugMonitor';
 import { GpuProfilerHook, GpuProfilerPanel } from './debug/GpuProfilerPanel';
+import { mark } from './debug/FrameProbe';
+import { ProbeProfiler } from './debug/ProbeProfiler';
+import { keepShaderPrograms } from './keepShaderPrograms';
 
 // Na obrazovku se kreslí jen fullscreen quad postprocessu (scéna jde do vlastního render targetu),
 // takže MSAA výchozího framebufferu nemá co vyhlazovat a preserveDrawingBuffer nic nečte –
@@ -142,10 +145,12 @@ function VideoManager({ allUrls, activeUrl, viewMode, isPreloaded = true, childr
 
       if (isCurrentActive) {
         if (entry.video.paused) {
+          mark(`video play ${decodeURIComponent(url.split('/').pop())}`);
           entry.video.play().catch(() => {});
         }
       } else {
         if (!entry.video.paused) {
+          mark(`video pause ${decodeURIComponent(url.split('/').pop())}`);
           entry.video.pause();
         }
       }
@@ -802,11 +807,16 @@ function CameraRig({ viewMode, rotationY, springScrollY, currentIndex, appConfig
 
 
 function RotationController({ rotationY, pageDistance, totalPages, setClosestIndex }) {
+  // setState jen při skutečné změně (dřív každý snímek -> React plánoval zbytečné rendery App)
+  const lastIdx = useRef(null);
   useFrame(() => {
     const val = rotationY.get();
     let idx = Math.round(val / pageDistance) % totalPages;
     if (idx < 0) idx += totalPages;
-    setClosestIndex(prev => prev !== idx ? idx : prev);
+    if (idx === lastIdx.current) return;
+    if (lastIdx.current !== null) mark(`scroll: projekt ${lastIdx.current} -> ${idx}`);
+    lastIdx.current = idx;
+    setClosestIndex(idx);
   });
   return null;
 }
@@ -862,9 +872,12 @@ function App() {
   }, [pagesData]);
   
   const [closestIndex, setClosestIndex] = useState(0);
+  // záznamník záseků: konec React commitu po přepnutí projektu (rozdíl od značky 'scroll:' = cena Reactu)
+  useLayoutEffect(() => { mark(`React commit hotový: projekt ${closestIndex} (${pagesData[closestIndex]?.title ?? '?'})`); }, [closestIndex]);
   const [isPreloaded, setIsPreloaded] = useState(false);
   const currentRotRef = useRef(0);
   const [viewMode, setViewMode] = useState('ORBIT');
+  useLayoutEffect(() => { mark(`React commit hotový: viewMode ${viewMode}`); }, [viewMode]);
   // odchod z projektu: nejdřív odtisk solidů, až pak (onUnprinted) ORBIT = průlet portálem zpět
   const [leaving, setLeaving] = useState(false);
   const finishLeaving = useCallback(() => { setLeaving(false); setViewMode('ORBIT'); }, []);
@@ -1083,7 +1096,7 @@ function App() {
           shadows 
           frameloop={isSuspended ? 'never' : 'always'}
           gl={CANVAS_GL}
-          onCreated={(state) => { if (import.meta.env.DEV) window.__r3f = state; }}
+          onCreated={(state) => { keepShaderPrograms(state.gl); if (import.meta.env.DEV) window.__r3f = state; }}
         >
           <RenderRestorationHandler isSuspended={isSuspended} />
           <DnaHeightDetector setDnaHeight360={setDetectedDnaHeight360} />
@@ -1125,6 +1138,7 @@ function App() {
               return (
               <>
                 
+                <ProbeProfiler id="BlenderScene">
                 <BlenderScene 
                   appConfig={appConfig} 
                   pagesData={pagesData}
@@ -1148,6 +1162,7 @@ function App() {
                     setViewMode('INSIDE');
                   }} 
                 />
+                </ProbeProfiler>
                 <VolumetricVideoBackground 
                   appConfig={appConfig}
                   videoTexture={activeVideoTex}
@@ -1163,6 +1178,7 @@ function App() {
                   insideRotationY={insideRotationY}
                   yStep={yStep}
                 >
+                  <ProbeProfiler id="ProjectContent">
                   <ProjectContent 
                     viewMode={viewMode}
                     page={pagesData[closestIndex]} 
@@ -1172,6 +1188,7 @@ function App() {
                     pageDistance={pageDistance}
                     transitionProgress={transitionProgress}
                   />
+                  </ProbeProfiler>
                 </InsideProjectPivot>
                 <SolidPrintDriver
                   viewMode={viewMode}

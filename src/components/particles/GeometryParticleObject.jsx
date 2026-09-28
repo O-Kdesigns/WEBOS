@@ -5,6 +5,7 @@ import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from
 import { ParticleMaterial } from './ParticleMaterial';
 import { printFx } from '../../SolidPrint';
 import { computeSurfacePlanes, COLLISION_DEFAULTS } from './SolidCollision';
+import { mark } from '../../debug/FrameProbe';
 
 // Emerge (obsah k solidu): výchozí hodnoty, config `particleEmerge` je přepíše (DEV: window.__emergeOverride).
 const EMERGE_DEFAULTS = {
@@ -27,6 +28,13 @@ const rand = (i, k) => {
   return x - Math.floor(x);
 };
 
+// Cache mezi připojeními: při přepnutí projektu se particle systémy odpojí a při návratu znovu připojí –
+// vrcholy nodu i data particlů jsou pro stejný node + nastavení pořád stejná, tak se nepočítají znovu
+// (dřív 5–20 ms JS na systém při každém přepnutí, Xelith má 4 systémy).
+const vertexCache = new WeakMap();   // geometry -> { vertices, center }
+const dataCache = new Map();         // klíč nastavení -> particlesData
+const DATA_CACHE_MAX = 24;
+
 export function GeometryParticleObject({ settings, appConfig, videoTexture, opacity, renderOrder, rotationY, pageDistance, transitionProgress, dnaGeometry, dnaMatrix, nodeMatrix, currentIndex }) {
   const meshRef = useRef();
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -38,9 +46,11 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   const posZ = settings.objectZ ?? 0.0;
   
   const { vertices, center } = useMemo(() => {
+    const geom = settings.customGeometry;
+    if (geom && vertexCache.has(geom)) return vertexCache.get(geom);
+    const tMark = performance.now();
     const pts = [];
     const c = new THREE.Vector3();
-    const geom = settings.customGeometry;
     
     if (geom) {
       geom.computeBoundingBox();
@@ -69,7 +79,10 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       }
     }
 
-    return { vertices: pts, center: c };
+    mark(`particly: vrcholy nodu ${pts.length} načteny, JS ${(performance.now() - tMark).toFixed(1)} ms`);
+    const res = { vertices: pts, center: c };
+    if (geom) vertexCache.set(geom, res);
+    return res;
   }, [settings.customGeometry]);
 
   const radiusScale = settings.radius ?? 1.0;
@@ -77,7 +90,13 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   const count = vertices.length > 0 ? Math.max(1, Math.floor(vertices.length * (densityPercent / 100))) : 0;
   const [segW, segH] = useMemo(() => getAdaptiveSphereSegments(count, settings), [count, settings]);
 
+  const dnaBaseScaleCfg = appConfig?.dnaSettings?.baseSize ?? 0.08;
   const particlesData = useMemo(() => {
+    const cacheKey = [settings.customGeometry?.uuid, count, settings.baseSize, settings.sizeRandomness, settings.radius,
+      settings.colorMode, settings.baseColor, settings.sizeMultiplier, dnaGeometry?.uuid,
+      dnaMatrix ? dnaMatrix.elements.join(',') : '-', dnaBaseScaleCfg].join('|');
+    if (dataCache.has(cacheKey)) return dataCache.get(cacheKey);
+    const tMark = performance.now();
     const data = [];
     const baseColorObj = new THREE.Color(settings.baseColor || '#3b82f6');
 
@@ -90,7 +109,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         }
       }
 
-      const dnaBaseScale = (appConfig?.dnaSettings?.baseSize ?? 0.08);
+      const dnaBaseScale = dnaBaseScaleCfg;
 
       for (let i = 0; i < count; i++) {
         let x = 0, y = 0, z = 0;
@@ -154,8 +173,13 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
 
         data.push({ x, y, z, scale, color, speed, offset, dnaX, dnaY, dnaZ, dnaScale: dScale });
       }
+      mark(`particly: data ${count} spočítána, JS ${(performance.now() - tMark).toFixed(1)} ms`);
+      if (settings.customGeometry) {
+        dataCache.set(cacheKey, data);
+        if (dataCache.size > DATA_CACHE_MAX) dataCache.delete(dataCache.keys().next().value);
+      }
       return data;
-    }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier, dnaGeometry, dnaMatrix]);
+    }, [count, vertices, center, colors, settings.baseSize, settings.sizeRandomness, settings.radius, settings.colorMode, settings.baseColor, settings.sizeMultiplier, settings.customGeometry, dnaGeometry, dnaMatrix, dnaBaseScaleCfg]);
 
   const compute = useGPGPU(count, particlesData, gl);
 
@@ -181,15 +205,8 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   useLayoutEffect(() => {
     if (!meshRef.current || !compute) return;
 
-    for (let i = 0; i < count; i++) {
-      dummy.position.set(0, 0, 0);
-      dummy.scale.set(1, 1, 1);
-      dummy.rotation.set(0, 0, 0);
-      dummy.updateMatrix();
-      meshRef.current.setMatrixAt(i, dummy.matrix);
-      meshRef.current.setColorAt(i, particlesData[i].color);
-    }
-    meshRef.current.instanceMatrix.needsUpdate = true;
+    // instanceMatrix zůstává jednotková (InstancedMesh ji tak inicializuje) – pozice jdou z GPGPU textury
+    for (let i = 0; i < count; i++) meshRef.current.setColorAt(i, particlesData[i].color);
     if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
     meshRef.current.frustumCulled = false;
     
@@ -226,6 +243,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         let near = 0;
         for (let i = 0; i < count; i++) if (planes[i * 4] || planes[i * 4 + 1] || planes[i * 4 + 2]) near++;
         console.log(`[SolidCollision] ${near}/${count} particlů u solidu, ${Math.round(performance.now() - t0)} ms`);
+        mark(`kolize se solidy hotové (${count} particlů, worker ${Math.round(performance.now() - t0)} ms)`);
       }
     });
   }, [compute, count, particlesData, settings.collisionSolids, settings.customGeometry, nodeMatrix, collisionCfg]);

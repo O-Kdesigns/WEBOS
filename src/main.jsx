@@ -30,8 +30,11 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
+// StrictMode v DEV spouští useMemo / efekty 2× a připojí, odpojí a znovu připojí každou komponentu – u
+// WebGL scény to znamená 2× data particlů, GPGPU vytvořit/zrušit/vytvořit a zdvojené záseky při přepnutí
+// projektu (produkce StrictMode stejně nepoužívá). Pro hledání chyb v efektech: ?strict=1.
+const strict = new URLSearchParams(window.location.search).get('strict') === '1';
+
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  strict ? <StrictMode><App /></StrictMode> : <App />,
 )

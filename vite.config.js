@@ -86,12 +86,12 @@ function portfolioCMSPlugin() {
 
               const sessionFileName = `${data.sessionId || 'session_default'}.log`;
               const sessionFilePath = path.join(logsDir, sessionFileName);
-              const latestFilePath = path.join(logsDir, data.kind === 'profile' ? 'latest_profile.log' : 'latest.log');
+              const latestFilePath = path.join(logsDir, data.kind === 'profile' ? 'latest_profile.log' : data.kind === 'hitch' ? 'latest_hitch.log' : 'latest.log');
 
               const formattedContent = formatDiagnosticLog(data);
 
               // profil: historie se přidává na konec (každé ~2 s jeden snímek), diagnostika se přepisuje
-              if (data.kind === 'profile') fs.appendFileSync(sessionFilePath, formattedContent + '\n', 'utf-8');
+              if (data.kind === 'profile' || data.kind === 'hitch') fs.appendFileSync(sessionFilePath, formattedContent + '\n', 'utf-8');
               else fs.writeFileSync(sessionFilePath, formattedContent, 'utf-8');
               fs.writeFileSync(latestFilePath, formattedContent, 'utf-8');
 
@@ -111,6 +111,24 @@ function portfolioCMSPlugin() {
   };
 }
 
+// Jen dev server: React 19 v DEV kreslí do Chrome DevTools stopy "Components ⚛" / "Scheduler ⚛"
+// (console.timeStamp + console.createTask u každé komponenty a efektu). Na scéně s particly to při přepnutí
+// projektu dělalo ~2 ztracené snímky navíc, které produkce nemá (změřeno 2026-09-28, viz LIGHTING.md).
+// React si podporu zjistí jednou při načtení -> skript před moduly ji schová. ?reacttracks=1 = nechat.
+function devReactTracksOff() {
+  return {
+    name: 'webos-dev-react-tracks-off',
+    apply: 'serve',
+    transformIndexHtml() {
+      return [{
+        tag: 'script',
+        injectTo: 'head-prepend',
+        children: "if (!/[?&]reacttracks=1/.test(location.search)) { try { console.timeStamp = undefined; console.createTask = undefined; } catch (e) {} }",
+      }];
+    },
+  };
+}
+
 // GPU profiler (src/debug/GpuProfiler.js): ms na GPU za snímek po průchodech/objektech, nezávislé na focusu
 function formatProfileLog(data) {
   const p = data.profile || {};
@@ -125,6 +143,8 @@ function formatProfileLog(data) {
 
 function formatDiagnosticLog(data) {
   if (data.kind === 'profile') return formatProfileLog(data);
+  // záznam záseku (src/debug/FrameProbe.js) – text formátuje prohlížeč
+  if (data.kind === 'hitch') return String(data.text || '');
   const m = data.metrics || {};
   const vids = (m.videos || []).map(v => 
     `- ${v.fileName}: ${v.isPlaying ? 'HRAJE' : 'PAUZA'} (${v.currentTime}s / ${v.duration}s) | Drop: ${v.dropped}f | Total: ${v.total}f | State: readyState=${v.readyState}`
@@ -170,9 +190,12 @@ export default defineConfig({
   base: process.env.GITHUB_PAGES ? '/WEBOS/' : '/',
   plugins: [
     react(),
-    portfolioCMSPlugin()
+    portfolioCMSPlugin(),
+    devReactTracksOff()
   ],
   server: {
+    // JS Self-Profiling API (src/debug/FrameProbe.js, ?jsprof=1) potřebuje tuto hlavičku dokumentu
+    headers: { 'Document-Policy': 'js-profiling' },
     watch: {
       ignored: ['**/*.mp4', '**/*.webm', '**/*.mov', '**/*.mkv', '**/debug_logs/**']
     }

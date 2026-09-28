@@ -1,10 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRenderer.js';
+import { GPUComputationRenderer } from './GPUComputationRenderer'; // kopie s rozlišením v uniformě (sdílené shadery)
 import { FLUID_DEFAULTS, getFluid, createFrontPass, REST_TARGET_GLSL } from './ParticleFluid';
 import { prof } from '../../debug/GpuProfiler';
 import { TEX_LOD0 } from '../../glslTexLod0';
+import { mark } from '../../debug/FrameProbe';
 
 // Pomocná funkce pro vygenerování palety
 export const getColors = () => [
@@ -418,6 +419,7 @@ export function useGPGPU(count, particlesData, gl) {
       return;
     }
     
+    const tMark = performance.now();
     const size = Math.ceil(Math.sqrt(count));
     const gpuCompute = new GPUComputationRenderer(size, size, gl);
     
@@ -488,6 +490,7 @@ export function useGPGPU(count, particlesData, gl) {
     
     const computeObj = { gpuCompute, velVar, posVar, size, targetUniforms, disposed: false, writtenData: dataRef.current };
     setCompute(computeObj);
+    mark(`GPGPU ${size}² (${count} particlů) vytvořen, JS ${(performance.now() - tMark).toFixed(1)} ms`);
     if (import.meta.env.DEV) { (window.__gpgpu = window.__gpgpu || new Set()).add(computeObj); }
 
     // Disposal is deferred: after a dependency change the old system is still used for a frame or two
@@ -525,6 +528,7 @@ export function useGPGPU(count, particlesData, gl) {
 function disposeCompute(c) {
   if (!c || c.disposed) return;
   c.disposed = true;
+  mark(`GPGPU ${c.size}² uvolněn`);
   if (import.meta.env.DEV) window.__gpgpu?.delete(c);
   const u = c.posVar.material.uniforms;
   // Data textures that are not owned by GPUComputationRenderer

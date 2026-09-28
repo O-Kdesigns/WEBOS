@@ -26,6 +26,7 @@ const state = {
   windowStart: 0,
   targetNames: new WeakMap(),
   last: null,
+  frameGpu: new Map(), // id snímku -> ns na GPU (pro záznam záseků, FrameProbe.js)
   listeners: new Set(),
   disjoint: 0,
   mode: 'off',
@@ -85,6 +86,8 @@ function poll() {
     const b = bucket(p.label);
     b.gpu += ns;
     b.samples++;
+    state.frameGpu.set(p.frame, (state.frameGpu.get(p.frame) || 0) + ns);
+    if (state.frameGpu.size > 1200) state.frameGpu.delete(state.frameGpu.keys().next().value);
   }
   // pojistka: GPU nestíhá vracet (neměl by nastat) -> nehromadit query donekonečna
   if (state.pending.length > 4000) {
@@ -194,6 +197,9 @@ export const prof = {
   get on() { return state.on; },
   get mode() { return state.mode; },
   get last() { return state.last; },
+  get frameId() { return state.on ? state.frame : -1; },
+  // GPU ms daného snímku (null = profiler neběžel nebo výsledek ještě nedorazil)
+  gpuOfFrame(id) { const ns = state.frameGpu.get(id); return ns == null ? null : ns / 1e6; },
   // Pojmenování render targetu pro tabulku (volitelné, jinak "RT WxH")
   nameTarget(rt, name) { if (rt) state.targetNames.set(rt, name); return rt; },
   // Scope = všechny draw cally uvnitř dostanou prefix (např. 'fluid'). Vždy párovat s end().

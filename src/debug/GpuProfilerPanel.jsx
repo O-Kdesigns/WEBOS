@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useThree, addEffect, addAfterEffect } from '@react-three/fiber';
 import { prof } from './GpuProfiler';
+import { probe } from './FrameProbe';
 
 // Uvnitř <Canvas>: napojí profiler na renderer a na začátek/konec každého snímku R3F.
 // ?prof=1 v URL ho zapne hned po načtení, F9 přepíná.
@@ -8,8 +9,9 @@ export function GpuProfilerHook() {
   const gl = useThree((s) => s.gl);
   useEffect(() => {
     prof.attach(gl);
-    const offA = addEffect(() => prof.frameBegin());
-    const offB = addAfterEffect(() => prof.frameEnd());
+    probe.attach(gl); // záznamník záseků běží v DEV vždy (debug_logs/hitch_*.log)
+    const offA = addEffect(() => { prof.frameBegin(); probe.frameBegin(); });
+    const offB = addAfterEffect(() => { prof.frameEnd(); probe.frameEnd(); });
     if (new URLSearchParams(window.location.search).get('prof') === '1') prof.enable();
     const onKey = (e) => { if (e.key === 'F9') { e.preventDefault(); prof.toggle(); } };
     window.addEventListener('keydown', onKey);
