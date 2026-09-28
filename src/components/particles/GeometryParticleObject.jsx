@@ -5,6 +5,7 @@ import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from
 import { ParticleMaterial } from './ParticleMaterial';
 import { printFx } from '../../SolidPrint';
 import { computeSurfacePlanes, COLLISION_DEFAULTS } from './SolidCollision';
+import { liveLight } from '../../SolidLiveLight';
 import { mark } from '../../debug/FrameProbe';
 
 // Emerge (obsah k solidu): výchozí hodnoty, config `particleEmerge` je přepíše (DEV: window.__emergeOverride).
@@ -217,12 +218,15 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   // Kolize se solidy stránky: vlastní rovina povrchu na particl (worker, do té doby bez kolizí).
   // Textura se přepočítá jen při změně tvaru / solidů / počtu particlů (klíč), ne při každém přepnutí projektu.
   const collisionCfg = useMemo(() => ({ ...COLLISION_DEFAULTS, ...(appConfig?.particleCollision || {}), ...((import.meta.env.DEV && window.__collisionOverride) || {}) }), [appConfig?.particleCollision]);
-  const surfRef = useRef({ key: null, tex: null });
+  // surfTex = UV nejbližšího bodu solidu na particl (barva ze zapečeného světla, jen obsah spárovaný se solidem)
+  const surfRef = useRef({ key: null, tex: null, surfTex: null, live: null });
   useEffect(() => {
     const solids = settings.collisionSolids || [];
     if (!compute || !collisionCfg.enabled || !solids.length || !nodeMatrix) {
       surfRef.current.tex?.dispose();
-      surfRef.current = { key: null, tex: null };
+      surfRef.current.surfTex?.dispose();
+      if (surfRef.current.live) liveLight.systems.delete(surfRef.current.live);
+      surfRef.current = { key: null, tex: null, surfTex: null, live: null };
       return;
     }
     const key = [settings.customGeometry?.uuid, count, compute.size, collisionCfg.band, ...solids.map((n) => n.uuid)].join('|');
@@ -231,15 +235,30 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
     const points = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) { points[i * 3] = particlesData[i].x; points[i * 3 + 1] = particlesData[i].y; points[i * 3 + 2] = particlesData[i].z; }
     const t0 = performance.now();
-    computeSurfacePlanes(solids, nodeMatrix, points, collisionCfg.band).then((planes) => {
+    const restPoints = points.slice(); // points se do workeru přesouvají (transfer)
+    computeSurfacePlanes(solids, nodeMatrix, points, collisionCfg.band).then(({ planes, surf }) => {
       if (surfRef.current.key !== key) return;
       const size = compute.size;
-      const data = new Float32Array(size * size * 4);
-      data.set(planes.subarray(0, Math.min(planes.length, data.length)));
-      const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.FloatType);
-      tex.needsUpdate = true;
+      const toTex = (src) => {
+        const data = new Float32Array(size * size * 4);
+        data.set(src.subarray(0, Math.min(src.length, data.length)));
+        const t = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.FloatType);
+        t.needsUpdate = true;
+        return t;
+      };
       surfRef.current.tex?.dispose();
-      surfRef.current.tex = tex;
+      surfRef.current.surfTex?.dispose();
+      surfRef.current.tex = toTex(planes);
+      let hasUV = false;
+      for (let i = 3; i < surf.length; i += 4) if (surf[i] > 0.5) { hasUV = true; break; }
+      surfRef.current.surfTex = hasUV ? toTex(surf) : null;
+      // živé zapečené světlo (SolidLiveLight.js): obsah spárovaný se solidem se hlásí jako zdroj světla
+      if (surfRef.current.live) liveLight.systems.delete(surfRef.current.live);
+      surfRef.current.live = null;
+      if (hasUV && settings.emerge && meshRef.current) {
+        surfRef.current.live = { mesh: meshRef.current, compute, count, points: restPoints, surf, surfTex: surfRef.current.surfTex, computeUVs, key };
+        liveLight.systems.add(surfRef.current.live);
+      }
       if (import.meta.env.DEV) {
         let near = 0;
         for (let i = 0; i < count; i++) if (planes[i * 4] || planes[i * 4 + 1] || planes[i * 4 + 2]) near++;
@@ -247,8 +266,12 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
         mark(`kolize se solidy hotové (${count} particlů, worker ${Math.round(performance.now() - t0)} ms)`);
       }
     });
-  }, [compute, count, particlesData, settings.collisionSolids, settings.customGeometry, nodeMatrix, collisionCfg]);
-  useEffect(() => () => { surfRef.current.tex?.dispose(); surfRef.current = { key: null, tex: null }; }, []);
+  }, [compute, count, particlesData, settings.collisionSolids, settings.customGeometry, settings.emerge, nodeMatrix, collisionCfg, computeUVs]);
+  useEffect(() => () => {
+    surfRef.current.tex?.dispose(); surfRef.current.surfTex?.dispose();
+    if (surfRef.current.live) liveLight.systems.delete(surfRef.current.live);
+    surfRef.current = { key: null, tex: null, surfTex: null, live: null };
+  }, []);
 
   const worldGroupRef = useRef();
   const prevMatRef = useRef({ m: new THREE.Matrix4(), compute: null });
@@ -305,6 +328,13 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
       u.uSurfMargin.value = collisionCfg.margin;
       u.uSurfMaxPen.value = collisionCfg.band / Math.max(1e-6, nodeMatrix?.getMaxScaleOnAxis() ?? 1);
       u.uPrintY.value = printFx.uniforms.uPrintY.value;
+    }
+    // barva ze zapečeného světla solidu: jen obsah spárovaný se solidem (emerge = "X0" k "X1"), ne pozadí okolo
+    const mu = mesh?.material?.uniforms;
+    if (mu && mu.tSurfUV) {
+      const st = settings.emerge ? surfRef.current.surfTex : null;
+      mu.tSurfUV.value = st;
+      mu.uBakeOn.value = st && compute && st.image.width === compute.size ? 1 : 0;
     }
     if (compute && !compute.disposed && compute.posVar.material.uniforms.uEmerge) {
       const u = compute.posVar.material.uniforms;

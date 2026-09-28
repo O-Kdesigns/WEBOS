@@ -16,7 +16,7 @@ const pending = new Map();
 function getWorker() {
   if (!worker) {
     worker = new Worker(new URL('./solidCollisionWorker.js', import.meta.url), { type: 'module' });
-    worker.onmessage = (e) => { const cb = pending.get(e.data.id); pending.delete(e.data.id); cb?.(e.data.data); };
+    worker.onmessage = (e) => { const cb = pending.get(e.data.id); pending.delete(e.data.id); cb?.({ planes: e.data.data, surf: e.data.surf }); };
   }
   return worker;
 }
@@ -24,7 +24,9 @@ function getWorker() {
 const _m = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _v = new THREE.Vector3();
 
 // solids = nody solidů (useGLTF), nodeMatrix = matrixWorld particle nodu (stejný prostor GLB),
-// points = Float32Array xyz cílů particlů v lokálním prostoru nodu. Vrací Promise<Float32Array> (RGBA na particl).
+// points = Float32Array xyz cílů particlů v lokálním prostoru nodu. Vrací Promise<{ planes, surf }> (RGBA na particl):
+// planes = rovina povrchu, surf = UV nejbližšího bodu solidu (u, v, vzdálenost, 1 = platné; jen solidy s UV a
+// zapečeným světlem = emissiveMap, jinak 0).
 export function computeSurfacePlanes(solids, nodeMatrix, points, band) {
   _inv.copy(nodeMatrix).invert();
   const meshes = [];
@@ -37,7 +39,9 @@ export function computeSurfacePlanes(solids, nodeMatrix, points, band) {
       const pos = new Float32Array(src.count * 3);
       for (let i = 0; i < src.count; i++) _v.fromBufferAttribute(src, i).applyMatrix4(_m).toArray(pos, i * 3);
       const idx = m.geometry.index ? Uint32Array.from(m.geometry.index.array) : Uint32Array.from({ length: src.count }, (_, i) => i);
-      meshes.push({ pos, idx });
+      const uvAttr = m.geometry.attributes.uv;
+      const uv = uvAttr && m.material?.emissiveMap ? Float32Array.from(uvAttr.array) : null;
+      meshes.push({ pos, idx, uv });
     });
   });
   // band je v jednotkách GLB, body jsou v lokálním prostoru nodu (scale nodu)
@@ -45,6 +49,6 @@ export function computeSurfacePlanes(solids, nodeMatrix, points, band) {
   return new Promise((resolve) => {
     const id = nextId++;
     pending.set(id, resolve);
-    getWorker().postMessage({ id, meshes, points, band: localBand }, [...meshes.flatMap((m) => [m.pos.buffer, m.idx.buffer]), points.buffer]);
+    getWorker().postMessage({ id, meshes, points, band: localBand }, [...meshes.flatMap((m) => [m.pos.buffer, m.idx.buffer, ...(m.uv ? [m.uv.buffer] : [])]), points.buffer]);
   });
 }

@@ -97,7 +97,11 @@
           "diffuse": 1,
           "specular": 1.2,
           "glow": 0.08,
-          "sheen": 1
+          "sheen": 1,
+          "particleTint": 0.9,
+          "particleGlow": 0.03,
+          "live": 1,
+          "liveCell": 0.04
         }
       },
       "videoUrl": "video/reklama xelith.mp4"

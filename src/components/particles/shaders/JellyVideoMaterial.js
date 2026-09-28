@@ -37,7 +37,10 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     uEscFlashTime: 0.6,
     uEscGlow: 0.0,
     uEscPop: 0.0,
-    uEscLife: 25.0
+    uEscLife: 25.0,
+    // barva ze zapečeného světla solidu (UV nejbližšího bodu solidu na particl, GeometryParticleObject + SolidLink)
+    tSurfUV: null,
+    uBakeOn: 0.0
   },
   `
   uniform sampler2D tPositions;
@@ -49,6 +52,10 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   uniform float uEscFlashTime;
   uniform float uEscPop;
   uniform float uEscLife;
+  uniform sampler2D tSurfUV;
+  uniform sampler2D tBakeLight;
+  uniform float uBakeOn, uBakePart;
+  varying vec3 vBake;
   varying float vEsc;
   varying float vEscFlash;
   
@@ -67,6 +74,10 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec3 computedPos = computedData.xyz;
     float computedScale = computedData.w;
     ${ESC_VERTEX}
+
+    // zapečené světlo solidu v místě, kde particl na solidu sedí (mip 2 = průměr okolí ~1 cm, ne jeden texel)
+    vec4 surfUV = texture2D(tSurfUV, aComputeUV);
+    vBake = surfUV.w > 0.5 ? textureLod(tBakeLight, surfUV.xy, 2.0).rgb * (uBakeOn * uBakePart) : vec3(0.0);
 
     // náhoda na particl (stabilní, z UV v compute textuře)
     vRand = fract(sin(vec3(dot(aComputeUV, vec2(127.1, 311.7)), dot(aComputeUV, vec2(269.5, 183.3)), dot(aComputeUV, vec2(419.2, 371.9)))) * 43758.5453);
@@ -127,6 +138,8 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   uniform float uEscGlow;
   varying float vEsc;
   varying float vEscFlash;
+  varying vec3 vBake;
+  uniform float uBakePTint, uBakePGlow;
 
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
@@ -285,6 +298,14 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     
     // přisvícení od solidu (a žáru 3D tisku), SolidLink.jsx – mimo INSIDE je uSLightAmt 0
     finalColor += solidLightAt(vWorldPos, normalize((vec4(normal, 0.0) * viewMatrix).xyz)) * (0.35 + videoTex.rgb * 0.65);
+
+    // particl u osvětleného místa solidu převezme jeho barvu (stínování kuličky zůstane) a sám jí trochu září
+    float bkPeak = max(vBake.r, max(vBake.g, vBake.b));
+    if (bkPeak > 1e-4) {
+      float bkLum = dot(finalColor, vec3(0.299, 0.587, 0.114));
+      vec3 bkHue = vBake / bkPeak;
+      finalColor = mix(finalColor, bkLum * bkHue * 1.8, clamp(bkPeak, 0.0, 1.0) * uBakePTint) + vBake * uBakePGlow;
+    }
 
     // odtržený: převezme barvu a slabě září, v bodě zlomu HDR záblesk (bloom)
     // přebarvení drží stínování kuličky (jas původní barvy × nová barva), ať nesvítí plošně

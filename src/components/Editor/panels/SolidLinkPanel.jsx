@@ -9,7 +9,7 @@ export const SOLID_LINK_PRESET = {
   solidMaterial: { enabled: true, color: '#3c3b3d', metalness: 0.92, roughness: 0.28, reflections: 0.6, directLight: 0.02, layerLines: 0, grain: 0.35, rim: 0.8 },
   particleLight: { enabled: true, useVideoColor: true, color: '#ffffff', intensity: 4, radius: 0.3, wrap: 0.5 },
   solidLight: { enabled: true, color: '#ff6a2a', intensity: 1, radius: 0.35, printHeat: 1, selfGlow: 0 },
-  bakedLight: { enabled: true, intensity: 4, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1 }
+  bakedLight: { enabled: true, intensity: 4, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.03, live: 1, liveCell: 0.04 }
 };
 
 const SubTitle = ({ color, children }) => (
@@ -61,6 +61,10 @@ export function SolidLinkPanel({ settings, onUpdate, onReplace }) {
         <DenseSlider label="Difuzně" desc="Světlo × barva povrchu (u kovu slabé, víc u nekovu)." min={0} max={4} step={0.05} value={v(bl, P.bakedLight, 'diffuse')} color="#dc2626" onChange={x => setBl('diffuse', x)} />
         <DenseSlider label="Pod úhlem" desc="Na hranách a plochách pod ostrým úhlem se odlesk blíží bílé (Fresnel)." min={0} max={1} step={0.01} value={v(bl, P.bakedLight, 'sheen')} color="#dc2626" onChange={x => setBl('sheen', x)} />
         <DenseSlider label="Záře" desc="Podíl, který svítí sám (nezávisle na materiálu). Vyšší = jako plochá emise." min={0} max={1} step={0.01} value={v(bl, P.bakedLight, 'glow')} color="#dc2626" onChange={x => setBl('glow', x)} />
+        <DenseSlider label="Particly: barva" desc="Particly obsahu u solidu převezmou barvu zapečeného světla v místě, kde na solidu sedí (0 = barva videa)." min={0} max={1} step={0.01} value={v(bl, P.bakedLight, 'particleTint')} color="#dc2626" onChange={x => setBl('particleTint', x)} />
+        <DenseSlider label="Particly: záře" desc="Jak moc particly tou barvou samy září (vysoko = ploché rudé fleky)." min={0} max={0.3} step={0.005} value={v(bl, P.bakedLight, 'particleGlow')} color="#dc2626" onChange={x => setBl('particleGlow', x)} />
+        <DenseSlider label="Živé světlo" desc="Světlo na solidu svítí jen tam, kde jsou právě particly (odfouknutí myší = potemní, návrat = rozsvítí; při tisku se rozsvěcí s doletem). 0 = statické." min={0} max={1} step={0.01} value={v(bl, P.bakedLight, 'live')} color="#dc2626" onChange={x => setBl('live', x)} />
+        <DenseSlider label="Živé: buňka (m)" desc="Velikost buňky mřížky particlů. Menší = ostřejší reakce, ale víc šumu z levitace." min={0.02} max={0.12} step={0.005} value={v(bl, P.bakedLight, 'liveCell')} color="#dc2626" onChange={x => setBl('liveCell', x)} />
       </>)}
 
       <SubTitle color="#ef4444">✨ Částice osvětlují solid</SubTitle>

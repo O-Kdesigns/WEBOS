@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { printFx } from './SolidPrint';
+import { liveLight, LIVE_GLSL, updateLiveLight } from './SolidLiveLight';
 
 // Světelná vazba solidů a particlů (INSIDE) + vzhled povrchu solidů. Bez skutečných světel:
 // - particly -> solid: particly projektu se shluknou do PL_N "sond" (těžiště hustoty, váha = počet bodů).
@@ -52,7 +53,12 @@ export const linkUniforms = {
   uSLightAmt: { value: 0 },
   uSLightColor: { value: new THREE.Color('#000000') },
   uSLightRadius: { value: 0.4 },
-  uSLightPos: { value: vec4s(SL_N) }
+  uSLightPos: { value: vec4s(SL_N) },
+  // zapečené světlo -> particly obsahu u solidu (jelly: barva z textury v místě nejbližšího bodu solidu)
+  tBakeLight: { value: null },
+  uBakePart: { value: 0 },
+  uBakePTint: { value: 0.8 },
+  uBakePGlow: { value: 0.15 }
 };
 
 export const linkFx = { uniforms: linkUniforms, probesP: 0, probesS: 0 };
@@ -73,8 +79,9 @@ const SOLID_DECL = /* glsl */`
 // baked = materiál má emisní texturu se zapečeným světlem (jiný program, customProgramCacheKey v SolidPrint).
 export function patchSolidLook(shader, baked = false) {
   Object.assign(shader.uniforms, linkUniforms);
+  if (baked) Object.assign(shader.uniforms, liveLight.uniforms);
   shader.fragmentShader = shader.fragmentShader
-    .replace('#include <common>', '#include <common>\n' + SOLID_DECL)
+    .replace('#include <common>', '#include <common>\n' + SOLID_DECL + (baked ? LIVE_GLSL : ''))
     .replace('#include <color_fragment>', `#include <color_fragment>
       diffuseColor.rgb = mix(diffuseColor.rgb, uLookColor, uLookOn);`)
     .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
@@ -93,7 +100,8 @@ export function patchSolidLook(shader, baked = false) {
       }`)
     .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       ${baked ? `// zapečené světlo: emise (textura × síla z GLB) = světlo dopadající na povrch, jako záře jen malý podíl
-      vec3 bakedLight = totalEmissiveRadiance * uBakeAmt;
+      // živé: světlo jen tam, kde jsou právě particly, které ho vyzařují (SolidLiveLight.js)
+      vec3 bakedLight = totalEmissiveRadiance * uBakeAmt * liveMask(vPrintW);
       totalEmissiveRadiance = bakedLight * uBakeGlow;` : ''}
       totalEmissiveRadiance += uLookGlow;`)
     .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
@@ -165,6 +173,10 @@ export function attachParticleLink(uniforms) {
   uniforms.uSLightColor = linkUniforms.uSLightColor;
   uniforms.uSLightRadius = linkUniforms.uSLightRadius;
   uniforms.uSLightPos = linkUniforms.uSLightPos;
+  uniforms.tBakeLight = linkUniforms.tBakeLight;
+  uniforms.uBakePart = linkUniforms.uBakePart;
+  uniforms.uBakePTint = linkUniforms.uBakePTint;
+  uniforms.uBakePGlow = linkUniforms.uBakePGlow;
 }
 
 // Shluknutí bodů do n sond: mřížka 4×4×3 přes bounding box, neprázdné buňky -> těžiště + počet, top n.
@@ -213,7 +225,8 @@ const AVG_FRAG = /* glsl */`
 
 const DEFAULT_PL = { enabled: false, color: '#ffffff', useVideoColor: true, intensity: 1.5, radius: 0.35, wrap: 0.5 };
 // bez klíče bakedLight platí výchozí (solid se zapečeným světlem ho má vždy, jinak by emise svítila plochou září)
-const DEFAULT_BL = { enabled: true, intensity: 1, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1 };
+const DEFAULT_BL = { enabled: true, intensity: 1, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.03, live: 1, liveCell: 0.04 };
+const _findBaked = (m) => { if (!linkFx.bakedMesh && m.material?.emissiveMap) linkFx.bakedMesh = m; };
 const DEFAULT_SL = { enabled: false, color: '#ff7a3a', intensity: 0.5, radius: 0.4, printHeat: 1.0, selfGlow: 0 };
 
 // Renderuje se v ProjectContent jako sourozenec solidů a particlů (stejný rodič = stejný prostor).
@@ -295,6 +308,15 @@ export function SolidLinkDriver({ nodes, settings, videoTexture, transitionProgr
     u.uBakeSpec.value = bl.specular;
     u.uBakeGlow.value = bl.glow;
     u.uBakeSheen.value = bl.sheen;
+    // particly u solidu: stejná textura a síla jako solid (emise z GLB × intensity), jen když je solid vidět
+    linkFx.bakedMesh = null;
+    printFx.meshes.forEach(_findBaked);
+    const bm = linkFx.bakedMesh;
+    u.tBakeLight.value = bm ? bm.material.emissiveMap : null;
+    u.uBakePart.value = bm && bl.enabled && solidsShown ? bm.material.emissiveIntensity * bl.intensity * inside : 0;
+    u.uBakePTint.value = bl.particleTint;
+    u.uBakePGlow.value = bl.particleGlow;
+    updateLiveLight(gl, bm && bl.enabled && solidsShown ? bm : null, bl.live * inside, bl.liveCell);
 
     g.updateWorldMatrix(true, false);
     const mw = g.matrixWorld;
