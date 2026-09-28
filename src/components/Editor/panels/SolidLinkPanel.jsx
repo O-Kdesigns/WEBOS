@@ -9,7 +9,7 @@ export const SOLID_LINK_PRESET = {
   solidMaterial: { enabled: true, color: '#3c3b3d', metalness: 0.92, roughness: 0.28, reflections: 0.6, directLight: 0.02, layerLines: 0, grain: 0.35, rim: 0.8 },
   particleLight: { enabled: true, useVideoColor: true, color: '#ffffff', intensity: 4, radius: 0.3, wrap: 0.5 },
   solidLight: { enabled: true, color: '#ff6a2a', intensity: 1, radius: 0.35, printHeat: 1, selfGlow: 0 },
-  bakedLight: { enabled: true, intensity: 4, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.03, live: 1, liveCell: 0.04 }
+  bakedLight: { enabled: true, intensity: 4, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.03, live: 1, liveCell: 0.04, lift: 2 }
 };
 
 const SubTitle = ({ color, children }) => (
@@ -57,6 +57,7 @@ export function SolidLinkPanel({ settings, onUpdate, onReplace }) {
       <DenseToggle label="Zapnout" desc="Solid z GLB s emisní texturou (Xelith: rudé světlo z emisních dílů, zapečené v Cycles). Emise se čte jako světlo dopadající na kov, ne jako záře. Vypnuto = bez zapečeného světla." checked={v(bl, P.bakedLight, 'enabled')} color="#dc2626" onChange={x => setBl('enabled', x)} />
       {v(bl, P.bakedLight, 'enabled') && (<>
         <DenseSlider label="Síla" desc="Celková síla zapečeného světla." min={0} max={10} step={0.05} value={v(bl, P.bakedLight, 'intensity')} color="#dc2626" onChange={x => setBl('intensity', x)} />
+        <DenseSlider label="Zvednout střední" desc="Zesílí slabě a středně osvětlená místa (solid i particly), plně světlá a černá zůstanou. 0 = jak je zapečeno." min={0} max={6} step={0.1} value={v(bl, P.bakedLight, 'lift')} color="#dc2626" onChange={x => setBl('lift', x)} />
         <DenseSlider label="V odlesku" desc="Kolik světla se ukáže v lesku kovu (hlavní složka u kovu)." min={0} max={4} step={0.05} value={v(bl, P.bakedLight, 'specular')} color="#dc2626" onChange={x => setBl('specular', x)} />
         <DenseSlider label="Difuzně" desc="Světlo × barva povrchu (u kovu slabé, víc u nekovu)." min={0} max={4} step={0.05} value={v(bl, P.bakedLight, 'diffuse')} color="#dc2626" onChange={x => setBl('diffuse', x)} />
         <DenseSlider label="Pod úhlem" desc="Na hranách a plochách pod ostrým úhlem se odlesk blíží bílé (Fresnel)." min={0} max={1} step={0.01} value={v(bl, P.bakedLight, 'sheen')} color="#dc2626" onChange={x => setBl('sheen', x)} />

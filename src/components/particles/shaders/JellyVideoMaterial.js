@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { shaderMaterial } from '@react-three/drei';
 import { extend } from '@react-three/fiber';
 import { TEX_LOD0 } from '../../../glslTexLod0';
-import { PARTICLE_DECL } from '../../../SolidLink';
+import { PARTICLE_DECL, BAKE_LIFT_GLSL } from '../../../SolidLink';
 import { ESC_VERTEX } from './escapeGlsl';
 import { DNA_RAINBOW_GLSL, DNA_PALETTE_MAX } from './dnaRainbow';
 
@@ -54,7 +54,8 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   uniform float uEscLife;
   uniform sampler2D tSurfUV;
   uniform sampler2D tBakeLight;
-  uniform float uBakeOn, uBakePart;
+  uniform float uBakeOn, uBakePart, uBakeLift;
+  ${BAKE_LIFT_GLSL}
   varying vec3 vBake;
   varying float vEsc;
   varying float vEscFlash;
@@ -77,7 +78,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
 
     // zapečené světlo solidu v místě, kde particl na solidu sedí (mip 2 = průměr okolí ~1 cm, ne jeden texel)
     vec4 surfUV = texture2D(tSurfUV, aComputeUV);
-    vBake = surfUV.w > 0.5 ? textureLod(tBakeLight, surfUV.xy, 2.0).rgb * (uBakeOn * uBakePart) : vec3(0.0);
+    vBake = surfUV.w > 0.5 ? bakeLift(textureLod(tBakeLight, surfUV.xy, 2.0).rgb, 1.0, uBakeLift) * (uBakeOn * uBakePart) : vec3(0.0);
 
     // náhoda na particl (stabilní, z UV v compute textuře)
     vRand = fract(sin(vec3(dot(aComputeUV, vec2(127.1, 311.7)), dot(aComputeUV, vec2(269.5, 183.3)), dot(aComputeUV, vec2(419.2, 371.9)))) * 43758.5453);

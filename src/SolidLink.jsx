@@ -41,6 +41,9 @@ export const linkUniforms = {
   uBakeSpec: { value: 1 },
   uBakeGlow: { value: 0.1 },
   uBakeSheen: { value: 1 },
+  // zvednutí slabých/středních míst zapečeného světla (plně světlá a černá zůstávají), uBakeNorm = síla emise z GLB
+  uBakeLift: { value: 0 },
+  uBakeNorm: { value: 1 },
   // particly -> solid
   uPLightAmt: { value: 0 },
   uPLightColor: { value: new THREE.Color('#ffffff') },
@@ -65,10 +68,22 @@ export const linkFx = { uniforms: linkUniforms, probesP: 0, probesS: 0 };
 if (import.meta.env.DEV && typeof window !== 'undefined') window.__linkFx = linkFx;
 
 // --- GLSL: solid (MeshStandard/Physical přes onBeforeCompile, potřebuje vPrintW + printNoise ze SolidPrint) ---
+// křivka zapečeného světla: 1 - (1-x)^(1+lift) na jasu (odstín zůstane). x = hodnota textury 0..1 (světlo / norm).
+// Černá zůstane černá (dole jen zesílení 1+lift, šum JPEG nevyskočí), plně světlá beze změny, slabé a střední se zvednou.
+export const BAKE_LIFT_GLSL = /* glsl */`
+  vec3 bakeLift(vec3 l, float norm, float lift) {
+    float p = max(l.r, max(l.g, l.b)) / max(norm, 1e-5);
+    if (lift <= 0.0 || p <= 1e-6) return l;
+    float q = 1.0 - pow(1.0 - clamp(p, 0.0, 1.0), 1.0 + lift);
+    return l * (q / p);
+  }
+`;
+
 const SOLID_DECL = /* glsl */`
   uniform float uLookOn, uLookMetal, uLookRough, uLookEnv, uLookLayers, uLookGrain, uLookRim, uLookDirect;
   uniform vec3 uLookColor, uLookGlow;
-  uniform float uBakeAmt, uBakeDiffuse, uBakeSpec, uBakeGlow, uBakeSheen;
+  uniform float uBakeAmt, uBakeDiffuse, uBakeSpec, uBakeGlow, uBakeSheen, uBakeLift, uBakeNorm;
+  ${BAKE_LIFT_GLSL}
   uniform float uPLightAmt, uPLightVideo, uPLightRadius, uPLightWrap;
   uniform vec3 uPLightColor;
   uniform sampler2D uPLightAvg;
@@ -101,7 +116,7 @@ export function patchSolidLook(shader, baked = false) {
     .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       ${baked ? `// zapečené světlo: emise (textura × síla z GLB) = světlo dopadající na povrch, jako záře jen malý podíl
       // živé: světlo jen tam, kde jsou právě particly, které ho vyzařují (SolidLiveLight.js)
-      vec3 bakedLight = totalEmissiveRadiance * uBakeAmt * liveMask(vPrintW);
+      vec3 bakedLight = bakeLift(totalEmissiveRadiance, uBakeNorm, uBakeLift) * uBakeAmt * liveMask(vPrintW);
       totalEmissiveRadiance = bakedLight * uBakeGlow;` : ''}
       totalEmissiveRadiance += uLookGlow;`)
     .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
@@ -177,6 +192,7 @@ export function attachParticleLink(uniforms) {
   uniforms.uBakePart = linkUniforms.uBakePart;
   uniforms.uBakePTint = linkUniforms.uBakePTint;
   uniforms.uBakePGlow = linkUniforms.uBakePGlow;
+  uniforms.uBakeLift = linkUniforms.uBakeLift;
 }
 
 // Shluknutí bodů do n sond: mřížka 4×4×3 přes bounding box, neprázdné buňky -> těžiště + počet, top n.
@@ -225,7 +241,7 @@ const AVG_FRAG = /* glsl */`
 
 const DEFAULT_PL = { enabled: false, color: '#ffffff', useVideoColor: true, intensity: 1.5, radius: 0.35, wrap: 0.5 };
 // bez klíče bakedLight platí výchozí (solid se zapečeným světlem ho má vždy, jinak by emise svítila plochou září)
-const DEFAULT_BL = { enabled: true, intensity: 1, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.03, live: 1, liveCell: 0.04 };
+const DEFAULT_BL = { enabled: true, intensity: 1, diffuse: 1, specular: 1.2, glow: 0.08, sheen: 1, particleTint: 0.9, particleGlow: 0.03, live: 1, liveCell: 0.04, lift: 0 };
 const _findBaked = (m) => { if (!linkFx.bakedMesh && m.material?.emissiveMap) linkFx.bakedMesh = m; };
 const DEFAULT_SL = { enabled: false, color: '#ff7a3a', intensity: 0.5, radius: 0.4, printHeat: 1.0, selfGlow: 0 };
 
@@ -316,6 +332,8 @@ export function SolidLinkDriver({ nodes, settings, videoTexture, transitionProgr
     u.uBakePart.value = bm && bl.enabled && solidsShown ? bm.material.emissiveIntensity * bl.intensity * inside : 0;
     u.uBakePTint.value = bl.particleTint;
     u.uBakePGlow.value = bl.particleGlow;
+    u.uBakeLift.value = bl.lift;
+    if (bm) u.uBakeNorm.value = bm.material.emissiveIntensity;
     updateLiveLight(gl, bm && bl.enabled && solidsShown ? bm : null, bl.live * inside, bl.liveCell);
 
     g.updateWorldMatrix(true, false);

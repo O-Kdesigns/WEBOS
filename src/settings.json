@@ -79,17 +79,17 @@
           "enabled": true,
           "useVideoColor": true,
           "color": "#ffffff",
-          "intensity": 4,
+          "intensity": 6.5,
           "radius": 0.3,
-          "wrap": 0.5
+          "wrap": 0
         },
         "solidLight": {
           "enabled": true,
           "color": "#ff6a2a",
-          "intensity": 1,
-          "radius": 0.35,
-          "printHeat": 1,
-          "selfGlow": 0
+          "intensity": 1.05,
+          "radius": 0.51,
+          "printHeat": 2.65,
+          "selfGlow": 0.12
         },
         "bakedLight": {
           "enabled": true,
@@ -101,7 +101,8 @@
           "particleTint": 0.9,
           "particleGlow": 0.03,
           "live": 1,
-          "liveCell": 0.04
+          "liveCell": 0.04,
+          "lift": 2
         }
       },
       "videoUrl": "video/reklama xelith.mp4"
