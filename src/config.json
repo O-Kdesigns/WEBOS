@@ -27,7 +27,7 @@
   "volumetricLight": {
     "enabled": true,
     "posX": 0,
-    "posY": 0,
+    "posY": 7,
     "posZ": 0,
     "lightSize": 0,
     "lightIntensity": 20,

@@ -985,12 +985,21 @@ const VolumetricLightShader = {
   `
 };
 
+// Skupina L3 (v scroll skupině scény) – god rays z ní berou světovou pozici, ať střed paprsků sedí na skutečném světle
+const centerLightFx = { group: null };
+
 export function CenterLight({ appConfig }) {
   const vl = appConfig?.volumetricLight || {};
+  const groupRef = useRef(null);
+  useEffect(() => {
+    centerLightFx.group = groupRef.current;
+    return () => { centerLightFx.group = null; };
+  });
   if (vl.enabled === false) return null;
 
   const posX = vl.posX ?? 0;
-  const posY = vl.posY ?? 0;
+  // posY = výška NAD kamerou (kamera je ve stejné scroll skupině) -> světlo se drží nad kamerou a nikdy není v záběru
+  const posY = (appConfig?.cameraHeight ?? 0) + (vl.posY ?? 0);
   const posZ = vl.posZ ?? 0;
   const radius = vl.lightSize ?? 0.35;
   const intensity = vl.lightIntensity ?? 20;
@@ -1000,7 +1009,7 @@ export function CenterLight({ appConfig }) {
   const auraOpacity = vl.auraOpacity ?? 0.35;
 
   return (
-    <group position={[posX, posY, posZ]}>
+    <group ref={groupRef} position={[posX, posY, posZ]}>
       {/* Kompaktní zářivé jádro uprostřed scény */}
       <mesh renderOrder={1}>
         <sphereGeometry args={[radius, 32, 32]} />
@@ -1356,11 +1365,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     mat.uniforms.uCenterRayDensity.value = vDepth.rayDensity ?? 1.0;
 
     // ORBIT parametry (středové God Rays) - bez alokace nových objektů
-    lightPosRef.current.set(
-      vl.posX ?? 0,
-      vl.posY ?? 0,
-      vl.posZ ?? 0
-    );
+    if (centerLightFx.group) {
+      centerLightFx.group.getWorldPosition(lightPosRef.current);
+    } else {
+      lightPosRef.current.set(vl.posX ?? 0, vl.posY ?? 0, vl.posZ ?? 0);
+    }
 
     camera.updateMatrixWorld();
     camera.getWorldPosition(camWorldPosRef.current);
