@@ -396,6 +396,9 @@ void main() {
 }
 `;
 
+// Všechny GPGPU systémy (i ty čekající na dispose – živé mají čerstvé `tick`). Čte DnaCore (odhalení páteře).
+export const particleSystems = new Set();
+
 // --- GPGPU HOOK ---
 // Writes per-particle targets into the data textures.
 // base = project shape (xyz) + project scale (w); dna = DNA state (xyz) + DNA scale (w, negative = reserve cube).
@@ -510,6 +513,7 @@ export function useGPGPU(count, particlesData, gl) {
     setCompute(computeObj);
     mark(`GPGPU ${size}² (${count} particlů) vytvořen, JS ${(performance.now() - tMark).toFixed(1)} ms`);
     if (import.meta.env.DEV) { (window.__gpgpu = window.__gpgpu || new Set()).add(computeObj); }
+    particleSystems.add(computeObj);
 
     // Disposal is deferred: after a dependency change the old system is still used for a frame or two
     // until React re-renders with the new one. Disposing immediately made three.js silently re-allocate
@@ -548,6 +552,9 @@ function disposeCompute(c) {
   c.disposed = true;
   mark(`GPGPU ${c.size}² uvolněn`);
   if (import.meta.env.DEV) window.__gpgpu?.delete(c);
+  particleSystems.delete(c);
+  c.spinePoints?.geometry.dispose();
+  c.spinePoints?.material.dispose();
   const u = c.posVar.material.uniforms;
   // Data textures that are not owned by GPUComputationRenderer
   u.tBasePosition.value?.dispose();
@@ -780,6 +787,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     }
     
     posUniforms.uCameraY.value = worldCameraPos.current.y;
+    compute.tick = performance.now(); // živý systém (odložené k dispose se nepočítají) – čte DnaCore
     prof.scope(`particly GPGPU ${compute.size}²`);
     compute.gpuCompute.compute();
     prof.end();
