@@ -1,150 +1,26 @@
 .preloader-overlay {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
   background-color: #000000;
   z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   user-select: none;
   overflow: hidden;
   cursor: default;
 }
 
-.preloader-bg-glow {
+.preloader-canvas {
   position: absolute;
-  width: 600px;
-  height: 600px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 240, 255, 0.06) 0%, rgba(0, 80, 120, 0.02) 45%, transparent 70%);
-  pointer-events: none;
-  animation: preloaderPulse 3.5s ease-in-out infinite;
-}
-
-.preloader-svg-container {
-  position: relative;
-  width: 90vw;
-  max-width: 680px;
-  aspect-ratio: 4 / 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.preloader-svg {
+  inset: 0;
   width: 100%;
   height: 100%;
-  overflow: visible;
+  display: block;
 }
 
-/* Animations for energetic field lines */
-.preloader-core-flare {
-  animation: preloaderFlare 2.8s ease-in-out infinite alternate;
-}
-
-.preloader-side-arcs {
-  animation: preloaderArcPulse 3.2s ease-in-out infinite alternate;
-}
-
-.preloader-wave-left {
-  animation: preloaderWaveL 4s ease-in-out infinite alternate;
-}
-
-.preloader-wave-right {
-  animation: preloaderWaveR 4s ease-in-out infinite alternate;
-}
-
-.preloader-counter-text {
-  font-family: 'SF Mono', 'Roboto Mono', 'JetBrains Mono', Consolas, 'Fira Code', monospace;
-  font-size: 26px;
-  font-weight: 700;
-  fill: #8ef7ff;
-  letter-spacing: 0.12em;
-  filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.95)) drop-shadow(0 0 20px rgba(0, 240, 255, 0.45));
-}
-
-.preloader-telemetry {
-  font-family: 'SF Mono', 'Roboto Mono', Consolas, monospace;
-  font-size: 9px;
-  fill: #00f0ff;
-  opacity: 0.35;
-  letter-spacing: 0.05em;
-}
-
-.preloader-status-bar {
-  margin-top: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  opacity: 0.6;
-}
-
-.preloader-status-text {
-  font-family: 'SF Mono', 'Roboto Mono', Consolas, monospace;
-  font-size: 11px;
-  letter-spacing: 0.25em;
-  color: #00e5ff;
-  text-transform: uppercase;
-}
-
-.preloader-status-line {
-  width: 32px;
+.preloader-sr {
+  position: absolute;
+  width: 1px;
   height: 1px;
-  background: linear-gradient(90deg, #00f0ff, transparent);
-}
-
-@keyframes preloaderPulse {
-  0%, 100% {
-    transform: scale(0.95);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 0.85;
-  }
-}
-
-@keyframes preloaderFlare {
-  0%, 100% {
-    opacity: 0.8;
-    filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.6));
-  }
-  50% {
-    opacity: 1;
-    filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.95));
-  }
-}
-
-@keyframes preloaderArcPulse {
-  0%, 100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-@keyframes preloaderWaveL {
-  0%, 100% {
-    transform: translateX(0);
-    opacity: 0.3;
-  }
-  50% {
-    transform: translateX(-4px);
-    opacity: 0.6;
-  }
-}
-
-@keyframes preloaderWaveR {
-  0%, 100% {
-    transform: translateX(0);
-    opacity: 0.3;
-  }
-  50% {
-    transform: translateX(4px);
-    opacity: 0.6;
-  }
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

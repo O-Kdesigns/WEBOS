@@ -3,6 +3,7 @@ import { useProgress } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import { videoTextureCache } from './App';
 import { resolveAssetUrl } from './assetUrl';
+import { startPreloaderCanvas } from './PreloaderCanvas';
 import './Preloader.css';
 
 
@@ -15,6 +16,18 @@ export function Preloader({ activeVideoUrl, onLoaded }) {
   const targetProgressRef = useRef(0);
   const startTimeRef = useRef(0);
   const onLoadedFiredRef = useRef(false);
+  const progressRef = useRef(0);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    progressRef.current = displayedProgress;
+  }, [displayedProgress]);
+
+  // 2D line animation (helix drawing itself with the progress)
+  useEffect(() => {
+    if (isDone || !canvasRef.current) return;
+    return startPreloaderCanvas(canvasRef.current, progressRef);
+  }, [isDone]);
 
   useEffect(() => {
     startTimeRef.current = Date.now();
@@ -135,254 +148,17 @@ export function Preloader({ activeVideoUrl, onLoaded }) {
 
   if (isDone) return null;
 
-  const circumference = 502.65; // 2 * Math.PI * 80
-  const strokeDashoffset = circumference * (1 - displayedProgress / 100);
-
-  const formattedNum = displayedProgress < 10 ? `0${displayedProgress}` : `${displayedProgress}`;
-
   return (
     <AnimatePresence onExitComplete={() => setIsDone(true)}>
       {!isExiting && (
         <motion.div
           className="preloader-overlay"
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 1.04 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         >
-          <div className="preloader-bg-glow" />
-
-          <div className="preloader-svg-container">
-            <svg
-              className="preloader-svg"
-              viewBox="0 0 800 600"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <defs>
-                {/* Diagonal hatch pattern matching reference */}
-                <pattern
-                  id="at-diagonal-hatch"
-                  width="10"
-                  height="10"
-                  patternTransform="rotate(45 0 0)"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <line
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="10"
-                    stroke="#00f0ff"
-                    strokeWidth="1.2"
-                    strokeOpacity="0.45"
-                  />
-                </pattern>
-
-                {/* Soft glow filter */}
-                <filter id="cyan-glow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur stdDeviation="3.5" result="coloredBlur" />
-                  <feMerge>
-                    <feMergeNode in="coloredBlur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-
-                {/* Vertical wave gradient */}
-                <linearGradient id="wave-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00f0ff" stopOpacity="0" />
-                  <stop offset="50%" stopColor="#00f0ff" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#00f0ff" stopOpacity="0" />
-                </linearGradient>
-
-                {/* Soft flare gradient */}
-                <linearGradient id="spike-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#70f3ff" stopOpacity="1" />
-                  <stop offset="100%" stopColor="#0088aa" stopOpacity="0.2" />
-                </linearGradient>
-              </defs>
-
-              {/* Sinuous resonance wave ripples on far left & right */}
-              <g opacity="0.45">
-                <path
-                  d="M 120 150 C 75 230, 165 370, 115 450"
-                  fill="none"
-                  stroke="url(#wave-grad)"
-                  strokeWidth="1.6"
-                  className="preloader-wave-left"
-                />
-                <path
-                  d="M 175 180 C 150 245, 198 355, 165 420"
-                  fill="none"
-                  stroke="url(#wave-grad)"
-                  strokeWidth="1.2"
-                  className="preloader-wave-left"
-                />
-                <path
-                  d="M 680 150 C 725 230, 635 370, 685 450"
-                  fill="none"
-                  stroke="url(#wave-grad)"
-                  strokeWidth="1.6"
-                  className="preloader-wave-right"
-                />
-                <path
-                  d="M 625 180 C 650 245, 602 355, 635 420"
-                  fill="none"
-                  stroke="url(#wave-grad)"
-                  strokeWidth="1.2"
-                  className="preloader-wave-right"
-                />
-              </g>
-
-              {/* Magnetic field lines flanking the circle */}
-              <g className="preloader-side-arcs">
-                {/* Left outer & inner field loops */}
-                <path
-                  d="M 335 218 C 255 242, 238 300, 238 300 C 238 300, 255 358, 335 382"
-                  fill="none"
-                  stroke="#00e5ff"
-                  strokeWidth="1.2"
-                  opacity="0.5"
-                />
-                <path
-                  d="M 346 232 C 290 252, 274 300, 274 300 C 274 300, 290 348, 346 368"
-                  fill="none"
-                  stroke="#00e5ff"
-                  strokeWidth="1.6"
-                  opacity="0.8"
-                />
-
-                {/* Right outer & inner field loops */}
-                <path
-                  d="M 465 218 C 545 242, 562 300, 562 300 C 562 300, 545 358, 465 382"
-                  fill="none"
-                  stroke="#00e5ff"
-                  strokeWidth="1.2"
-                  opacity="0.5"
-                />
-                <path
-                  d="M 454 232 C 510 252, 526 300, 526 300 C 526 300, 510 348, 454 368"
-                  fill="none"
-                  stroke="#00e5ff"
-                  strokeWidth="1.6"
-                  opacity="0.8"
-                />
-              </g>
-
-              {/* Energetic vertical & diagonal flares */}
-              <g className="preloader-core-flare">
-                {/* Top spire with curved base matching Active Theory reference */}
-                <path
-                  d="M 368 226 Q 396 215 400 135 Q 404 215 432 226"
-                  fill="none"
-                  stroke="#00f0ff"
-                  strokeWidth="1.8"
-                  filter="url(#cyan-glow)"
-                />
-                {/* Bottom spire */}
-                <path
-                  d="M 368 374 Q 396 385 400 465 Q 404 385 432 374"
-                  fill="none"
-                  stroke="#00f0ff"
-                  strokeWidth="1.8"
-                  filter="url(#cyan-glow)"
-                />
-
-                {/* Diagonal rays */}
-                <path
-                  d="M 345 244 Q 328 205 315 170"
-                  fill="none"
-                  stroke="#00d8f0"
-                  strokeWidth="1.4"
-                  opacity="0.75"
-                />
-                <path
-                  d="M 455 244 Q 472 205 485 170"
-                  fill="none"
-                  stroke="#00d8f0"
-                  strokeWidth="1.4"
-                  opacity="0.75"
-                />
-                <path
-                  d="M 345 356 Q 328 395 315 430"
-                  fill="none"
-                  stroke="#00d8f0"
-                  strokeWidth="1.4"
-                  opacity="0.75"
-                />
-                <path
-                  d="M 455 356 Q 472 395 485 430"
-                  fill="none"
-                  stroke="#00d8f0"
-                  strokeWidth="1.4"
-                  opacity="0.75"
-                />
-              </g>
-
-              {/* Dark inner circle background */}
-              <circle
-                cx="400"
-                cy="300"
-                r="79"
-                fill="rgba(2, 14, 20, 0.94)"
-              />
-
-              {/* Diagonal hatch pattern circle */}
-              <circle
-                cx="400"
-                cy="300"
-                r="79"
-                fill="url(#at-diagonal-hatch)"
-              />
-
-              {/* Circular progress track */}
-              <circle
-                cx="400"
-                cy="300"
-                r="80"
-                fill="none"
-                stroke="rgba(0, 240, 255, 0.18)"
-                strokeWidth="2"
-              />
-
-              {/* Animated Progress Ring */}
-              <circle
-                cx="400"
-                cy="300"
-                r="80"
-                fill="none"
-                stroke="#00f0ff"
-                strokeWidth="2.5"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                transform="rotate(-90 400 300)"
-                filter="url(#cyan-glow)"
-              />
-
-              {/* Faint telemetry glyphs */}
-              <text x="350" y="272" className="preloader-telemetry">9</text>
-              <text x="446" y="272" className="preloader-telemetry">9</text>
-              <text x="340" y="328" className="preloader-telemetry">9</text>
-              <text x="456" y="328" className="preloader-telemetry">9</text>
-
-              {/* Center Counter Display */}
-              <text
-                x="400"
-                y="308"
-                textAnchor="middle"
-                dominantBaseline="central"
-                className="preloader-counter-text"
-              >
-                {`/ ${formattedNum}`}
-              </text>
-            </svg>
-          </div>
-
-          <div className="preloader-status-bar">
-            <div className="preloader-status-line" />
-            <span className="preloader-status-text">INITIALIZING SCENE</span>
-            <div className="preloader-status-line" style={{ transform: 'rotate(180deg)' }} />
-          </div>
+          <canvas ref={canvasRef} className="preloader-canvas" aria-hidden="true" />
+          <span className="preloader-sr">{`Loading ${displayedProgress} %`}</span>
         </motion.div>
       )}
     </AnimatePresence>
