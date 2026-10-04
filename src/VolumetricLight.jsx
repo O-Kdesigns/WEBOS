@@ -161,6 +161,7 @@ const VolumetricLightShader = {
     uDustDecay: { value: 0.96 },
     uDustCap: { value: 0.15 },
     uDustTint: { value: 0.7 },
+    uDustTaper: { value: 1.0 },  // 1 = paprsek prachu plynule dohasne do nuly, 0 = useknutý konec (váha 37 % na konci)
     uFogClear: { value: 1.0 },                          // INSIDE: voda rozráží mlhu tam, kde je vidět pozadí
     uFogRim: { value: 0.35 },
     uWaterStreak: { value: 0.25 },
@@ -424,6 +425,7 @@ const VolumetricLightShader = {
     uniform float uDustDecay;
     uniform float uDustCap;
     uniform float uDustTint;
+    uniform float uDustTaper;
     uniform float uFogClear;
     uniform float uFogRim;
     uniform float uWaterStreak;
@@ -578,27 +580,36 @@ const VolumetricLightShader = {
       vec2 toL = uDustLightPos - vUv;
       float dl = length(toL);
       vec2 st = (dl > 1e-4 ? toL / dl : vec2(0.0)) * min(dl, uDustRayLen) / 24.0;
-      vec2 uv = vUv + st * getDither(gl_FragCoord.xy);
+      float dith = getDither(gl_FragCoord.xy);
+      vec2 uv = vUv + st * dith;
       vec3 acc = vec3(0.0);
       float dec = 1.0;
+      // konec paprsku: váha ke konci okna plynule k nule (smoothstep) -> paprsek dohasne, není vidět hranice délky
+      float tStep = 1.0 / 24.0, t = dith * tStep;
       if (uPrepass > 0.5) {
         // tDustSrc = to samé, co počítá větev níž, jen předem 1× na pixel scény (1 čtení místo 2 na krok)
         for (int i = 0; i < 24; i++) {
-          acc += texture2D(tDustSrc, clamp(uv, vec2(0.0), vec2(1.0))).rgb * dec;
+          float tw = mix(1.0, 1.0 - t * t * (3.0 - 2.0 * t), uDustTaper);
+          t += tStep;
+          acc += texture2D(tDustSrc, clamp(uv, vec2(0.0), vec2(1.0))).rgb * dec * tw;
           dec *= uDustDecay;
           uv += st;
         }
         acc *= uDustCap;
       } else {
         for (int i = 0; i < 24; i++) {
+          float tw = mix(1.0, 1.0 - t * t * (3.0 - 2.0 * t), uDustTaper);
+          t += tStep;
           vec2 cu = clamp(uv, vec2(0.0), vec2(1.0));
           float bg = step(0.9999, texture2D(tDepth, cu).r);
           // jen tečky prachu (nad tmavou barvou pozadí), strop = jasné věci nepřepálí mlhu
-          acc += clamp(texture2D(tBlur, cu).rgb - 0.02, 0.0, uDustCap) * bg * dec;
+          acc += clamp(texture2D(tBlur, cu).rgb - 0.02, 0.0, uDustCap) * bg * dec * tw;
           dec *= uDustDecay;
           uv += st;
         }
       }
+      // dohasínání ubere energii -> vyrovnat, ať paprsky u zdroje nezeslábnou
+      acc *= mix(1.0, 1.5, uDustTaper);
       vec3 light = acc * 0.12 * uDustRays + clamp(blurSmooth(vUv) - 0.02, 0.0, uDustCap) * uDustHaze;
       float lum = dot(light, vec3(0.299, 0.587, 0.114));
       return mix(light, uTvColor * lum * 2.0, uDustTint) * uDustFog;
@@ -1503,6 +1514,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       u.uDustDecay.value = tl.dustDecay ?? 0.96;
       u.uDustCap.value = tl.dustCap ?? 0.15;
       u.uDustTint.value = tl.dustTint ?? 0.7;
+      u.uDustTaper.value = tl.dustTaper ?? 1;
       u.uFogClear.value = tl.fogClear ?? 0.9;
       u.uFogRim.value = tl.fogRim ?? 0.35;
       u.uWaterStreak.value = tl.waterStreak ?? 0.25;
