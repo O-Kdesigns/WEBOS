@@ -15,7 +15,7 @@ HALO_GAIN = float(argv[5]) if len(argv) > 5 else 1.0
 # strop dozvuku (podíl plného jasu textury): světlá místa (panely, diamanty) zůstanou ostrá, dozvuk jen doplní okolí
 HALO_CAP = float(argv[6]) if len(argv) > 6 else 1.0
 AO_DIST = 0.12
-BAKE_DIR = r'C:\WEBOS\ASSETS\bake'
+BAKE_DIR = r'C:\PROJEKTY\BRAND\WEBOS\ASSETS\bake'
 os.makedirs(BAKE_DIR, exist_ok=True)
 
 sc = bpy.context.scene

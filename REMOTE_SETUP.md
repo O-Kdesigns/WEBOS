@@ -10,7 +10,7 @@ Aktualizováno: 2026-09-26
 - **SSH klíč:** `~/.ssh/github_webos` (přidán na O-Kdesigns GitHub účet)
 - **SSH config:** `~/.ssh/config` routuje `github.com` na `github_webos` klíč
 - **Repo velikost:** ~239 MB (po odstranění videí z git historie)
-- **Videa:** Lokálně v `C:\WEBOS\blender\`, v gitu nejsou (ani LFS)
+- **Videa:** Lokálně v `public\obsah\video\`, v gitu nejsou (ani LFS)
 
 ### Běžný workflow
 
@@ -88,14 +88,14 @@ git push origin main     # Push na GitHub
 ## Soubory ve workspace
 
 ```
-C:\WEBOS\
+C:\PROJEKTY\BRAND\
 ├── WEBOS\               # Git repozitář (tento projekt)
 │   ├── src\             # React + Three.js komponenty
-│   ├── public\obsah\    # Projekty portfolia (0_uvod, 1_prvni_projekt...)
+│   ├── public\obsah\    # Projekty portfolia (videa v public\obsah\video – NOT v gitu)
+│   ├── ASSETS\          # Blender soubory + bake (NOT v gitu)
 │   ├── CLAUDE.md        # Hlavní context pro Claude Code (auto-načte se)
 │   ├── GEMINI.md        # 15 výkonnostních pravidel
-│   ├── .agents\AGENTS.md # Architektura + AI pravidla
-│   └── WEBOS.bat        # Launcher
-├── blender\             # Blender soubory + exporty (NOT v gitu)
-└── WEBOS.lnk            # Zkratka pro spuštění
+│   └── .agents\AGENTS.md # Architektura + AI pravidla
+├── brand-kinetic-lab\
+└── launcher\            # BRAND launcher (zástupce BRAND na ploše)
 ```
