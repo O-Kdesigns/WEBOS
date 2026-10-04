@@ -15,7 +15,7 @@
 //                 na odhad absolutního fps na reálném zařízení.
 //
 // Žádný z režimů nesimuluje skutečný výkon konkrétního GPU - Chrome/Brave neumí
-// "částečné" zpomalení grafiky, jen zapnuto/vypnuto. Pro reálná čísla viz real-device.bat
+// "částečné" zpomalení grafiky, jen zapnuto/vypnuto. Pro reálná čísla viz launcher/actions/adb-device.js
 // (remote debugging na skutečný telefon přes USB).
 //
 // Použití: node emulate-browser.cjs --mode=hw|swiftshader <url> [cpuThrottle]

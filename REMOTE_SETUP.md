@@ -31,12 +31,11 @@ git push --force origin main
 
 ---
 
-## Launcher (WEBOS.bat)
+## Launcher (BRAND)
 
-Zkratka `WEBOS.lnk` v `C:\WEBOS\` spouští `WEBOS.bat`:
-1. Zkontroluje jestli běží `claude.exe` (Claude Code) — pokud ne, spustí ho
-2. Spustí `open_browser.cjs` na pozadí (počká na server, otevře Brave)
-3. Spustí `npm run dev`
+Zástupce `BRAND` na ploše spouští `C:\PROJEKTY\BRAND\launcher` (okno s menu; `config.json` = co umí spustit).
+Dev server se startuje sám (okno minimalizované), pokud ještě neběží, a stránka se otevře v defaultním prohlížeči.
+Starý `WEBOS.bat` + `open_browser.cjs` už se nepoužívají.
 
 Claude Code exe: `%LOCALAPPDATA%\Microsoft\WindowsApps\claude-desktop.exe`
 

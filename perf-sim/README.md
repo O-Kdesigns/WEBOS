@@ -15,21 +15,20 @@ i slabý mobilní GPU (změřeno 1.6 fps na této scéně vs. 47 fps na reálné
 13T). Není tedy způsob, jak si v Chromu na desktopu přesně "vyrenderovat"
 konkrétní telefon – jen buď plná rychlost, nebo drastický worst-case.
 
-## Nástroje (`../WEBOS-mobile-*.bat`)
+## Nástroje (spouští se z BRAND launcheru, sekce „Testování mobilu“)
 
 | Nástroj | Co dělá | K čemu je dobrý | K čemu NENÍ dobrý |
 |---|---|---|---|
-| `WEBOS-mobile-hwthrottle.bat` (`emulate-browser.cjs --mode=hw`) | Moto G Power viewport/DPR/UA (oficiální Lighthouse mid-tier profil) + CPU throttle, GPU akcelerace zapnutá | Rychlá kontrola layoutu/UI na mobilním viewportu | Odhad reálného fps (zůstane blízko desktopu, GPU-bound scéna) |
-| `WEBOS-mobile-worstcase.bat` (`--mode=swiftshader`) | Totéž + GPU vypnutá (SwiftShader, softwarový render) | Relativní A/B srovnání – vypnu efekt/omezím particly -> o kolik % rychlejší. Zpomalení je skutečné a scéně úměrné (víc práce = pomalejší), ne fixní strop | Odhad absolutního fps na konkrétním zařízení (přestřeluje o řády dolů) |
-| `perf-sim/real-device.bat` | `adb reverse` + instrukce pro `chrome://inspect` na skutečný telefon přes USB | Jediný zdroj přesných čísel (fps, frame time) pro konkrétní zařízení | – |
+| „Mobilní viewport (GPU)“ (`emulate-browser.cjs --mode=hw`) | Moto G Power viewport/DPR/UA (oficiální Lighthouse mid-tier profil) + CPU throttle, GPU akcelerace zapnutá | Rychlá kontrola layoutu/UI na mobilním viewportu | Odhad reálného fps (zůstane blízko desktopu, GPU-bound scéna) |
+| „Worst-case (SwiftShader)“ (`--mode=swiftshader`) | Totéž + GPU vypnutá (SwiftShader, softwarový render) | Relativní A/B srovnání – vypnu efekt/omezím particly -> o kolik % rychlejší. Zpomalení je skutečné a scéně úměrné (víc práce = pomalejší), ne fixní strop | Odhad absolutního fps na konkrétním zařízení (přestřeluje o řády dolů) |
+| „Skutečný telefon (ADB)“ (`launcher/actions/adb-device.js`) | `adb reverse` + instrukce pro `chrome://inspect` na skutečný telefon přes USB | Jediný zdroj přesných čísel (fps, frame time) pro konkrétní zařízení | – |
 
-Všechny tři sdílí stejný běžící dev server (port se nastavuje nahoře v každém
-`.bat`, výchozí 5173) – nespouští se žádná druhá instance Vite.
+Všechny tři sdílí stejný běžící dev server (port je v `launcher/config.json`, výchozí 5173) – nespouští se žádná druhá instance Vite.
 
-`real-device.bat` čeká na jednorázový setup (adb v PATH, USB debugging
-povolený na telefonu) – instrukce jsou přímo v tom skriptu, vypíšou se, pokud
+ADB akce čeká na jednorázový setup (adb v PATH, USB debugging
+povolený na telefonu) – instrukce vypíše sám skript, pokud
 `adb` chybí. Jakmile je to jednou nastavené, příště stačí telefon připojit
-kabelem a spustit ten `.bat` – najde ho, přesměruje port, dá návod na
+kabelem a kliknout v launcheru – najde ho, přesměruje port, dá návod na
 `chrome://inspect`.
 
 ## Plán (zatím NEIMPLEMENTOVÁNO): detekce výkonu zařízení při startu

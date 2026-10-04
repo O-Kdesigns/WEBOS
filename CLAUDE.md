@@ -38,7 +38,7 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 
 ## Workflow: Claude Code + browser pane
 
-1. `WEBOS.bat` spustí Claude Code + npm run dev + otevře Brave
+1. Launcher `C:\PROJEKTY\BRAND\launcher` (zástupce BRAND na ploše) – jedním klikem Claude, dev server + Brave, mobilní testy
 2. V Claude Code browser pane: naviguj na `localhost:5173`
 3. Říkej co chceš — Claude vidí stránku přímo, může scrollovat a číst
 
@@ -53,7 +53,7 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 - LFS nainstalován, ale nic nesleduje — videa jsou jen lokálně (a na Netlify)
 - **GitHub Pages živě** (od 2026-09-27): https://o-kdesigns.github.io/WEBOS/ – repo je veřejné, `.github/workflows/pages.yml` nasazuje každý push do `main`. Build s `GITHUB_PAGES=true` → `base: '/WEBOS/'`. Cesty k souborům z `public/` v JS vždy přes `withBase()` / `resolveAssetUrl()` z `src/assetUrl.js` (CSS a index.html Vite přepíše sám).
 - **Video fallback:** když se video nenačte (Pages je nemá), přepne se na `public/placeholder.mp4` (10 s, 118 KB) – `ensureVideoEntry` v `App.jsx` + náhled v editoru.
-- `WEBOS.bat` přepsán: Antigravity → Claude Code (Bionic → claude-desktop.exe)
+- `WEBOS.bat` přepsán: Antigravity → Claude Code (Bionic → claude-desktop.exe); později nahrazen BRAND launcherem (všechny .bat smazány)
 - Browser pane funkční: Claude vidí a ovládá localhost:5173 přímo
 
 ---
