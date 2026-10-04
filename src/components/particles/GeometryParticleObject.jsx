@@ -2,7 +2,7 @@ import React, { useRef, useMemo, useLayoutEffect, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getColors, useGPGPU, useParticleLogic, getAdaptiveSphereSegments } from './utils';
-import { ParticleMaterial } from './ParticleMaterial';
+import { ParticleMaterial, impostorMode } from './ParticleMaterial';
 import { printFx } from '../../SolidPrint';
 import { computeSurfacePlanes, COLLISION_DEFAULTS } from './SolidCollision';
 import { liveLight } from '../../SolidLiveLight';
@@ -91,6 +91,8 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
   const densityPercent = settings.densityPercent ?? 100;
   const count = vertices.length > 0 ? Math.max(1, Math.floor(vertices.length * (densityPercent / 100))) : 0;
   const [segW, segH] = useMemo(() => getAdaptiveSphereSegments(count, settings), [count, settings]);
+  // impostor (particleImpostor): čtverec 2×2 místo koule, kouli dopočítá želé shader (ParticleMaterial.impostorMode)
+  const impostor = impostorMode(settings, appConfig, videoTexture);
 
   const dnaBaseScaleCfg = appConfig?.dnaSettings?.baseSize ?? 0.08;
   // Editor ORBIT "Náhodnost velikosti": jen zvětšování (0 = beze změny), většina trochu, pár kuliček až 3×
@@ -217,7 +219,7 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
     meshRef.current.frustumCulled = false;
     
     meshRef.current.geometry.setAttribute('aComputeUV', new THREE.InstancedBufferAttribute(computeUVs, 2));
-  }, [count, particlesData, dummy, compute, computeUVs, segW, segH]);
+  }, [count, particlesData, dummy, compute, computeUVs, segW, segH, impostor > 0]);
 
   // Kolize se solidy stránky: vlastní rovina povrchu na particl (worker, do té doby bez kolizí).
   // Textura se přepočítá jen při změně tvaru / solidů / počtu particlů (klíč), ne při každém přepnutí projektu.
@@ -377,8 +379,10 @@ export function GeometryParticleObject({ settings, appConfig, videoTexture, opac
     <group ref={worldGroupRef} {...transform}>
       <group ref={inverseGroupRef}>
         <instancedMesh ref={meshRef} args={[null, null, count]} renderOrder={renderOrder}>
-          <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />
-          <ParticleMaterial settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} />
+          {impostor
+            ? <planeGeometry key="impostor" args={[2, 2]} />
+            : <sphereGeometry key={`${segW}-${segH}`} args={[1, segW, segH]} />}
+          <ParticleMaterial settings={settings} appConfig={appConfig} videoTexture={videoTexture} opacity={opacity} rotationY={rotationY} pageDistance={pageDistance} transitionProgress={transitionProgress} impostor={impostor} />
         </instancedMesh>
       </group>
     </group>

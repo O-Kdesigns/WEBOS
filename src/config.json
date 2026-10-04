@@ -306,5 +306,9 @@
   "dnaSettings": {
     "sizeRandomness": 1,
     "baseSize": 0.034
+  },
+  "particleImpostor": {
+    "enabled": true,
+    "depth": true
   }
 }

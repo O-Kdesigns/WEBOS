@@ -10,8 +10,26 @@ import { ESC_VERTEX } from './shaders/escapeGlsl';
 import { DNA_RAINBOW_GLSL, buildDnaPalette } from './shaders/dnaRainbow';
 import pagesConfig from '../../settings.json';
 
-export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 1, rotationY, pageDistance, transitionProgress }) {
-  const isCylinder = settings.isCylinder || settings.scatterSpring !== undefined || (settings.shape === 'cylinder' && !settings.customGeometry);
+const NO_DEFINES = {};
+const IMPOSTOR_DEFINES = { IMPOSTOR: '' };
+const IMPOSTOR_DEPTH_DEFINES = { IMPOSTOR: '', IMPOSTOR_DEPTH: '' };
+
+const isCylinderSettings = (settings) =>
+  settings.isCylinder || settings.scatterSpring !== undefined || (settings.shape === 'cylinder' && !settings.customGeometry);
+
+// Režim impostoru pro částice: jen želé materiál (video + textura) a jen když je zapnutý v configu
+// (particleImpostor {enabled, depth}). DEV: window.__impostorOverride = {enabled, depth} (platí při dalším renderu).
+export function impostorMode(settings, appConfig, videoTexture) {
+  if (settings.colorMode !== 'video' || !videoTexture || isCylinderSettings(settings)) return 0;
+  const cfg = { ...(appConfig?.particleImpostor || {}), ...((import.meta.env.DEV && window.__impostorOverride) || {}) };
+  if (!cfg.enabled) return 0;
+  return cfg.depth === false ? 1 : 2;
+}
+
+// impostor: 0 = koule (geometrie), 1 = čtverec + koule dopočítaná paprskem, 2 = navíc skutečná hloubka (prolínání)
+// – jen želé materiál; geometrii (čtverec) dodává GeometryParticleObject, viz impostorMode()
+export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 1, rotationY, pageDistance, transitionProgress, impostor = 0 }) {
+  const isCylinder = isCylinderSettings(settings);
   const matRef = useRef();
   // Barva particlů v ORBITu (DNA stav): stojatá duha namíchaná z 2D prachu (config.atmosphereDust)
   // + barev všech portfolií (settings.json) - viz shaders/dnaRainbow.js. Automaticky se změní,
@@ -171,6 +189,8 @@ export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 
   if (settings.colorMode === 'video' && videoTexture) {
     return (
       <jellyVideoMaterialImpl
+        key={`jelly${impostor}`}
+        defines={impostor ? (impostor > 1 ? IMPOSTOR_DEPTH_DEFINES : IMPOSTOR_DEFINES) : NO_DEFINES}
         ref={jellyRef}
         tVideo={videoTexture} 
         uColor={new THREE.Color(settings.baseColor || '#6df73b')}

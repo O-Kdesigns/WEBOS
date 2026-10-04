@@ -64,6 +64,9 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
         <div style={{ height: '10px' }} />
         <DenseToggle desc="Zobrazí vnější dekorativní sloupec částic simulující DNA." label="Zobrazit částice DNA" checked={p.hasParticles ?? true} onChange={v => updateDnaSettings('hasParticles', v)} />
         <DenseSlider desc="Šířka oblouku (rádius) obíhajících částic." label="Poloměr oblaku" min={5} max={50} step={1} value={p.radius ?? 20} onChange={v => updateDnaSettings('radius', v)} />
+        <div style={{ height: '10px' }} />
+        <DenseToggle desc="Želé kuličky jako plošky natočené na kameru, kouli dopočítá shader po pixelech: dokonale kulaté v jakékoli velikosti a 4 vrcholy místo ~40. Vypnuto = 3D koule z trojúhelníků (hranaté u velkých kuliček)." label="Kuličky jako plošky (impostor)" checked={appConfig.particleImpostor?.enabled ?? false} onChange={v => updateConfig('particleImpostor', { ...(appConfig.particleImpostor || {}), enabled: v })} />
+        <DenseToggle desc="Kuličky zapisují skutečnou hloubku bodu na kouli -> překrývající se kuličky se protínají jako koule. Vypnuto = ploché kotouče (rychlejší, ale u překryvu je vidět rovný řez)." label="Prolínání kuliček" checked={appConfig.particleImpostor?.depth ?? true} onChange={v => updateConfig('particleImpostor', { ...(appConfig.particleImpostor || {}), depth: v })} />
       </DashboardCard>
 
       <DashboardCard title="Rozvíření DNA (myš v ORBITu)" icon="🌀" color="#22d3ee">

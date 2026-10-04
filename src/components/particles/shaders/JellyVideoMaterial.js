@@ -67,7 +67,12 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   varying vec3 vWorldPos;
   varying float vScale;
   varying vec3 vRand;
-  
+  #ifdef IMPOSTOR
+  varying vec3 vQuadPos;
+  varying vec3 vCenterView;
+  varying float vRadius;
+  #endif
+
   void main() {
     vUv = uv;
     
@@ -120,6 +125,28 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vViewPosition = -mvPosition.xyz;
     vWorldPos = instancePosition.xyz;
     vScale = computedScale;
+
+    #ifdef IMPOSTOR
+    // Impostor (particleImpostor): místo koule čtverec 2×2 natočený kolmo na paprsek ke středu kuličky, posunutý
+    // před ni a velký přesně jako kužel siluety (perspektivně správně i mimo střed obrazu). Kouli dopočítá
+    // fragment shader paprskem -> dokonale kulatá v jakékoli velikosti, 4 vrcholy místo ~40.
+    float R = computedScale * nearFade;
+    float Rq = R * (1.0 + uWobble * 0.25) + 1e-5;   // rezerva na vlnění obrysu
+    vec3 C = centerView.xyz;
+    float dC = max(length(C), 1e-6);
+    vec3 dir = C / dC;
+    float d = max(dC, Rq * 1.02);
+    vec3 up0 = abs(dir.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 bx = normalize(cross(up0, dir));
+    vec3 by = cross(bx, dir);   // bx × by = −dir -> přední strana čtverce ke kameře (jinak ho zahodí culling)
+    float front = max(d - Rq, 1e-3);
+    float tanA = Rq / sqrt(d * d - Rq * Rq);
+    vec3 qv = dir * front + (position.x * bx + position.y * by) * front * tanA;
+    gl_Position = projectionMatrix * vec4(qv, 1.0);
+    vQuadPos = qv;
+    vCenterView = C;
+    vRadius = R;
+    #endif
   }
   `,
   `${TEX_LOD0}
@@ -188,7 +215,56 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   ${DNA_RAINBOW_GLSL}
   ${PARTICLE_DECL}
 
+  #ifdef IMPOSTOR
+  uniform mat4 modelMatrix;
+  uniform mat4 projectionMatrix;
+  uniform float uWobble;
+  varying vec3 vQuadPos;
+  varying vec3 vCenterView;
+  varying float vRadius;
+  // vlnění obrysu jako dřív ve vertex shaderu koule (stejný vzorec na směru v prostoru objektu -> netočí se s kamerou)
+  float jellyRadius(vec3 nView) {
+    vec3 o = normalize(transpose(mat3(modelMatrix)) * (vec4(nView, 0.0) * viewMatrix).xyz);
+    float ph = vRand.x * 6.2832;
+    float t = uTime * (1.6 + vRand.y);
+    float w = sin(o.x * 2.6 + t + ph) * sin(o.y * 2.3 - t * 0.83 + ph * 1.7) + 0.6 * sin(o.z * 3.1 + t * 1.2 - ph);
+    return vRadius * (1.0 + uWobble * 0.14 * w);
+  }
+  #endif
+
   void main() {
+    #ifdef IMPOSTOR
+    // průsečík paprsku z kamery (view space, kamera v počátku) s kuličkou: střed vCenterView, poloměr podle směru (vlnění)
+    vec3 rd = normalize(vQuadPos);
+    float b = dot(rd, vCenterView);
+    float q2 = max(dot(vCenterView, vCenterView) - b * b, 0.0);   // vzdálenost paprsku od středu²
+    float q = sqrt(q2);
+    float qAA = fwidth(q);
+    float Rw = vRadius;
+    vec3 impN = vec3(0.0, 0.0, 1.0);
+    for (int it = 0; it < 2; it++) {
+      impN = normalize(rd * (b - sqrt(max(Rw * Rw - q2, 0.0))) - vCenterView);
+      Rw = jellyRadius(impN);
+    }
+    // měkký okraj (~1 px) místo zubů
+    float impCov = clamp((Rw - q) / max(qAA, 1e-7) + 0.5, 0.0, 1.0);
+    if (impCov <= 0.0) discard;
+    vec3 impP = rd * (b - sqrt(max(Rw * Rw - q2, 0.0)));
+    impN = normalize(impP - vCenterView);
+    vec3 impViewPos = -impP;
+    vec3 impWorld = (vec4(impP, 0.0) * viewMatrix).xyz + cameraPosition;
+    vec4 impClip = projectionMatrix * vec4(impP, 1.0);
+    #ifdef IMPOSTOR_DEPTH
+    // prolínání: skutečná hloubka bodu na kouli -> kuličky se protínají jako koule, ne jako ploché kotouče
+    gl_FragDepth = impClip.z / impClip.w * 0.5 + 0.5;
+    #endif
+    // zbytek shaderu čte varyingy koule -> přesměrovat na hodnoty z paprsku
+    #define vNormal impN
+    #define vViewPosition impViewPos
+    #define vWorldPos impWorld
+    #define vScreenPos impClip
+    #endif
+
     // stojatá duha v ORBITu: world-space pole (na kameře nezávislé), pomalu tažené v čase,
     // namíchané z uDnaPalette (2D prach + barvy portfolií, viz ParticleMaterial.jsx)
     float dnaField = fract(0.5 + uTime * 0.00225
@@ -341,6 +417,9 @@ export const JellyVideoMaterialImpl = shaderMaterial(
                + uEscColor * (vEscFlash * uEscFlash + vEsc * uEscGlow);
 
     gl_FragColor = vec4(finalColor, uOpacity);
+    #ifdef IMPOSTOR
+    gl_FragColor.a *= impCov;
+    #endif
   }
   `
 );
