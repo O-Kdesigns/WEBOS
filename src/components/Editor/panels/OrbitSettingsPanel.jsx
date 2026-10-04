@@ -2,6 +2,7 @@
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
 import { DNA_CORE_DEFAULTS } from '../../../DnaCore';
 import { DNA_HOLD_DEFAULTS } from '../../particles/utils';
+import { BRAND_LOGO_DEFAULTS } from '../../../BrandLogo';
 
 export const DenseSlider = ({ label, desc, min, max, step, value, onChange, unit = '', color = '#10b981' }) => (
   <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 45px', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
@@ -54,10 +55,19 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
   const vl = appConfig.volumetricLight || {};
   const updateVL = (field, value) => updateConfig('volumetricLight', { ...vl, [field]: value });
   const updateTvLight = (field, value) => updateConfig('tvLight', { ...(appConfig.tvLight || {}), [field]: value });
+  const logoCfg = { ...BRAND_LOGO_DEFAULTS, ...(appConfig.brandLogo || {}) };
+  const updateLogo = (field, value) => updateConfig('brandLogo', { ...logoCfg, [field]: value });
   
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
-      
+
+      <DashboardCard title="Logo (vlevo nahoře)" icon="🔠" color="#c4ff00">
+        <DenseToggle desc="Kinetic logo z labu (brand-kinetic-lab → ★ → 🌐 Save for web). Vzhled a animace se nastavují v labu, tady jen umístění." label="Zobrazit logo" color="#c4ff00" checked={logoCfg.enabled} onChange={v => updateLogo('enabled', v)} />
+        <DenseSlider desc="Velikost loga (1 = box 240 × 105 px, text ho vyplní na šířku). Hover zóna se zvětšuje s ním." label="Velikost (scale)" min={0.2} max={3} step={0.05} color="#c4ff00" value={logoCfg.scale} onChange={v => updateLogo('scale', v)} />
+        <DenseSlider desc="Posun boxu loga od levého okraje obrazovky (px)." label="Offset X" min={0} max={600} step={1} unit="px" color="#c4ff00" value={logoCfg.offsetX} onChange={v => updateLogo('offsetX', v)} />
+        <DenseSlider desc="Posun boxu loga od horního okraje obrazovky (px)." label="Offset Y" min={0} max={400} step={1} unit="px" color="#c4ff00" value={logoCfg.offsetY} onChange={v => updateLogo('offsetY', v)} />
+      </DashboardCard>
+
       <DashboardCard title="Architektura (DNA)" icon="🧬" color="#10b981">
         <DenseSlider desc="Výška, na které DNA udělá plnou otočku. Kalibruje rotaci projektů." label="Výška 360° otočky" min={5} max={100} step={0.5} value={appConfig.dnaHeight360 || 30} onChange={v => updateConfig('dnaHeight360', v)} />
         <DenseSlider desc="Prostorová vzdálenost (krokování) mezi jednotlivými projekty v ose Y." label="Rozestup projektů" min={1} max={30} step={0.1} value={appConfig.verticalStep || 10} onChange={v => updateConfig('verticalStep', v)} />

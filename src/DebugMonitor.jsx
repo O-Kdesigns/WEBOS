@@ -92,7 +92,8 @@ export function CanvasDebugTracker() {
 }
 
 // UI overlay zobrazený v rohu obrazovky s automatickým zápisem na disk
-export function DebugMonitorHUD({ videoTextureCache, viewMode, activeUrl, activeTitle }) {
+// actions = tlačítka vlevo vedle FPS ukazatele (App: ⚙️ Editor)
+export function DebugMonitorHUD({ videoTextureCache, viewMode, activeUrl, activeTitle, actions }) {
   const [isOpen, setIsOpen] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState(false);
   const [, setTick] = useState(0);
@@ -322,8 +323,10 @@ ${incidentsStr}
 
   return (
     <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 99999, fontFamily: 'monospace', fontSize: 12 }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'stretch' }}>
+      {actions}
       {/* Tlačítko pro rozbalení/sbalení s živým FPS ukazatelem */}
-      <div 
+      <div
         onClick={() => setIsOpen(o => !o)}
         style={{
           background: 'rgba(15, 23, 42, 0.88)',
@@ -348,6 +351,7 @@ ${incidentsStr}
           <span style={{ color: '#ef4444', fontWeight: 'bold' }}>⚠️</span>
         )}
         <span style={{ color: '#64748b' }}>{isOpen ? '▼' : '▲'}</span>
+      </div>
       </div>
 
       {/* Rozbalený diagnostický panel */}

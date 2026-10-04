@@ -6,6 +6,8 @@ import { withBase } from '../../assetUrl';
 import { OrbitSettingsPanel } from './panels/OrbitSettingsPanel';
 import { InsideSettingsPanel } from './panels/InsideSettingsPanel';
 import { PageSettingsPanel } from './panels/PageSettingsPanel';
+import { useAiLive } from '../../AiLiveMode';
+import { useFluidView } from '../../FluidView';
 
 export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaHeight360 }) {
   const [assets, setAssets] = useState({ models: [], images: [], videos: [] });
@@ -26,6 +28,8 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
   const [isTransparent, setIsTransparent] = useState(false);
   const [editorMode, setEditorMode] = useState('orbit');
   const [blenderNodes, setBlenderNodes] = useState([]);
+  const [aiLive, setAiLive] = useAiLive();
+  const [fluidView, setFluidView] = useFluidView();
 
   const touchSection = (sectionId) => {
     if (!sectionId) return;
@@ -168,6 +172,23 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
           <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#ccc' }}>
             <input type="checkbox" checked={isTransparent} onChange={e => setIsTransparent(e.target.checked)} />
             Průhledný režim (vidět scénu)
+          </label>
+          {/* AI živý render: plný render i bez fokusu / v neaktivním tabu (src/AiLiveMode.js). Jen tento prohlížeč, jde i přes ?ai=1 / ?ai=0. */}
+          <label
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#ccc' }}
+            title="Plný render i když okno nemá fokus nebo je tab na pozadí (pro práci s Claude). Vypnuto = platí powerSaving z configu. Pamatuje si to jen tento prohlížeč; jde i přes ?ai=1 / ?ai=0."
+          >
+            <input type="checkbox" checked={aiLive} onChange={e => setAiLive(e.target.checked)} />
+            🤖 AI živý render
+          </label>
+          {/* Náhled 2D vody, ze které particly berou proud myši (src/FluidView.jsx). 0 = vypnuto, nic se nekreslí. */}
+          <label
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#ccc' }}
+            title="Průhlednost náhledu neviditelné 2D simulace vody (barva = směr proudu). Na 0 se vůbec nekreslí. Pamatuje si to jen tento prohlížeč."
+          >
+            💧 2D voda
+            <input type="range" min={0} max={1} step={0.05} value={fluidView} onChange={e => setFluidView(e.target.value)} style={{ width: 90 }} />
+            <span style={{ width: 32, textAlign: 'right' }}>{Math.round(fluidView * 100)}%</span>
           </label>
         </div>
         <div className="editor-actions">

@@ -1,0 +1,42 @@
+{
+  "savedAt": "2026-10-04T19:17:15.019Z",
+  "attrs": {
+    "text": "KANTØR",
+    "font": "Unbounded",
+    "weight": "310",
+    "tracking": "0.8",
+    "scale": "1",
+    "energy": "wild",
+    "hover-text": "KANTØR",
+    "o-blink": "3",
+    "hover-mix": "magnet:0.5",
+    "rare": "0.12",
+    "interval": "6",
+    "rare-set": "glitch orbit sink blackhole mirror solo ignite shatter portal magnify swap",
+    "off": "",
+    "hover-rare-set": "glitch orbit sink blackhole mirror solo ignite shatter portal magnify swap",
+    "hover-off": ""
+  },
+  "style": {
+    "color": "#F2F2F2",
+    "accent": "#C4FF00"
+  },
+  "settings": {
+    "text": "KANTØR",
+    "font": "Unbounded",
+    "weight": 310,
+    "energy": "wild",
+    "hoverText": "KANTØR",
+    "oBlink": true,
+    "oBlinkEvery": 3,
+    "rare": 0.12,
+    "interval": 6,
+    "tracking": 0.8,
+    "scale": 1,
+    "groups": {},
+    "hoverGroups": {},
+    "mix": {
+      "magnet": 0.5
+    }
+  }
+}

@@ -18,7 +18,8 @@ import { SolidPrintDriver, usePrintableSolid } from './SolidPrint';
 import { SolidLinkDriver } from './SolidLink';
 import { PortalDriver, portalFx } from './PortalTransition';
 import { useAiLive, useAiLiveTicker } from './AiLiveMode';
-import { FluidView, useFluidView } from './FluidView';
+import { FluidView } from './FluidView';
+import { BrandLogo } from './BrandLogo';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
@@ -862,8 +863,7 @@ function App() {
   const [appConfig, setAppConfig] = useState(config || {});
   
   // AI živý render (src/AiLiveMode.js): nepauzuje při ztrátě fokusu a renderuje i v neaktivním tabu
-  const [aiLive, setAiLive] = useAiLive();
-  const [fluidView, setFluidView] = useFluidView();
+  const [aiLive] = useAiLive();   // přepínač je v hlavičce Editoru
   useAiLiveTicker(aiLive);
   const pauseOnBlur = !aiLive && (appConfig.powerSaving?.pauseOnBlur ?? true);
 
@@ -1219,31 +1219,9 @@ function App() {
         </Canvas>
       </div>
 
-      <button 
-        style={{ position: 'absolute', top: 10, left: 10, zIndex: 1000, background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', pointerEvents: 'auto' }}
-        onClick={() => setIsEditorOpen(true)}
-      >
-        ⚙️ Editor
-      </button>
-
-      {/* AI živý render: plný render i bez fokusu / v neaktivním tabu. Ukládá se do localStorage (jen tento prohlížeč). */}
-      <label
-        style={{ position: 'absolute', top: 10, left: 100, zIndex: 1000, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', userSelect: 'none' }}
-        title="Plný render i když okno nemá fokus nebo je tab na pozadí (pro práci s Claude). Vypnuto = platí powerSaving z configu. Pamatuje si to jen tento prohlížeč; jde i přes ?ai=1 / ?ai=0."
-      >
-        <input type="checkbox" checked={aiLive} onChange={(e) => setAiLive(e.target.checked)} />
-        🤖 AI živý render
-      </label>
-
-      {/* Náhled 2D vody, ze které particly berou proud myši (src/FluidView.jsx). 0 = vypnuto, nic se nekreslí. */}
-      <label
-        style={{ position: 'absolute', top: 10, left: 260, zIndex: 1000, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '5px 10px', borderRadius: '4px', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', userSelect: 'none' }}
-        title="Průhlednost náhledu neviditelné 2D simulace vody (barva = směr proudu). Na 0 se vůbec nekreslí. Pamatuje si to jen tento prohlížeč."
-      >
-        💧 2D voda
-        <input type="range" min={0} max={1} step={0.05} value={fluidView} onChange={(e) => setFluidView(e.target.value)} style={{ width: 90 }} />
-        <span style={{ width: 30, textAlign: 'right' }}>{Math.round(fluidView * 100)}%</span>
-      </label>
+      {/* Kinetic logo vlevo nahoře (src/BrandLogo.jsx, nastavení Editor → Globální → 🔠 Logo).
+          AI živý render a náhled 2D vody jsou v hlavičce Editoru. */}
+      <BrandLogo appConfig={appConfig} />
 
       {isSuspended && (appConfig.powerSaving?.showBadge ?? true) && (
         <div 
@@ -1264,7 +1242,15 @@ function App() {
 
       {import.meta.env.DEV && <GpuProfilerPanel />}
 
-      <DebugMonitorHUD 
+      <DebugMonitorHUD
+        actions={
+          <button
+            onClick={() => setIsEditorOpen(true)}
+            style={{ background: 'rgba(15, 23, 42, 0.88)', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.18)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'monospace', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+          >
+            ⚙️ Editor
+          </button>
+        }
         videoTextureCache={videoTextureCache}
         viewMode={viewMode}
         activeUrl={pagesData[closestIndex]?.videoUrl || pagesData[closestIndex]?.particlesSettings?.videoUrl}
@@ -1285,7 +1271,7 @@ function App() {
 
       <div className="ui-overlay">
         {viewMode === 'ORBIT' ? (
-          <div className="instructions" style={{ color: '#aaa', userSelect: 'none' }}>
+          <div className="instructions" style={{ color: '#aaa', userSelect: 'none', marginTop: 'auto', alignSelf: 'center' }}>{/* dole uprostřed – vlevo nahoře je logo */}
             Objevuj (Swipe nebo Scroll). KliknutĂ­m na desku vstup do projektu.
           </div>
         ) : !leaving && (
