@@ -11,6 +11,9 @@
                on top of the mouse reaction), morph-time (s, default .75),
                o-blink (mean seconds between O ↔ Ø blinks; absent = off),
                force-hover (debug: behaves as if the pointer were on the logo),
+               anchor (where the text sits in its box: top-left top top-right left center right
+               bottom-left bottom bottom-right; default center), offset ("x y" em from that spot for
+               the name, + = right/down), hover-offset ("x y" em for the hover name; default = offset),
                show-zone (draws the hover/click hit zone around the text — for tuning only),
                rare (0–1 chance of a rare animation), interval (seconds between animations),
                rare-set ("orbit shatter …" = which animations count as rare), off ("drop decode" = never auto-play),
@@ -369,8 +372,8 @@ function glyphPts(ch, font, w) {
 }
 
 const CSS = `
-:host{display:block;position:relative;aspect-ratio:16/7;overflow:hidden;color:var(--kl-color,currentColor);--acc:var(--kl-accent,#C4FF00);
-  user-select:none;-webkit-user-select:none;contain:layout paint;-webkit-tap-highlight-color:transparent}
+:host{display:block;position:relative;aspect-ratio:16/7;overflow:visible;color:var(--kl-color,currentColor);--acc:var(--kl-accent,#C4FF00);
+  user-select:none;-webkit-user-select:none;contain:layout;-webkit-tap-highlight-color:transparent}
 .stage{position:absolute;inset:0;display:grid;place-items:center;perspective:1200px}
 .row{grid-area:1/1;position:relative;display:inline-flex;align-items:center;line-height:1;white-space:pre;perspective:7em;transform-style:preserve-3d}
 .row.off{visibility:hidden}
@@ -389,7 +392,7 @@ const RM = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motio
 const f3 = v => (Math.abs(v) < 1e-4 ? 0 : v).toFixed(3), f1 = v => (Math.abs(v) < .01 ? 0 : v).toFixed(1);
 
 class KineticLogo extends HTMLElement {
-  static get observedAttributes() { return ['text', 'font', 'weight', 'tracking', 'scale', 'paused', 'hover-text']; }
+  static get observedAttributes() { return ['text', 'font', 'weight', 'tracking', 'scale', 'paused', 'hover-text', 'anchor', 'offset', 'hover-offset']; }
   // groups: 'rare-set' = space-separated ids treated as rare (default: built-in), 'off' = ids that never auto-play
   static get reactions() { return REACTIONS.slice(); }
   static get animations() { return ANIMS.map(a => ({ id: a.id, rare: !!a.rare, needs: a.needs || '' })); }
@@ -404,7 +407,7 @@ class KineticLogo extends HTMLElement {
     this._rows = []; this._m = 0; this._mSeed = 1; this._bkWait = 1.5; this._bkRep = null;
     this._vis = []; this._hx = []; this._t = 0; this._cur = null; this._wait = .8; this._lastId = '';
     this._hv = 0; this._vx = 0; this._mx = 0; this._my = 0; this._tmx = 0; this._tmy = 0; this._in = false;
-    this._fs = 100; this._W = 1; this._H = 1; this._run = false; this._onScreen = true; this._seed = (Math.random() * 1e9) | 0;
+    this._fs = 100; this._cx = 0; this._cy = 0; this._W = 1; this._H = 1; this._run = false; this._onScreen = true; this._seed = (Math.random() * 1e9) | 0;
     this._frame = this._frame.bind(this);
     // the pointer only counts inside the hit zone around the text (see _hitAt); re-checked every frame in _step,
     // so scrolling, resizing and the morph changing the name length are handled without a pointermove
@@ -425,6 +428,14 @@ class KineticLogo extends HTMLElement {
   get hover() { const v = this.getAttribute('hover') || 'magnet'; return v === 'morph' ? 'off' : v; }   // 'morph' = old name of "hover-text only"
   get hoverStrength() { const v = parseFloat(this.getAttribute('hover-strength')); return isNaN(v) ? 1 : clamp(v, 0, 2); }
   get hoverText() { return this.getAttribute('hover-text') || ''; }
+  // anchor → [justify, align] of the rows in the stage grid
+  get anchor() {
+    const a = (this.getAttribute('anchor') || 'center').toLowerCase();
+    return [/left/.test(a) ? 'start' : /right/.test(a) ? 'end' : 'center', /top/.test(a) ? 'start' : /bottom/.test(a) ? 'end' : 'center'];
+  }
+  _off(name) { const v = (this.getAttribute(name) || '').split(/[\s,]+/).map(parseFloat); return [isNaN(v[0]) ? 0 : v[0], isNaN(v[1]) ? 0 : v[1]]; }
+  get offset() { return this._off('offset'); }
+  get hoverOffset() { return this.hasAttribute('hover-offset') ? this._off('hover-offset') : this.offset; }
   // active mouse reactions as [[name, strength], …]: hover-mix, else the old single hover + hover-strength
   get hoverMix() {
     const key = this.getAttribute('hover-mix') + '|' + this.getAttribute('hover') + '|' + this.getAttribute('hover-strength');
@@ -466,7 +477,7 @@ class KineticLogo extends HTMLElement {
   attributeChangedCallback(name) {
     if (!this.$row || !this.isConnected) return;
     if (name === 'text' || name === 'font' || name === 'hover-text') this._build();
-    else if (name === 'weight' || name === 'tracking' || name === 'scale') this._fit();
+    else if (name === 'weight' || name === 'tracking' || name === 'scale' || name === 'anchor' || name === 'offset' || name === 'hover-offset') this._fit();
     else if (name === 'paused') this._kick();
   }
 
@@ -523,7 +534,11 @@ class KineticLogo extends HTMLElement {
   _fit() {
     if (!this.isConnected || !this._rows[0]) return;
     const w = this.clientWidth, h = this.clientHeight; if (!w || !h) return;
-    const rows = this._rows.filter(Boolean), wt = this.weight;
+    const rows = this._rows.filter(Boolean), wt = this.weight, [ji, ai] = this.anchor;
+    this.$stage.style.justifyItems = ji; this.$stage.style.alignItems = ai;
+    // PLACEMENT — each name is aligned to the anchor and shifted by its own offset (em), so the hover
+    // name glitches in at its own spot instead of the logo sliding. `translate` keeps `transform` free for tilt.
+    rows.forEach((R, k) => { const o = k ? this.hoverOffset : this.offset; R.ox = o[0]; R.oy = o[1]; R.el.style.translate = o[0] || o[1] ? `${o[0]}em ${o[1]}em` : ''; });
     for (const R of rows) {
       R.el.style.fontSize = '100px'; R.el.style.setProperty('--tr', this.tracking + 'em');
       for (const s of R.el.children) s.style.fontWeight = wt;
@@ -537,10 +552,12 @@ class KineticLogo extends HTMLElement {
     this._measure();
   }
   _measure() {
-    const fs = this._fs;
+    const fs = this._fs, sw = this.$stage.clientWidth, sh = this.$stage.clientHeight;
     for (const R of this._rows) {
       if (!R) continue;
       const rw = R.el.offsetWidth;
+      R.cx = (R.el.offsetLeft + rw / 2 - sw / 2) / fs + (R.ox || 0);
+      R.cy = (R.el.offsetTop + R.el.offsetHeight / 2 - sh / 2) / fs + (R.oy || 0);
       R.hx = R.vis.map(L => (L.el.offsetLeft + L.el.offsetWidth / 2 - rw / 2) / fs);
       R.wd = R.vis.map(L => L.el.offsetWidth / fs);
       R.W = rw / fs;
@@ -550,7 +567,7 @@ class KineticLogo extends HTMLElement {
   // make row R the one animations, hover and clicks work on
   _use(R) {
     if (!R) return;
-    this.$row = R.el; this._vis = R.vis; this._hx = R.hx; this._wd = R.wd; this._W = R.W; this._H = this.clientHeight / (this._fs || 100);
+    this.$row = R.el; this._vis = R.vis; this._hx = R.hx; this._wd = R.wd; this._W = R.W; this._cx = R.cx || 0; this._cy = R.cy || 0; this._H = this.clientHeight / (this._fs || 100);
   }
   _rowVis() {
     const B = this._rows[1];
@@ -583,16 +600,17 @@ class KineticLogo extends HTMLElement {
      Width = shown name, height = one line, plus a padding. Hysteresis: entering needs the smaller
      zone around the shown name; once inside, the zone grows to the wider of both names (morph) and
      a larger padding — no flicker at the edge, no flip-back when the morph makes the name shorter.
+     Each name has its own box where it really sits (anchor + offset); the stay zone = all boxes.
      KNOBS ZONE_IN .3 em enter padding · ZONE_STAY .55 em stay padding · .45 half line height em */
   _hitAt(x, y, stay) {
     const r = this.$stage.getBoundingClientRect(), fs = this._fs;
     const mx = (x - (r.left + r.width / 2)) / fs, my = (y - (r.top + r.height / 2)) / fs;
-    const z = this._zoneSize(stay);
-    return { mx, my, hit: Math.abs(mx) <= z[0] && Math.abs(my) <= z[1] };
+    return { mx, my, hit: this._zones(stay).some(z => Math.abs(mx - z[0]) <= z[2] && Math.abs(my - z[1]) <= z[3]) };
   }
-  _zoneSize(stay) {
+  // [centre x, centre y, half width, half height] in em from the stage centre, one per name
+  _zones(stay) {
     const rows = stay ? this._rows.filter(Boolean) : [this._act || this._rows[0]], pad = stay ? ZONE_STAY : ZONE_IN;
-    return [Math.max(.5, ...rows.map(R => R ? R.W : 0)) / 2 + pad, .45 + pad];
+    return rows.filter(Boolean).map(R => [R.cx || 0, R.cy || 0, Math.max(.25, R.W / 2) + pad, .45 + pad]);
   }
   _step(dt) {
     this._t += dt; this._dt = dt;
@@ -605,7 +623,10 @@ class KineticLogo extends HTMLElement {
       if (this._in && this._hv < .05) { this._mx = this._tmx; this._my = this._tmy; }
       this.$stage.classList.toggle('hot', this._in && this.getAttribute('click') !== 'off');
     }
-    if (this.hasAttribute('show-zone')) { const z = this._zoneSize(this._in); this.$zone.style.cssText = `font-size:${this._fs.toFixed(2)}px;width:${(2 * z[0]).toFixed(3)}em;height:${(2 * z[1]).toFixed(3)}em`; }
+    if (this.hasAttribute('show-zone')) {   // outline of the (union of) zones
+      const zs = this._zones(this._in), x0 = Math.min(...zs.map(z => z[0] - z[2])), x1 = Math.max(...zs.map(z => z[0] + z[2])), y0 = Math.min(...zs.map(z => z[1] - z[3])), y1 = Math.max(...zs.map(z => z[1] + z[3]));
+      this.$zone.style.cssText = `font-size:${this._fs.toFixed(2)}px;width:${(x1 - x0).toFixed(3)}em;height:${(y1 - y0).toFixed(3)}em;margin-left:${((x0 + x1) / 2).toFixed(3)}em;margin-top:${((y0 + y1) / 2).toFixed(3)}em`;
+    }
     const en = this.energy, hover = this.hover, hovering = this._hovering();
     // morph: m 0 → 1 while hovered (name → hover-text), back on leave; see _morphL
     const A = this._rows[0], B = this._rows[1];
@@ -649,7 +670,7 @@ class KineticLogo extends HTMLElement {
           if (variable) L.w += Math.sin(t * 1.1 + j * .55) * 35 * en.E;
         }
         if (cur && act) cur.a.fn(L, j, n, Math.min(1, cur.p), cur.c);
-        if (hv > .001 && act) for (const [m, w] of mix) this._hoverL(L, j, hv * w, mx, my, hi, m);
+        if (hv > .001 && act) for (const [m, w] of mix) this._hoverL(L, j, hv * w, mx - this._cx, my - this._cy, hi, m);
         if (mT) this._morphL(L, j, R === B, tear);
         if (L.bk !== null) this._blinkL(L, dt);
         L.w = clamp(L.w, lo, hi);
@@ -658,7 +679,7 @@ class KineticLogo extends HTMLElement {
     }
     if (cur && cur.a.all && this._cur === cur) cur.a.all(Math.min(1, cur.p), cur.c, this);
     let tv = 0; for (const [m, w] of mix) if (m === 'tilt') tv += hv * w;
-    const rowT = tv > .001 ? `rotateY(${f1(clamp(mx / Math.max(this._W / 2, .5), -1.5, 1.5) * 18 * tv)}deg) rotateX(${f1(clamp(-my, -1.5, 1.5) * 20 * tv)}deg)` : '';
+    const rowT = tv > .001 ? `rotateY(${f1(clamp((mx - this._cx) / Math.max(this._W / 2, .5), -1.5, 1.5) * 18 * tv)}deg) rotateX(${f1(clamp(this._cy - my, -1.5, 1.5) * 20 * tv)}deg)` : '';
     // the shown row changes with the morph — move the tilt to it and clear it from the old one
     if (rowT !== this._rowT || this.$row !== this._rowTEl) {
       if (this._rowTEl && this._rowTEl !== this.$row) this._rowTEl.style.transform = '';
@@ -827,7 +848,7 @@ class KineticLogo extends HTMLElement {
     const k = p < .1 ? 0 : p < .48 ? outC((p - .1) / .38) : p < .56 ? 1 : 1 - inOut(clamp((p - .56) / .3, 0, 1));
     const o = (sm(.02, .1, p) * (1 - sm(.86, .97, p))).toFixed(3);
     // dots react to the cursor with the same hover mode as the letters; each dot eases on its own (inertia ∝ size)
-    const hv = this._hv, mx = this._mx, my = this._my, mix = this.hoverMix, dt = this._dt || 1 / 60;
+    const hv = this._hv, mx = this._mx - this._cx, my = this._my - this._cy, mix = this.hoverMix, dt = this._dt || 1 / 60;   // row-local, like the dots
     for (const D of this._dots) {
       const x = lerp(D.bx, D.ex, k) + Math.sin(p * 9 + D.ph) * .06 * k, y = lerp(D.by, D.ey, k) + Math.cos(p * 7 + D.ph) * .05 * k;
       let tx = 0, ty = 0, ts = 1;

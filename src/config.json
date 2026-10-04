@@ -310,5 +310,9 @@
   "particleImpostor": {
     "enabled": true,
     "depth": true
+  },
+  "brandLogo": {
+    "enabled": true,
+    "scale": 1.45
   }
 }

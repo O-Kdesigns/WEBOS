@@ -1,15 +1,17 @@
 {
-  "savedAt": "2026-10-04T19:17:15.019Z",
+  "savedAt": "2026-10-04T19:42:43.818Z",
   "attrs": {
     "text": "KANTØR",
     "font": "Unbounded",
     "weight": "310",
     "tracking": "0.8",
-    "scale": "1",
     "energy": "wild",
     "hover-text": "KANTØR",
     "o-blink": "3",
     "hover-mix": "magnet:0.5",
+    "anchor": "top-left",
+    "offset": "0.4 0.3",
+    "hover-offset": "0.4 0.3",
     "rare": "0.12",
     "interval": "6",
     "rare-set": "glitch orbit sink blackhole mirror solo ignite shatter portal magnify swap",
@@ -33,6 +35,15 @@
     "interval": 6,
     "tracking": 0.8,
     "scale": 1,
+    "anchor": "top-left",
+    "offset": [
+      0.4,
+      0.3
+    ],
+    "hoverOffset": [
+      0.4,
+      0.3
+    ],
     "groups": {},
     "hoverGroups": {},
     "mix": {

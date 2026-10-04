@@ -61,11 +61,10 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
 
-      <DashboardCard title="Logo (vlevo nahoře)" icon="🔠" color="#c4ff00">
-        <DenseToggle desc="Kinetic logo z labu (brand-kinetic-lab → ★ → 🌐 Save for web). Vzhled a animace se nastavují v labu, tady jen umístění." label="Zobrazit logo" color="#c4ff00" checked={logoCfg.enabled} onChange={v => updateLogo('enabled', v)} />
-        <DenseSlider desc="Velikost loga (1 = box 240 × 105 px, text ho vyplní na šířku). Hover zóna se zvětšuje s ním." label="Velikost (scale)" min={0.2} max={3} step={0.05} color="#c4ff00" value={logoCfg.scale} onChange={v => updateLogo('scale', v)} />
-        <DenseSlider desc="Posun boxu loga od levého okraje obrazovky (px)." label="Offset X" min={0} max={600} step={1} unit="px" color="#c4ff00" value={logoCfg.offsetX} onChange={v => updateLogo('offsetX', v)} />
-        <DenseSlider desc="Posun boxu loga od horního okraje obrazovky (px)." label="Offset Y" min={0} max={400} step={1} unit="px" color="#c4ff00" value={logoCfg.offsetY} onChange={v => updateLogo('offsetY', v)} />
+      <DashboardCard title="Logo" icon="🔠" color="#c4ff00">
+        <DenseToggle desc="Kinetic logo z labu (brand-kinetic-lab → ★ → 🌐 Save for web). Vzhled, animace, roh a odsazení se nastavují v labu (Style → Placement debug), tady jen velikost." label="Zobrazit logo" color="#c4ff00" checked={logoCfg.enabled} onChange={v => updateLogo('enabled', v)} />
+        <DenseSlider desc="Velikost loga (1 = box 240 × 105 px, text ho vyplní na šířku). Odsazení z labu je v em, takže roste s ní." label="Velikost (scale)" min={0.2} max={3} step={0.05} color="#c4ff00" value={logoCfg.scale} onChange={v => updateLogo('scale', v)} />
+        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 6 }}>Roh a odsazení: lab → Style → Placement debug → ★ 🌐 Save for web.</div>
       </DashboardCard>
 
       <DashboardCard title="Architektura (DNA)" icon="🧬" color="#10b981">
