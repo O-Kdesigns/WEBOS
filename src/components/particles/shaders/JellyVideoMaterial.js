@@ -146,6 +146,9 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vQuadPos = qv;
     vCenterView = C;
     vRadius = R;
+    // kulička s nulovou velikostí (scale 0, nearFade u kamery) se nekreslí vůbec – jinak zbyl čtvereček 1e-5
+    // (rezerva Rq) a fragment shader by s poloměrem 0 počítal normalize(0) = NaN (prevence, NaN hlídat – viz NdotV)
+    if (R < 1e-6) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     #endif
   }
   `,
@@ -222,9 +225,11 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   varying vec3 vQuadPos;
   varying vec3 vCenterView;
   varying float vRadius;
+  // normalize bez NaN: nulový vektor (malá vzdálená kulička, pomocné pixely 2×2 kvádu pro fwidth) dá 0, ne NaN
+  vec3 safeNorm(vec3 v) { return v * inversesqrt(max(dot(v, v), 1e-30)); }
   // vlnění obrysu jako dřív ve vertex shaderu koule (stejný vzorec na směru v prostoru objektu -> netočí se s kamerou)
   float jellyRadius(vec3 nView) {
-    vec3 o = normalize(transpose(mat3(modelMatrix)) * (vec4(nView, 0.0) * viewMatrix).xyz);
+    vec3 o = safeNorm(transpose(mat3(modelMatrix)) * (vec4(nView, 0.0) * viewMatrix).xyz);
     float ph = vRand.x * 6.2832;
     float t = uTime * (1.6 + vRand.y);
     float w = sin(o.x * 2.6 + t + ph) * sin(o.y * 2.3 - t * 0.83 + ph * 1.7) + 0.6 * sin(o.z * 3.1 + t * 1.2 - ph);
@@ -234,23 +239,27 @@ export const JellyVideoMaterialImpl = shaderMaterial(
 
   void main() {
     #ifdef IMPOSTOR
+    if (vRadius < 1e-6) discard;   // nulová kulička -> normalize(0) = NaN (viz vertex shader)
     // průsečík paprsku z kamery (view space, kamera v počátku) s kuličkou: střed vCenterView, poloměr podle směru (vlnění)
-    vec3 rd = normalize(vQuadPos);
+    // Numericky robustně: q² přes vektorový součin (dřív |C|² − b² = rozdíl dvou velkých čísel -> ztráta přesnosti
+    // u vzdálených kuliček), bezpečný normalize. Každý NaN pixel v HDR scéně udělá v bloomu/DOF blikající čtverec.
+    vec3 rd = safeNorm(vQuadPos);
     float b = dot(rd, vCenterView);
-    float q2 = max(dot(vCenterView, vCenterView) - b * b, 0.0);   // vzdálenost paprsku od středu²
+    vec3 rq = cross(rd, vCenterView);
+    float q2 = dot(rq, rq);   // vzdálenost paprsku od středu²
     float q = sqrt(q2);
-    float qAA = fwidth(q);
+    float qAA = min(fwidth(q), vRadius);   // pomocné pixely mimo čtverec mohou mít nesmyslné derivace
     float Rw = vRadius;
     vec3 impN = vec3(0.0, 0.0, 1.0);
     for (int it = 0; it < 2; it++) {
-      impN = normalize(rd * (b - sqrt(max(Rw * Rw - q2, 0.0))) - vCenterView);
+      impN = safeNorm(rd * (b - sqrt(max(Rw * Rw - q2, 0.0))) - vCenterView);
       Rw = jellyRadius(impN);
     }
     // měkký okraj (~1 px) místo zubů
     float impCov = clamp((Rw - q) / max(qAA, 1e-7) + 0.5, 0.0, 1.0);
-    if (impCov <= 0.0) discard;
+    if (!(impCov > 0.0)) discard;   // i NaN -> zahodit
     vec3 impP = rd * (b - sqrt(max(Rw * Rw - q2, 0.0)));
-    impN = normalize(impP - vCenterView);
+    impN = safeNorm(impP - vCenterView);
     vec3 impViewPos = -impP;
     vec3 impWorld = (vec4(impP, 0.0) * viewMatrix).xyz + cameraPosition;
     vec4 impClip = projectionMatrix * vec4(impP, 1.0);
@@ -274,7 +283,9 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec3 uColorMod = mix(dnaPaletteBlend(dnaField), uColor, smoothstep(0.0, 1.0, uTransitionProgress));
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(vViewPosition);
-    float NdotV = max(dot(normal, viewDir), 0.0);
+    // clamp i shora: ve středu kuličky vyjde dot zaokrouhlením 1.0000001 -> pow(1 − NdotV, …) ze záporného čísla = NaN
+    // (1 NaN pixel v HDR scéně -> bloom/DOF z něj dělaly blikající bílý čtverec, 2026-10-04)
+    float NdotV = clamp(dot(normal, viewDir), 0.0, 1.0);
     
     // 1. Kulička = čočka: v každé je CELÉ video, převrácené (jako skleněná kulička) a zakřivené k okraji
     vec2 sphereUv = normal.xy;

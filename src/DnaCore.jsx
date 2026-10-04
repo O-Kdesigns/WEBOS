@@ -306,7 +306,7 @@ const tileFrag = PULSE_GLSL + /* glsl */`
     float mn = min(a.x, min(a.y, a.z));
     float mid = a.x + a.y + a.z - mx - mn;
     float edge = smoothstep(0.72, 0.98, mid);
-    float fres = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 3.0);
+    float fres = pow(max(1.0 - abs(dot(normalize(vN), normalize(vV))), 0.0), 3.0);   // max: |dot| může zaokrouhlením přesáhnout 1 -> pow(záporné) = NaN
     float p = pulses(vY);
     float nearAxis = 1.0 - smoothstep(0.0, 1.0, a.x);
     vec3 energy = uColor * (0.12 + p * 0.4) * (0.35 + 0.65 * nearAxis);
