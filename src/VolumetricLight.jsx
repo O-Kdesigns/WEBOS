@@ -6,6 +6,7 @@ import { debugMetrics } from './DebugMonitor';
 import { printFx } from './SolidPrint';
 import { tvRegistry, tvGlassFx } from './TvGlass';
 import { getFluid } from './components/particles/ParticleFluid';
+import { OrbitFog } from './OrbitFog';
 import { PrintSteam } from './PrintSteam';
 import { prof } from './debug/GpuProfiler';
 import { TEX_LOD0 } from './glslTexLod0';
@@ -161,6 +162,10 @@ const VolumetricLightShader = {
     uDustDecay: { value: 0.96 },
     uDustCap: { value: 0.15 },
     uDustTint: { value: 0.7 },
+    tOrbitFog: { value: dummyTexture }, // ORBIT mlha ve světě (OrbitFog.js) – nahrazuje mlhu z prachu
+    uOrbitFogOn: { value: 0.0 },
+    uOrbitFogObj: { value: 0.3 },
+    uOrbitFogStrength: { value: 1.0 },
     uDustTaper: { value: 1.0 },  // 1 = paprsek prachu bez konce (exponenciální útlum až ke zdroji), 0 = useknutý po dustRayLength
     uFogClear: { value: 1.0 },                          // INSIDE: voda rozráží mlhu tam, kde je vidět pozadí
     uFogRim: { value: 0.35 },
@@ -426,6 +431,10 @@ const VolumetricLightShader = {
     uniform float uDustCap;
     uniform float uDustTint;
     uniform float uDustTaper;
+    uniform sampler2D tOrbitFog;
+    uniform float uOrbitFogOn;
+    uniform float uOrbitFogObj;
+    uniform float uOrbitFogStrength;
     uniform float uFogClear;
     uniform float uFogRim;
     uniform float uWaterStreak;
@@ -640,7 +649,10 @@ const VolumetricLightShader = {
       vec2 asp = vec2(uAspect, 1.0);
       vec3 L = vec3(0.0);
       float orbitOn = uTvStrength * (1.0 - uInsideTransition);
-      if (orbitOn > 0.001 && uDustFog > 0.001) L += dustFog() * orbitOn * (1.0 - uTvClip * w) * tvRayMask();
+      if (orbitOn > 0.001 && uOrbitFogOn > 0.5) {
+        // mlha ve světě: vrstvy jsou za DNA -> přes objekty jen část (uOrbitFogObj)
+        L += texture2D(tOrbitFog, vUv).rgb * uOrbitFogStrength * orbitOn * (isBg ? 1.0 : uOrbitFogObj) * tvRayMask();
+      } else if (orbitOn > 0.001 && uDustFog > 0.001) L += dustFog() * orbitOn * (1.0 - uTvClip * w) * tvRayMask();
       float orbitAmt = uTvVis * orbitOn * uTvAnchor;
       if (orbitAmt > 0.001) {
         vec2 d = (vUv - uTvPos) * asp;
@@ -689,6 +701,7 @@ const VolumetricLightShader = {
     }
 
     void main() {
+      if (uTvDebug > 9.5) { gl_FragColor = vec4(texture2D(tOrbitFog, vUv).rgb * 2.0, 1.0); return; } // jen ORBIT mlha
       if (uTvDebug > 8.5) { float iw = insideWater(); gl_FragColor = vec4(iw, particleCover() * 0.5, texture2D(tDye, vUv).r * 4.0, 1.0); return; }
       if (uTvDebug > 6.5) { gl_FragColor = vec4(uTvDebug > 7.5 ? texture2D(tBlur, vUv).rgb * 4.0 : dustFog() * 4.0, 1.0); return; }
       if (uTvDebug > 3.5) { vec4 fv = texture2D(tFluid, vUv); float sp = length(fv.xy); gl_FragColor = vec4(step(500.0, sp), smoothstep(0.0, 20.0, sp), step(0.5, fv.w), 1.0); return; }
@@ -1231,6 +1244,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     prepass.rays.dispose(); prepass.dust.dispose(); prepass.material.dispose(); prepass.mesh.geometry.dispose();
   }, [prepass]);
   const steam = useMemo(() => new PrintSteam(), []);
+  const orbitFog = useMemo(() => new OrbitFog(), []);
+  useEffect(() => () => orbitFog.dispose(), [orbitFog]);
   useEffect(() => { steam.prewarm(gl); return () => steam.dispose(); }, [steam, gl]);
 
   const blurPass = useMemo(() => {
@@ -1698,6 +1713,27 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
       mat.uniforms.uCineVignette.value = cine.vignette ?? 0.45;
     }
 
+    // ORBIT mlha ve světě (OrbitFog.js): hustota + světlo ve 1/4 rozlišení, voda z myši ji unáší
+    {
+      const of = { ...(appConfig?.orbitFog || {}), ...(import.meta.env.DEV ? window.__orbitFogOverride : null) };
+      const U = mat.uniforms;
+      const fogOn = of.enabled !== false && U.uInsideTransition.value < 0.999 && U.uTvStrength.value > 0.001;
+      U.uOrbitFogOn.value = fogOn ? 1 : 0;
+      if (fogOn) {
+        const fl = getFluid(gl);
+        prof.scope('ORBIT mlha');
+        U.tOrbitFog.value = orbitFog.step(gl, {
+          w: Math.max(16, Math.floor(width / 4)), h: Math.max(16, Math.floor(height / 4)), camera, depth: sceneTarget.depthTexture,
+          fluid: fl.velocity, fluidTexel: U.uFluidTexel.value, dt: Math.min(Math.max(delta, 1 / 240), 1 / 30),
+          time: state.clock.getElapsedTime(), aspect: size.width / Math.max(1, size.height), cfg: of,
+        });
+        prof.end();
+        U.uOrbitFogObj.value = of.objects ?? 0.3;
+        U.uOrbitFogStrength.value = of.strength ?? 1;
+      }
+      if (import.meta.env.DEV) window.__orbitFog = orbitFog;
+    }
+
     drawPost(!(import.meta.env.DEV && window.__postPrepass === false));
     // DEV: znovu vykreslit jen post nad stejným snímkem scény (přesné A/B porovnání pixelů předpočtu)
     if (import.meta.env.DEV) window.__postRedraw = drawPost;
@@ -1723,7 +1759,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         gl.setRenderTarget(prepass.rays);
         gl.render(prepass.scene, quadCamera);
       }
-      if (orbit && U.uTvStrength.value > 0.001 && U.uDustFog.value > 0.001) {
+      if (orbit && U.uTvStrength.value > 0.001 && U.uDustFog.value > 0.001 && U.uOrbitFogOn.value < 0.5) {
         pu.uMode.value = 1;
         gl.setRenderTarget(prepass.dust);
         gl.render(prepass.scene, quadCamera);
