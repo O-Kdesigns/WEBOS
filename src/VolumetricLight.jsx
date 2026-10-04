@@ -161,7 +161,7 @@ const VolumetricLightShader = {
     uDustDecay: { value: 0.96 },
     uDustCap: { value: 0.15 },
     uDustTint: { value: 0.7 },
-    uDustTaper: { value: 1.0 },  // 1 = paprsek prachu plynule dohasne do nuly, 0 = useknutý konec (váha 37 % na konci)
+    uDustTaper: { value: 1.0 },  // 1 = paprsek prachu bez konce (exponenciální útlum až ke zdroji), 0 = useknutý po dustRayLength
     uFogClear: { value: 1.0 },                          // INSIDE: voda rozráží mlhu tam, kde je vidět pozadí
     uFogRim: { value: 0.35 },
     uWaterStreak: { value: 0.25 },
@@ -579,37 +579,50 @@ const VolumetricLightShader = {
     vec3 dustFog() {
       vec2 toL = uDustLightPos - vUv;
       float dl = length(toL);
-      vec2 st = (dl > 1e-4 ? toL / dl : vec2(0.0)) * min(dl, uDustRayLen) / 24.0;
+      vec2 dir = dl > 1e-4 ? toL / dl : vec2(0.0);
       float dith = getDither(gl_FragCoord.xy);
-      vec2 uv = vUv + st * dith;
+      // délka kroku původního okna (dustRayLength / 24) – jednotka, ve které jsou naladěné dustRays/dustDecay
+      float step0 = uDustRayLen / 24.0;
       vec3 acc = vec3(0.0);
-      float dec = 1.0;
-      // konec paprsku: váha ke konci okna plynule k nule (smoothstep) -> paprsek dohasne, není vidět hranice délky
-      float tStep = 1.0 / 24.0, t = dith * tStep;
-      if (uPrepass > 0.5) {
-        // tDustSrc = to samé, co počítá větev níž, jen předem 1× na pixel scény (1 čtení místo 2 na krok)
+      if (uDustTaper > 0.5) {
+        // Bez konce: paprsek jde až ke zdroji světla a slábne exponenciálně (jako světlo v mlze) se stejnou
+        // délkou útlumu, jakou dávalo dustDecay po krocích -> u prachu vypadá stejně, ale nikde neskončí hranou.
+        // Vzorky rozložené podle útlumu (importance sampling): hustě u pixelu, řídce v dalekém slabém konci,
+        // každý vzorek má stejnou váhu.
+        float F = step0 / max(1e-4, -log(uDustDecay));
+        float I = 1.0 - exp(-dl / F);
         for (int i = 0; i < 24; i++) {
-          float tw = mix(1.0, 1.0 - t * t * (3.0 - 2.0 * t), uDustTaper);
-          t += tStep;
-          acc += texture2D(tDustSrc, clamp(uv, vec2(0.0), vec2(1.0))).rgb * dec * tw;
-          dec *= uDustDecay;
-          uv += st;
+          float u = (float(i) + dith) / 24.0;
+          vec2 cu = clamp(vUv + dir * (-F * log(1.0 - u * I)), vec2(0.0), vec2(1.0));
+          if (uPrepass > 0.5) acc += texture2D(tDustSrc, cu).rgb;
+          else acc += clamp(texture2D(tBlur, cu).rgb - 0.02, 0.0, uDustCap) * step(0.9999, texture2D(tDepth, cu).r);
         }
-        acc *= uDustCap;
+        // součet vah = 24 × (integrál útlumu F·I) / step0 / 24
+        acc *= F * I / step0 / 24.0;
+        if (uPrepass > 0.5) acc *= uDustCap;
       } else {
-        for (int i = 0; i < 24; i++) {
-          float tw = mix(1.0, 1.0 - t * t * (3.0 - 2.0 * t), uDustTaper);
-          t += tStep;
-          vec2 cu = clamp(uv, vec2(0.0), vec2(1.0));
-          float bg = step(0.9999, texture2D(tDepth, cu).r);
-          // jen tečky prachu (nad tmavou barvou pozadí), strop = jasné věci nepřepálí mlhu
-          acc += clamp(texture2D(tBlur, cu).rgb - 0.02, 0.0, uDustCap) * bg * dec * tw;
-          dec *= uDustDecay;
-          uv += st;
+        vec2 st = dir * min(dl, uDustRayLen) / 24.0;
+        vec2 uv = vUv + st * dith;
+        float dec = 1.0;
+        if (uPrepass > 0.5) {
+          // tDustSrc = to samé, co počítá větev níž, jen předem 1× na pixel scény (1 čtení místo 2 na krok)
+          for (int i = 0; i < 24; i++) {
+            acc += texture2D(tDustSrc, clamp(uv, vec2(0.0), vec2(1.0))).rgb * dec;
+            dec *= uDustDecay;
+            uv += st;
+          }
+          acc *= uDustCap;
+        } else {
+          for (int i = 0; i < 24; i++) {
+            vec2 cu = clamp(uv, vec2(0.0), vec2(1.0));
+            float bg = step(0.9999, texture2D(tDepth, cu).r);
+            // jen tečky prachu (nad tmavou barvou pozadí), strop = jasné věci nepřepálí mlhu
+            acc += clamp(texture2D(tBlur, cu).rgb - 0.02, 0.0, uDustCap) * bg * dec;
+            dec *= uDustDecay;
+            uv += st;
+          }
         }
       }
-      // dohasínání ubere energii -> vyrovnat, ať paprsky u zdroje nezeslábnou
-      acc *= mix(1.0, 1.5, uDustTaper);
       vec3 light = acc * 0.12 * uDustRays + clamp(blurSmooth(vUv) - 0.02, 0.0, uDustCap) * uDustHaze;
       float lum = dot(light, vec3(0.299, 0.587, 0.114));
       return mix(light, uTvColor * lum * 2.0, uDustTint) * uDustFog;
