@@ -1,9 +1,10 @@
-import { useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useSpring } from '@react-spring/three';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { withBase } from './assetUrl';
+import { prewarm } from './prewarm';
 
 // 1x1 �ern� fallback textura
 const dummyTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
@@ -123,6 +124,11 @@ export function VolumetricVideoBackground({
       side: THREE.DoubleSide
     });
   }, []);
+
+  // video je do INSIDE skryté -> shader předkompilovat hned, ne až při kliknutí na desku (prewarm.js)
+  // (se scénou: počet světel scény je v klíči programu i u ShaderMaterialu)
+  const { gl, camera, scene } = useThree();
+  useEffect(() => prewarm(gl, new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 1, 1), screenMaterial), camera, scene), [gl, camera, scene, screenMaterial]);
 
   useFrame((state, delta) => {
     const currentFade = fade.get();

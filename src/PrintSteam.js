@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TEX_LOD0 } from './glslTexLod0';
+import { prewarm } from './prewarm';
 
 // Fake pára nad tiskovou linkou 3D tisku. Jedna malá textura hustoty (výška `res` řádků), 1 průchod za snímek:
 // semi-Lagrangeova advekce hustoty polem = vztlak (rychlost roste s výškou nad linkou, v = sqrt(v0² + 2·a·h) –
@@ -107,6 +108,9 @@ export class PrintSteam {
     this.rt = null;
     this.live = false;
   }
+
+  // shader předkompilovat hned, ne až v prvním snímku tisku (prewarm.js)
+  prewarm(gl) { prewarm(gl, this.scene, this.cam); }
 
   resize(gl, w, h) {
     if (this.rt && this.rt[0].width === w && this.rt[0].height === h) return;

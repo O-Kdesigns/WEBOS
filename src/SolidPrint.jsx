@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { portalFx } from './PortalTransition';
 import { patchSolidLook } from './SolidLink';
 import { buildSlices, sliceLine, sliceSpan } from './printSlices';
+import { liveLightMaterial } from './SolidLiveLight';
+import { prewarm } from './prewarm';
 
 // 3D tisk solidů při vstupu do projektu (INSIDE).
 // Až particly doletí do tvaru projektu, solidy "vyrostou" odspodu nahoru: vše nad řezem (uPrintY, world Y)
@@ -210,7 +212,7 @@ const ease = (t) => { const s = t * t * (3 - 2 * t); return t * 0.4 + s * 0.6; }
 
 // leaving = uživatel odchází z projektu: nejdřív se odtiskne, pak onUnprinted() (App přepne na ORBIT)
 export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leaving = false, onUnprinted }) {
-  const { size, gl } = useThree();
+  const { size, gl, scene } = useThree();
   const baseCfg = appConfig?.solidPrint || {};
   const enabled = baseCfg.enabled ?? true;
 
@@ -311,6 +313,26 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     return () => { printFx.renderMask = null; printFx.renderGlowMask = null; printFx.maskTarget = null; };
   }, [gpu, target, sync]);
 
+  // Předkompilace (prewarm.js): solidy jsou do tisku skryté, takže se jejich shadery (+ PMREM z HDRI, solid je
+  // první viditelný MeshStandard) a shadery masek dřív skládaly až v prvním snímku tisku = zásek.
+  // Hned po připojení solidu (v ORBITu) se zkompilují na pozadí.
+  const warm = useMemo(() => {
+    const done = new WeakSet();
+    const pending = [];
+    // body živého světla nemají uv (jiná varianta programu než s geometrií solidu)
+    const pointsGeo = new THREE.BufferGeometry();
+    pointsGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
+    return { pending, pointsGeo, check: (m) => { if (!done.has(m.material)) { done.add(m.material); pending.push(m); } } };
+  }, []);
+  useEffect(() => () => warm.pointsGeo.dispose(), [warm]);
+  const prewarmSolids = (list, camera) => {
+    for (const m of list) prewarm(gl, m, camera, scene);
+    const geo = list[0].geometry;
+    prewarm(gl, new THREE.Mesh(geo, gpu.material), camera);
+    prewarm(gl, new THREE.Mesh(geo, gpu.glowMaterial), camera);
+    prewarm(gl, new THREE.Points(warm.pointsGeo, liveLightMaterial()), camera);
+  };
+
   // předvázané callbacky pro forEach (žádné closures v useFrame)
   const fx = useMemo(() => {
     const s = st.current;
@@ -326,6 +348,8 @@ export function SolidPrintDriver({ viewMode, transitionProgress, appConfig, leav
     const dt = Math.min(Math.max(delta, 0), 0.1);
     const u = shared;
     u.uPrintTime.value = state.clock.getElapsedTime();
+    printFx.meshes.forEach(warm.check);
+    if (warm.pending.length) prewarmSolids(warm.pending.splice(0), state.camera);
 
     if (!enabled) {
       printFx.progress = 1; printFx.rays = 0;

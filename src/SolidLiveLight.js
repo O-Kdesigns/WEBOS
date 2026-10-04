@@ -97,6 +97,9 @@ function getGpu() {
   return gpu;
 }
 
+// materiál bodů do mřížky (SolidPrint ho předkompiluje, ať se neskládá až při startu tisku)
+export const liveLightMaterial = () => getGpu().material;
+
 // Mřížka podle bboxu solidu (lokální prostor meshe, buňka `cell` ve world metrech)
 function setupGrid(mesh, cell) {
   const g = getGpu();

@@ -1207,7 +1207,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     prepass.rays.dispose(); prepass.dust.dispose(); prepass.material.dispose(); prepass.mesh.geometry.dispose();
   }, [prepass]);
   const steam = useMemo(() => new PrintSteam(), []);
-  useEffect(() => () => steam.dispose(), [steam]);
+  useEffect(() => { steam.prewarm(gl); return () => steam.dispose(); }, [steam, gl]);
 
   const blurPass = useMemo(() => {
     const mat = new THREE.ShaderMaterial({

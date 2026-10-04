@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { printFx } from './SolidPrint';
 import { liveLight, LIVE_GLSL, updateLiveLight } from './SolidLiveLight';
+import { prewarm } from './prewarm';
 
 // Světelná vazba solidů a particlů (INSIDE) + vzhled povrchu solidů. Bez skutečných světel:
 // - particly -> solid: particly projektu se shluknou do PL_N "sond" (těžiště hustoty, váha = počet bodů).
@@ -280,6 +281,8 @@ export function SolidLinkDriver({ nodes, settings, videoTexture, transitionProgr
     return { target, material, geo, scene, camera: new THREE.Camera() };
   }, []);
   useEffect(() => () => { avg.target.dispose(); avg.material.dispose(); avg.geo.dispose(); }, [avg]);
+  // předkompilovat hned (na pozadí, prewarm.js), jinak se shader skládá až v prvním snímku tisku
+  useEffect(() => prewarm(gl, avg.scene, avg.camera), [gl, avg]);
 
   useEffect(() => {
     linkFx.probesP = probes.p.length; linkFx.probesS = probes.s.length;
