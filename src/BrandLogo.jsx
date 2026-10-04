@@ -17,7 +17,8 @@ export function BrandLogo({ appConfig }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    for (const [k, v] of Object.entries(logo.attrs)) el.setAttribute(k, v);
+    // scale z labu je jen náhled (starší uložení ho ještě obsahují) – velikost tady řídí brandLogo.scale
+    for (const [k, v] of Object.entries(logo.attrs)) if (k !== 'scale') el.setAttribute(k, v);
   }, [cfg.enabled]);
 
   if (!cfg.enabled) return null;
