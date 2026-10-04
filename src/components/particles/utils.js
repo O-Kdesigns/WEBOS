@@ -73,8 +73,9 @@ uniform float uReturnPull;    // pružina k domovu (1/s²) – brzdí let od dom
 // nafoukne do chlupaté trubice, šroubovice zůstane čitelná (bez vodítka odletěly vzdálené o celý poloměr DNA).
 uniform float uDnaLeash;      // 0 = vypnuto
 // Dojezd podél DNA: dokud je particl blízko struktury DNA (vlákna / příčky, do uDnaLeash), smí od domova
-// o uDnaSlide.x dál. U limitu BRZDA (celá rychlost, ne jen ven) -> zastaví se, neklouže po neviditelné stěně.
-uniform vec3 uDnaSlide;       // navíc (world), brzda (1/s), 1 = tvar DNA je znám
+// o uDnaSlide.x dál. Měkká hranice (uDnaSlide.y = podíl limitu): od (1 − y)·limit voda ztrácí sílu tlačit ven
+// a zapne se návrat -> particl si drží rychlost a stočí se obloukem zpět (dřív brzda u limitu = přitisknutí na stěnu).
+uniform vec3 uDnaSlide;       // navíc (world), měkkost hranice 0..1, 1 = tvar DNA je znám
 uniform float uDnaLimRand;    // 0..1 – náhodné rozhození limitu (vodítko i dojezd) pro každý particl zvlášť
 uniform vec3 uDnaShape;       // th0, k, R (šroubovice os vláken)
 uniform float uDnaRungY[${MAX_RUNGS}];
@@ -98,6 +99,18 @@ float dnaStructDist(vec3 p) {
     return d;
 }
 
+// limit vodítka DNA pro particl (uv) v bodě p: každý particl jiný (vodítko i dojezd, nezávislé losy) -> žádná společná „stěna“
+// rozhození r: násobek 1 ± 0,85·r (r 0,85 -> 0,28–1,72×)
+float dnaLimit(vec2 uv, vec3 p, float ol) {
+    float hl = fract(sin(dot(uv, vec2(27.619, 57.583))) * 43758.5453);
+    float hs = fract(sin(dot(uv, vec2(91.137, 13.719))) * 24634.6345);
+    float lim = uDnaLeash * mix(1.0, 0.15 + 1.7 * hl, uDnaLimRand);
+    // dojezd podél DNA: blízko struktury (do uDnaLeash) smí o uDnaSlide.x dál
+    if (uDnaSlide.x > 0.0 && uDnaSlide.z > 0.5 && ol > lim * 0.3)
+        lim += uDnaSlide.x * mix(1.0, 0.15 + 1.7 * hs, uDnaLimRand) * (1.0 - smoothstep(uDnaLeash * 0.5, uDnaLeash, dnaStructDist(p)));
+    return lim;
+}
+
 // síla návratu 0..1 podle "držení" (w): zpoždění, pak pomalý rozjezd (ease-in)
 float returnRampOf(float hold) {
     float holdT = uReturnDelay + uReturnRamp;
@@ -117,7 +130,20 @@ void main() {
     float esc = step(1.5, vel.w) * dnaRest * uEscOn * uPhysReturn;
     // ... nebo sám po uEscLife s (pak ho oblouky návratu dovedou domů)
     if (vel.w > 1.5 && (esc < 0.5 || vel.w - 2.0 > uEscLife)) { vel.w = 0.0; esc = 0.0; }
-    
+    // MĚKKÁ HRANICE vodítka DNA: edge 0 -> 1 mezi (1 − měkkost)·limit a limitem (jen klid DNA, ne odtržené)
+    float edge = 0.0;
+    vec3 edgeN = vec3(0.0);
+    vec3 vel0 = vel.xyz;
+    if (dnaRest > 0.5 && uDnaLeash > 0.0 && vel.w < 1.5 && uPhysReturn > 0.5) {
+        vec3 off = pos.xyz - dnaP.xyz;
+        float ol = length(off);
+        float lim = dnaLimit(uv, pos.xyz, ol);
+        if (ol > 1e-5) {
+            edgeN = off / ol;
+            edge = smoothstep(lim * (1.0 - uDnaSlide.y), lim, ol);
+        }
+    }
+
     // AGENT NOTE (from User): 
     // ALWAYS USE VELOCITY BRUSH. NEVER USE REPULSIVE FORCE.
     // Standing still must do NOTHING. Only mouse velocity (uMouseVel) pushes particles.
@@ -186,6 +212,11 @@ void main() {
             disturb = smoothstep(0.02, 0.2, pushNdc);
         }
     }
+    // u hranice vodítka voda ztrácí sílu tlačit ven (do strany tlačí dál -> particly dál krouží s vírem)
+    if (edge > 0.0) {
+        float dvr = dot(vel.xyz - vel0, edgeN);
+        if (dvr > 0.0) vel.xyz -= edgeN * dvr * edge;
+    }
     // w = "držení": 1 = právě strčen, lineárně klesá k 0 za (zpoždění + náběh); poziční shader z něj počítá sílu návratu
     // odtržený: w = 2 + čas od zlomu (strop 60 s)
     vel.w = esc > 0.5 ? min(vel.w + uDt, 62.0) : max(vel.w - uDt * uHoldDecay, disturb);
@@ -222,7 +253,8 @@ void main() {
         float offset = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
         vec3 local = base.xyz + vec3(0.0, sin(uTime * uFloatSpeed + offset) * uFloatAmplitude, 0.0);
         vec3 tgt = projRest > 0.5 ? (uFinalMat * vec4(local, 1.0)).xyz : dnaP.xyz;
-        float r = returnRampOf(vel.w);
+        // u hranice vodítka se návrat zapne hned (nečeká na zpoždění po strčení) -> particl se stočí obloukem zpět
+        float r = max(returnRampOf(vel.w), edge * edge);
         // Řízení místo pružiny: particl si drží rychlost a jen postupně stáčí směr k cíli omezeným
         // bočním zrychlením (uReturnTurn) -> rychlý opisuje široký oblouk, pomalý se otočí hned.
         // Rychlost se jen pozvolna blíží "dojezdové" (úměrné vzdálenosti) -> nikdo nezastaví a nejede rovně.
@@ -253,26 +285,17 @@ void main() {
         if (dnaRest * uEscOn > 0.5 && vel.w > 0.0 && dist > uEscDist && lucky < uEscChance) vel.w = 2.0;
         // VODÍTKO DNA: limit vzdálenosti od domova (odtržený particl ho tento snímek ještě nemá – od příštího pluje volně)
         if (dnaRest > 0.5 && uDnaLeash > 0.0 && vel.w < 1.5) {
-            // každý particl má jiný limit (vodítko i dojezd, nezávislé losy) -> žádná společná „stěna“
-            // rozhození r: násobek 1 ± 0,85·r (r 0,85 -> 0,28–1,72×); dřív pevně 0,6–1,4× jen u vodítka
-            float hl = fract(sin(dot(uv, vec2(27.619, 57.583))) * 43758.5453);
-            float hs = fract(sin(dot(uv, vec2(91.137, 13.719))) * 24634.6345);
-            float lim = uDnaLeash * mix(1.0, 0.15 + 1.7 * hl, uDnaLimRand);
+            // pojistka: hlavní práci dělá měkká hranice (voda netlačí ven + návrat obloukem);
+            // tady jen rychlost ven těsně u limitu a přesah za ním – žádná brzda celé rychlosti (= přitisknutí na stěnu)
             vec3 nextP = pos.xyz + vel.xyz;
             vec3 off = nextP - tgt;
             float ol = length(off);
-            // dojezd podél DNA: blízko struktury (do uDnaLeash) smí o uDnaSlide.x dál
-            if (uDnaSlide.x > 0.0 && uDnaSlide.z > 0.5 && ol > lim * 0.5)
-                lim += uDnaSlide.x * mix(1.0, 0.15 + 1.7 * hs, uDnaLimRand) * (1.0 - smoothstep(uDnaLeash * 0.5, uDnaLeash, dnaStructDist(nextP)));
-            if (ol > lim * 0.5) {
+            float lim = dnaLimit(uv, nextP, ol);
+            if (ol > lim * 0.85) {
                 vec3 n = off / ol;
-                float b = smoothstep(lim * 0.6, lim, ol);
-                // rychlost ven se u limitu pohltí
+                float b = smoothstep(lim * 0.85, lim * 1.1, ol);
                 float vr = dot(vel.xyz, n);
                 if (vr > 0.0) vel.xyz -= n * vr * b;
-                // BRZDA celé rychlosti (i do strany) – jen dokud ho strká voda, návrat nebrzdí (r = náběh návratu)
-                // -> zastaví se jako o brzdu, neklouže po limitu (dojem neviditelné stěny)
-                vel.xyz *= 1.0 - b * (1.0 - r) * (1.0 - exp(-uDnaSlide.y * uDt));
                 // přesah za limitem měkce vrátit (~6/s)
                 if (ol > lim) vel.xyz -= n * (ol - lim) * (1.0 - exp(-6.0 * uDt));
             }
@@ -618,7 +641,7 @@ export const DNA_HOLD_DEFAULTS = {
   dnaReturnDelay: 0.7, // s – zdržení po strčení vodou (projekt: returnDelay 0.15)
   dnaReturnRamp: 1.3,  // s – rozjezd návratu (projekt: returnRamp 0.8)
   dnaSlide: 0.6,       // world – o kolik dál smí particl od domova, dokud je blízko struktury DNA (0 = nic)
-  dnaBrake: 40,        // 1/s – brzda u limitu (celá rychlost -> zastaví se, neklouže po limitu)
+  dnaEdge: 0.6,        // 0..0,7 – měkkost hranice: od (1 − dnaEdge)·limit voda ztrácí sílu ven a particl se stočí zpět (dřív dnaBrake = zastavení u limitu)
   dnaLimitRandom: 0.85, // 0..1 – náhodné rozhození limitu pro každý particl (0,85 -> 0,28–1,72×), 0 = všichni stejně
 };
 
@@ -797,7 +820,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     }
     velUniforms.uDnaLeash.value = Math.max(0, phys.dnaLeash ?? DNA_HOLD_DEFAULTS.dnaLeash);
     velUniforms.uDnaLimRand.value = Math.min(1, Math.max(0, phys.dnaLimitRandom ?? DNA_HOLD_DEFAULTS.dnaLimitRandom));
-    velUniforms.uDnaSlide.value.set(Math.max(0, phys.dnaSlide ?? DNA_HOLD_DEFAULTS.dnaSlide), Math.max(0, phys.dnaBrake ?? DNA_HOLD_DEFAULTS.dnaBrake), dnaShape.valid ? 1 : 0);
+    velUniforms.uDnaSlide.value.set(Math.max(0, phys.dnaSlide ?? DNA_HOLD_DEFAULTS.dnaSlide), Math.min(0.7, Math.max(0.05, phys.dnaEdge ?? DNA_HOLD_DEFAULTS.dnaEdge)), dnaShape.valid ? 1 : 0);
     if (compute.dnaShapeVer !== dnaShape.version) {
       compute.dnaShapeVer = dnaShape.version;
       velUniforms.uDnaShape.value.set(dnaShape.th0, dnaShape.k, dnaShape.R);
