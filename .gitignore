@@ -73,3 +73,6 @@ public/obsah/**/*.blend1
 .vite/
 *.egg-info/
 .env.production.local
+
+# Blender zdroje a assety (jen lokálně)
+ASSETS/
