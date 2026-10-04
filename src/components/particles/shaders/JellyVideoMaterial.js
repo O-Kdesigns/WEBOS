@@ -100,7 +100,8 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     float ph = vRand.x * 6.2832;
     float t = uTime * (1.6 + vRand.y);
     float w = sin(position.x * 2.6 + t + ph) * sin(position.y * 2.3 - t * 0.83 + ph * 1.7) + 0.6 * sin(position.z * 3.1 + t * 1.2 - ph);
-    vec3 p = position * (1.0 + uWobble * 0.14 * w * smoothstep(0.0, 1.0, uTransitionProgress));
+    // (i v ORBITu – DNA má být stejně želatinová jako INSIDE)
+    vec3 p = position * (1.0 + uWobble * 0.14 * w);
 
     // minimální vzdálenost od kamery: kulička těsně u objektivu se zmenší do ztracena (jinak zakryje půl obrazu)
     // modelViewMatrix = viewMatrix * modelMatrix spočítaná jednou na CPU; závorky = jen matice × vektor
@@ -220,8 +221,15 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     
     // 2. Adaptivní zaostření textury podle velikosti koule (vScale)
     float sharpStrength = clamp((vScale - 0.12) * 4.0, 0.0, 1.25);
-    vec4 videoTex;
-    if (sharpStrength > 0.05) {
+    // ORBIT (DNA) = bez videa: uvnitř želé svítí jen jeho barva (střed jasnější, pomalu se přelévá).
+    // Video naběhne s přechodem do INSIDE; čistě v ORBITu se textura videa vůbec nečte.
+    float vidMix = smoothstep(0.0, 1.0, uTransitionProgress);
+    float inSwirl = snoise(sphereUv * 1.7 + vRand.xy * 7.0 + vec2(uTime * 0.35, -uTime * 0.27)) * 0.5 + 0.5;
+    vec3 orbitInner = uColorMod * mix(1.05, 0.4, r * r) * mix(0.75, 1.2, inSwirl);
+    vec4 videoTex = vec4(orbitInner, 1.0);
+    if (vidMix < 0.001) {
+      // bez videa
+    } else if (sharpStrength > 0.05) {
       vec2 texel = vec2(0.00052, 0.00092);
       vec4 center = texture2D(tVideo, lensUv);
       vec4 n = texture2D(tVideo, lensUv + vec2(0.0, texel.y));
@@ -233,10 +241,15 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     } else {
       videoTex = texture2D(tVideo, lensUv);
     }
-    // "okolí" = průměr 4 vzdálených vzorků videa – čím svítí prostředí na okraji kuličky
-    vec2 ec = vec2(0.5) + (screenUv - 0.5) * 0.5;
-    vec3 envCol = (texture2D(tVideo, ec + vec2(0.22, 0.2)).rgb + texture2D(tVideo, ec + vec2(-0.22, 0.2)).rgb
-                 + texture2D(tVideo, ec + vec2(0.22, -0.2)).rgb + texture2D(tVideo, ec + vec2(-0.22, -0.2)).rgb) * 0.25;
+    // "okolí" = průměr 4 vzdálených vzorků videa – čím svítí prostředí na okraji kuličky (ORBIT: barva želé)
+    vec3 envCol = uColorMod * 0.6;
+    if (vidMix >= 0.001) {
+      videoTex = vec4(mix(orbitInner, videoTex.rgb, vidMix), 1.0);
+      vec2 ec = vec2(0.5) + (screenUv - 0.5) * 0.5;
+      vec3 envVid = (texture2D(tVideo, ec + vec2(0.22, 0.2)).rgb + texture2D(tVideo, ec + vec2(-0.22, 0.2)).rgb
+                   + texture2D(tVideo, ec + vec2(0.22, -0.2)).rgb + texture2D(tVideo, ec + vec2(-0.22, -0.2)).rgb) * 0.25;
+      envCol = mix(envCol, envVid, vidMix);
+    }
     
     // 3. Želé tělo: tónování barvou jen z části (uTint), ať video ukáže svoje barvy.
     //    Absorpce (Beer-Lambert) roste k okraji – delší cesta světla = sytější a tmavší lem
