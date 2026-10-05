@@ -307,12 +307,32 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     lensUv = clamp(lensUv, vec2(0.002), vec2(0.998));
     
     // 2. Adaptivní zaostření textury podle velikosti koule (vScale)
-    float sharpStrength = clamp((vScale - 0.12) * 4.0, 0.0, 1.25);
-    // ORBIT (DNA) = bez videa: uvnitř želé svítí jen jeho barva (střed jasnější, pomalu se přelévá).
-    // Video naběhne s přechodem do INSIDE; čistě v ORBITu se textura videa vůbec nečte.
     float vidMix = smoothstep(0.0, 1.0, uTransitionProgress);
-    float inSwirl = snoise(sphereUv * 1.7 + vRand.xy * 7.0 + vec2(uTime * 0.35, -uTime * 0.27)) * 0.5 + 0.5;
-    vec3 orbitInner = uColorMod * mix(1.05, 0.4, r * r) * mix(0.75, 1.2, inSwirl);
+    // detail videa (doostření, jemné skvrny) naběhne až v INSIDE; mezi televizemi je video jen rozmazané světlo
+    float sharpStrength = clamp((vScale - 0.12) * 4.0, 0.0, 1.25) * smoothstep(0.3, 0.9, vidMix);
+
+    // ORBIT = želé bez videa: uvnitř kuličky svítí objem – pomalé barevné bloby ve dvou hloubkách (jemnější
+    // vrstva je zkroucená tou hrubší = jako smetena v gelu), svítící jádro na straně odvrácené od světla
+    // (subsurface), vnitřní membrána u okraje a druhý odstín ze sousední barvy palety.
+    // Tohle zároveň kryje přechod mezi videi: video se pod ním prolíná, ale tvar a barvu drží želé.
+    vec3 orbitInner = vec3(0.0);
+    float jBlob = 0.5;   // měkká tvář želé 0..1 (řídí i zamíchání tmavé/světlé složky při rotaci)
+    if (vidMix < 0.999) {
+      float jt = uTime * 0.3;
+      float nA = snoise(sphereUv * 0.8 + vRand.xy * 9.0 + vec2(jt, -jt * 0.73)) * 0.5 + 0.5;
+      float nB = snoise(sphereUv * 1.25 + vRand.yz * 5.0 + nA * 1.2 + vec2(-jt * 1.3, jt)) * 0.5 + 0.5;
+      float blob = smoothstep(0.05, 0.95, nA * 0.7 + nB * 0.3);
+      jBlob = blob;
+      vec2 coreOff = sphereUv + vec2(-0.35, -0.55) * 0.45;
+      float core = exp(-dot(coreOff, coreOff) * 3.2);
+      float membrane = smoothstep(0.5, 0.78, r) * (1.0 - smoothstep(0.8, 0.97, r));
+      vec3 colB = dnaPaletteBlend(fract(dnaField + 0.18));
+      vec3 deepCol = uColorMod * 0.5;
+      vec3 glowCol = mix(uColorMod, colB, 0.45) * 1.4;
+      orbitInner = mix(deepCol, glowCol, clamp(blob * 0.75 + core * 0.55, 0.0, 1.0));
+      orbitInner += colB * membrane * (0.18 + 0.25 * nB);
+      orbitInner *= mix(1.0, 0.55, r * r);
+    }
     vec4 videoTex = vec4(orbitInner, 1.0);
     if (vidMix < 0.001) {
       // bez videa
@@ -331,10 +351,12 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     // "okolí" = průměr 4 vzdálených vzorků videa – čím svítí prostředí na okraji kuličky (ORBIT: barva želé)
     vec3 envCol = uColorMod * 0.6;
     if (vidMix >= 0.001) {
-      videoTex = vec4(mix(orbitInner, videoTex.rgb, vidMix), 1.0);
       vec2 ec = vec2(0.5) + (screenUv - 0.5) * 0.5;
       vec3 envVid = (texture2D(tVideo, ec + vec2(0.22, 0.2)).rgb + texture2D(tVideo, ec + vec2(-0.22, 0.2)).rgb
                    + texture2D(tVideo, ec + vec2(0.22, -0.2)).rgb + texture2D(tVideo, ec + vec2(-0.22, -0.2)).rgb) * 0.25;
+      // zatím jen málo videa: místo kontrastního výřezu (skvrny) rozmazaný průměr
+      vec3 vidSoft = mix(envVid, videoTex.rgb, smoothstep(0.3, 0.9, vidMix));
+      videoTex = vec4(mix(orbitInner, vidSoft, vidMix), 1.0);
       envCol = mix(envCol, envVid, vidMix);
     }
     
@@ -357,14 +379,17 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     // 5. Zamíchávání tmavé a světlé složky POUZE při rotaci
     if (uNoiseAmount > 0.001) {
       vec3 p = vWorldPos * 0.25;
-      float swirl = snoise(p.xy + vec2(uTime * 0.5 + waterNoise * 0.5, p.z * 0.3));
+      // (dřív do víru šel i vysokofrekvenční waterNoise = ostrý "leopardí" vzor na každé kuličce při pohybu;
+      //  teď víc světová barevná skvrna + měkké bloby želé uvnitř kuličky)
+      float swirl = snoise(p.xy + vec2(uTime * 0.5, p.z * 0.3));
       float swirlMix = clamp(swirl * 0.5 + 0.5, 0.0, 1.0);
+      swirlMix = mix(swirlMix, jBlob, 0.55 * (1.0 - vidMix));
       
-      vec3 darkTarget = mix(vec3(0.0), uColorMod * 0.25, clamp(uMinDark, 0.0, 1.0));
+      vec3 darkTarget = mix(vec3(0.0), uColorMod * 0.25, clamp(uMinDark, 0.0, 1.0)) + uColorMod * 0.14 * (1.0 - vidMix);
       vec3 lightTarget = uColorMod * clamp(uMaxLight, 0.0, 3.0);
-      vec3 swirledTone = mix(darkTarget, lightTarget, smoothstep(0.2, 0.8, swirlMix));
+      vec3 swirledTone = mix(darkTarget, lightTarget, smoothstep(0.1, 0.9, swirlMix));
       
-      mixProgress = clamp(pow(uNoiseAmount, 1.2) * 1.15 + (waterNoise * 0.25 * uNoiseAmount), 0.0, 1.0);
+      mixProgress = clamp(pow(uNoiseAmount, 1.2) * 1.15, 0.0, 1.0);
       if (uNoiseAmount >= 0.95) {
         mixProgress = max(mixProgress, (uNoiseAmount - 0.95) / 0.05);
       }
