@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from './GPUComputationRenderer'; // kopie s rozlišením v uniformě (sdílené shadery)
-import { FLUID_DEFAULTS, getFluid, createFrontPass, REST_TARGET_GLSL } from './ParticleFluid';
+import { FLUID_DEFAULTS, getFluid, createFrontPass, createInjectPass, REST_TARGET_GLSL } from './ParticleFluid';
 import { prof } from '../../debug/GpuProfiler';
 import { TEX_LOD0 } from '../../glslTexLod0';
 import { mark } from '../../debug/FrameProbe';
@@ -29,6 +29,8 @@ uniform float uFluidOn;
 uniform sampler2D tFluid;     // xy = rychlost proudu (buňky mřížky / s), z = stopa myši (0..1)
 uniform vec2 uFluidTexel;     // 1 / rozměr mřížky
 uniform sampler2D tFront;     // 1 / hloubka nejbližšího particlu v buňce obrazovky
+uniform sampler2D tPush;      // [fluid.source particles] strčení myší: xy = proud, z = stopa (vodu tvoří až particly)
+uniform float uPushOn;
 uniform mat4 uMVP;            // lokální prostor meshe -> clip
 uniform vec3 uCamRight;       // osa X kamery v lokálním prostoru meshe (délka = 1 world)
 uniform vec3 uCamUp;
@@ -186,6 +188,7 @@ void main() {
             // volný particl není ve tvaru -> přední vrstva pro něj neplatí, voda ho tlačí vždy (vlastní síla)
             front = mix(front, uEscMouse, esc);
             vec3 fl = texture2D(tFluid, suv).xyz; // xy = proud, z = stopa myši
+            if (uPushOn > 0.5) { vec3 pf = texture2D(tPush, suv).xyz; fl.xy += pf.xy; fl.z = max(fl.z, pf.z); }
             vec2 ndc = fl.xy * smoothstep(0.1, 0.7, fl.z) * uFluidTexel * 2.0 * uDt; // posun v NDC za snímek, jen ve stopě
             vec3 flow = (uCamRight * (ndc.x * c.w / uProj.x) + uCamUp * (ndc.y * c.w / uProj.y)) * uFluidForce;
             // proud strhává jen když je rychlejší než particl; slábnoucí/mizející stopa ho nebrzdí
@@ -524,6 +527,7 @@ export function useGPGPU(count, particlesData, gl) {
     velVar.material.uniforms.uMouseForce = { value: 1.0 };
     Object.assign(velVar.material.uniforms, {
       uFluidOn: { value: 0 }, tFluid: { value: null }, uFluidTexel: { value: new THREE.Vector2() }, tFront: { value: null },
+      tPush: { value: null }, uPushOn: { value: 0 },
       uMVP: { value: new THREE.Matrix4() }, uCamRight: { value: new THREE.Vector3() }, uCamUp: { value: new THREE.Vector3() },
       uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
       uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
@@ -623,6 +627,7 @@ function disposeCompute(c) {
   u.tBasePosition.value?.dispose();
   u.tDnaPosition.value?.dispose();
   c.front?.dispose();
+  c.inject?.dispose();
   // Disposes render targets, initial value textures, materials and the fullscreen quad
   c.gpuCompute.dispose();
 }
@@ -776,6 +781,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
         velUniforms.uProj.value.set(cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]);
         velUniforms.uMVP.value.copy(mvp);
         velUniforms.tFluid.value = fluid.velocity;
+        velUniforms.tPush.value = fluid.push;
+        velUniforms.uPushOn.value = fluid.push ? 1 : 0;
         velUniforms.tWave.value = fluid.wave;
         velUniforms.uWaveForce.value = fluidCfg.waveForce;
         velUniforms.uWaveDrift.value = fluidCfg.waveDrift;
@@ -871,6 +878,16 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     prof.scope(`particly GPGPU ${compute.size}²`);
     compute.gpuCompute.compute();
     prof.end();
+    // [fluid.source particles] rychlost strčených particlů -> voda (spotřebuje příští update vody)
+    const fluidNow = fluidCfg.enabled && fluidOn ? getFluid(state.gl) : null;
+    if (fluidNow?.injectTarget) {
+      if (!compute.inject) compute.inject = createInjectPass(compute.size);
+      prof.scope(`fluid z particlů ${compute.size}²`);
+      compute.inject.render(state.gl, fluidNow.injectTarget, mvp,
+        compute.gpuCompute.getCurrentRenderTarget(compute.posVar).texture, compute.gpuCompute.getCurrentRenderTarget(compute.velVar).texture,
+        velUniforms.uDt.value, fluidCfg.injectPointSize);
+      prof.end();
+    }
     
     const tex = compute.gpuCompute.getCurrentRenderTarget(compute.posVar).texture;
     // vzhled odtržených (barva + záblesk) – materiál čte stav z textury rychlostí
