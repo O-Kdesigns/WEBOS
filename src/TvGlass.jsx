@@ -16,12 +16,13 @@ import { TEX_LOD0 } from './glslTexLod0';
 //   tvTint, tvRim, tvRimStrength, tvMilk, tvIor, tvDistort, tvFrost, tvScratch, tvBackground, tvRadius, tvVideo
 // Průlet portálem (PortalTransition): aktivní deska nezmizí s ostatními (uKeep), ale u kamery se sklo
 // rozpouští po pixelech podle vzdálenosti (uNear) -> kamera projede sklem bez bliknutí.
-// Když hraje video: video se kreslí AŽ po tónování skla (sklo ho nebarví) a sklo přebírá barvu videa –
-// rozmazané video (malý RT 16×9, 1× za snímek na video) prosvítá do matného skla kolem obrazu jako
-// ambilight, obraz má ostrou hranu, particly za rámečkem se ztlumí (dřív v rámečku rušily ostré tečky).
-//   tvVidGlow (0.35), tvVidReach (0.35 = dosah záře, podíl menší poloosy skla), tvVidDim (0.25 = jas
-//   scény za sklem u videa), tvVidTint (1 = sklo do barvy videa), tvVidFrost (0; >0 = víc matu u videa)
-//   DEV: window.__tvVidOverride = { glow, reach, dim, tint, frost }
+// Když hraje video: sklo je zamrzlé – na krajích plný led (ledové žilky lámou scénu a rozptylují světlo,
+// video tam není), ke středu led plynule ubývá a přibývá video (průhledné, tmavá místa propouštějí scénu).
+// Video se kreslí AŽ po tónování skla (sklo ho nebarví); sklo jde do barvy videa (rozmazané video, RT 16×9).
+//   tvVidOpacity (0.85 = krytí videa ve středu), tvVidFade (0.6 = šířka přechodu, podíl poloosy obrazu),
+//   tvIce (1 = síla ledu), tvIceScale (8 = hustota žilek), tvIceCenter (0.12 = zbytek ledu ve středu),
+//   tvVidTint (0.5 = sklo do barvy videa)
+//   DEV: window.__tvVidOverride = { opacity, fade, ice, iceScale, iceCenter, tint }
 
 const FBO_SCALE = 0.5;
 
@@ -59,7 +60,7 @@ const fragmentShader = `${TEX_LOD0}
   uniform vec3 uTint, uRim;
   uniform float uRimStrength, uMilk, uIor, uDistort, uFrost, uScratch, uBgLevel;
   uniform sampler2D tVidBlur;
-  uniform float uVidAmb, uVidGlow, uVidReach, uVidDim, uVidTint, uVidFrost;
+  uniform float uVidAmb, uVidTint, uVidOpacity, uVidFade, uIce, uIceScale, uIceCenter;
   varying vec3 vLocal;
   varying vec3 vLN;
   varying vec3 vN;
@@ -81,6 +82,21 @@ const fragmentShader = `${TEX_LOD0}
     float line = noise(r * vec2(1.2, 150.0) + seed);
     float mask = noise(r * vec2(3.0, 6.0) + seed * 3.1);
     return smoothstep(0.86, 0.97, line) * smoothstep(0.5, 0.8, mask);
+  }
+
+  // zamrzlé sklo: ledové žilky (ridged šum, 2 oktávy, mírně zkroucené) -> lom podle jejich sklonu
+  float iceH(vec2 p) {
+    p += vec2(noise(p * 0.6 + 7.0), noise(p * 0.6 + 19.0)) * 1.5;
+    float r1 = 1.0 - abs(noise(p) * 2.0 - 1.0);
+    float r2 = 1.0 - abs(noise(p * 2.3 + 11.0) * 2.0 - 1.0);
+    return r1 * r1 * 0.65 + r2 * r2 * 0.35;
+  }
+  // xy = směr lomu (~ -1..1), z = výška žilek (0..1)
+  vec3 iceAt(vec2 p) {
+    float h = iceH(p);
+    float e = 0.04;
+    vec2 g = vec2(iceH(p + vec2(e, 0.0)) - h, iceH(p + vec2(0.0, e)) - h) / e;
+    return vec3(g * 0.18, h);
   }
 
   vec3 sceneAt(vec2 uv) { return texture2D(tScene, clamp(uv, 0.001, 0.999)).rgb; }
@@ -124,25 +140,29 @@ const fragmentShader = `${TEX_LOD0}
     // video jako portál uvnitř skla (rovina GlassDesk = střed tloušťky)
     float tVid = -depth / (sdn * adn);
     float vidOn = (uHasVideo > 0.5 && tVid > 0.0) ? 1.0 : 0.0;
-    // (počítá se vždy, mimo if: fwidth potřebuje sousední pixely)
     vec3 pv = vLocal + dIn * max(tVid, 0.0);
     vec2 vuv = vec2(dot(pv, uVidU.xyz) + uVidU.w, dot(pv, uVidV.xyz) + uVidV.w);
     vuv += wob * 0.004 * uDistort;
-    // obraz jako zaoblený obdélník v lokálních jednotkách skla: ostrá vyhlazená hrana (ne rozmlžený přechod)
+    // jak hluboko uvnitř obrazu (0 = hrana obrazu i všechno mimo něj, 1 = od uVidFade dovnitř)
     vec2 vScale = max(vec2(length(uVidU.xyz), length(uVidV.xyz)), vec2(1e-4));
-    float sdVid = sdRR((vuv - 0.5) / vScale, 0.5 / vScale, uRadius * 0.6);
-    float aaVid = max(fwidth(sdVid), 1e-5);
-    float vidM = vidOn * (1.0 - smoothstep(-aaVid, aaVid, sdVid));
-    // záře videa v matném skle kolem obrazu (ambilight), slábne se vzdáleností od hrany
-    float glowW = vidOn * uVidAmb * exp(-max(sdVid, 0.0) / max(uVidReach * min(uHalf.x, uHalf.y), 1e-3));
+    vec2 vHalf = 0.5 / vScale;
+    float sdVid = sdRR((vuv - 0.5) / vScale, vHalf, uRadius * 0.6);
+    float vidIn = vidOn * smoothstep(0.0, uVidFade * min(vHalf.x, vHalf.y), -sdVid);
+    vidIn = vidIn * vidIn * (3.0 - 2.0 * vidIn);
+
+    // zamrzlé sklo: na krajích plný led (lom scény, video není vidět), ke středu led ubývá a video přibývá
+    float iceK = uHasVideo > 0.5 ? uIce : 0.0;
+    float iceF = mix(1.0, uIceCenter, vidIn);
+    vec3 ice = iceAt(q / max(min(uHalf.x, uHalf.y), 1e-3) * uIceScale);
+    vec2 iceOff = ice.xy * iceK * iceF;
 
     // lom scény za sklem (screen-space), disperze + matné rozmazání
     vec2 suv = gl_FragCoord.xy / uRes;
     vec3 nV = normalize((viewMatrix * vec4(N, 0.0)).xyz);
     float strength = (uIor - 1.0) * uDistort;
-    vec2 off = -nV.xy * strength * 0.12 + wob * strength * 0.05;
+    vec2 off = -nV.xy * strength * 0.12 + wob * strength * 0.05 + iceOff * 0.02;
     off *= 1.0 + smoothstep(0.0, 0.04, sdBack) * 1.5; // přes hranu se obraz láme víc
-    float frost = uFrost * (0.004 + smudge * 0.004) * (1.0 + uVidFrost * glowW);
+    float frost = uFrost * (0.004 + smudge * 0.004) * (1.0 + iceK * iceF);
     float rnd = hash(floor(q * 900.0)) * 6.2831; // stabilní zrno matného skla (nepoblikává)
     vec3 bg = vec3(0.0);
     for (int i = 0; i < 6; i++) {
@@ -157,28 +177,33 @@ const fragmentShader = `${TEX_LOD0}
     // jinak by prosvítal do god rays (dřív je blokovala neprůhledná deska)
     bg = bg * uBgLevel / (1.0 + bg);
 
-    // barva skla: pohlcení + mléčný rozptyl; s videem přebírá barvu videa (ambient = rozmazané video)
+    // barva skla: pohlcení + mléčný rozptyl (víc v ledu); s videem jde do barvy videa (rozmazané video)
     float tmax = max(max(uTint.r, uTint.g), max(uTint.b, 0.05));
-    vec3 amb = vec3(0.0);
     vec3 tint = uTint;
     float ambK = vidOn * uVidAmb;
     if (ambK > 0.5) {
-      amb = vidBlurAt(vuv);
+      vec3 amb = vidBlurAt(vuv);
       vec3 hue = amb / max(max(max(amb.r, amb.g), amb.b), 0.04);
       tint = mix(uTint, hue * tmax, clamp(uVidTint, 0.0, 1.0));
-      bg *= mix(1.0, uVidDim, glowW); // particly za rámečkem kolem obrazu jen tlumeně prosvítají
     }
     vec3 absorb = mix(vec3(1.0), tint / tmax, 0.5);
     vec3 col = bg * absorb;
-    col += tint * uMilk * (0.6 + smudge * 0.8);
-    // světlo videa rozptýlené v matném skle kolem obrazu (ambilight)
-    col += amb * uVidGlow * glowW * (0.75 + smudge * 0.5);
+    // s videem jen slabý závoj (čisté sklo); v ledu rozptyl kopíruje žilky -> zmrzlá textura je vidět i na tmavém pozadí
+    float iceRidge = smoothstep(0.35, 0.95, ice.z);
+    col += tint * uMilk * (0.6 + smudge * 0.8) * mix(1.0, 0.12 + iceF * (0.15 + 0.55 * iceRidge), iceK);
 
-    // video až po tónování skla -> sklo ho nebarví
-    if (vidM > 0.0) {
-      vec3 vid = texture2D(tVideo, clamp(vuv, 0.0, 1.0)).rgb;
+    // video až po tónování skla (sklo ho nebarví), lomené ledem; průhledné: tmavá místa propouštějí scénu
+    float vidM = 0.0;
+    if (vidIn > 0.001) {
+      vec2 vu = clamp(vuv + iceOff * 0.05, 0.0, 1.0);
+      vec3 vid = texture2D(tVideo, vu).rgb;
+      if (ambK > 0.5) vid = mix(vid, vidBlurAt(vu), iceF * iceK * 0.6); // přes led rozmazané
+      float lum = dot(vid, vec3(0.2126, 0.7152, 0.0722));
+      vidM = vidIn * uVidOpacity * mix(0.55, 1.0, smoothstep(0.02, 0.4, lum));
       col = mix(col, vid, vidM);
     }
+    // hřbety ledových žilek se lesknou
+    col += uRim * smoothstep(0.8, 0.98, ice.z) * iceK * iceF * 0.05;
 
     // odlesky: falešný softbox shora + škrábance, které se lesknou ve světle
     vec3 R = reflect(-V, N);
@@ -288,7 +313,7 @@ const BLUR_FRAG = `${TEX_LOD0}
     gl_FragColor = vec4(s / 36.0, 1.0);
   }
 `;
-const VID_DEFAULTS = { glow: 0.35, reach: 0.35, dim: 0.25, tint: 1, frost: 0 };
+const VID_DEFAULTS = { opacity: 0.85, fade: 0.6, ice: 1, iceScale: 8, iceCenter: 0.12, tint: 0.5 };
 
 function createVideoBlur() {
   const material = new THREE.ShaderMaterial({
@@ -437,11 +462,12 @@ export function useTvGlass(nodes, deskNode, fade) {
       mu.uVidAmb.value = tex ? 1 : 0;
       if (tex) mu.tVidBlur.value = vidBlur.get(gl, tex, frame);
       if (vo) {
-        if (vo.glow != null) mu.uVidGlow.value = vo.glow;
-        if (vo.reach != null) mu.uVidReach.value = vo.reach;
-        if (vo.dim != null) mu.uVidDim.value = vo.dim;
+        if (vo.opacity != null) mu.uVidOpacity.value = vo.opacity;
+        if (vo.fade != null) mu.uVidFade.value = vo.fade;
+        if (vo.ice != null) mu.uIce.value = vo.ice;
+        if (vo.iceScale != null) mu.uIceScale.value = vo.iceScale;
+        if (vo.iceCenter != null) mu.uIceCenter.value = vo.iceCenter;
         if (vo.tint != null) mu.uVidTint.value = vo.tint;
-        if (vo.frost != null) mu.uVidFrost.value = vo.frost;
       }
     }
     if ((frame & 255) === 0) vidBlur.prune(frame);
@@ -500,11 +526,12 @@ function makeMaterial(part, shared) {
       uBgLevel: { value: ud.tvBackground ?? 0.45 },
       tVidBlur: { value: null },
       uVidAmb: { value: 0 },
-      uVidGlow: { value: ud.tvVidGlow ?? VID_DEFAULTS.glow },
-      uVidReach: { value: ud.tvVidReach ?? VID_DEFAULTS.reach },
-      uVidDim: { value: ud.tvVidDim ?? VID_DEFAULTS.dim },
       uVidTint: { value: ud.tvVidTint ?? VID_DEFAULTS.tint },
-      uVidFrost: { value: ud.tvVidFrost ?? VID_DEFAULTS.frost }
+      uVidOpacity: { value: ud.tvVidOpacity ?? VID_DEFAULTS.opacity },
+      uVidFade: { value: ud.tvVidFade ?? VID_DEFAULTS.fade },
+      uIce: { value: ud.tvIce ?? VID_DEFAULTS.ice },
+      uIceScale: { value: ud.tvIceScale ?? VID_DEFAULTS.iceScale },
+      uIceCenter: { value: ud.tvIceCenter ?? VID_DEFAULTS.iceCenter }
     },
     vertexShader,
     fragmentShader,
