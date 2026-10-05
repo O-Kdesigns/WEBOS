@@ -89,7 +89,9 @@ export const FLUID_DEFAULTS = {
 // je přes devicePixelRatio (škálování Windows, retina) drží na ~0.2–0.26 mm na desktopu (27" 1440p 100 % 0.23 mm,
 // 15" 1080p 125 % 0.22, 4K 27" 150 % 0.23) a ~0.16 mm na mobilu (Android dp = 1/160"). Skutečné DPI prohlížeč
 // neprozradí, tohle je nejlepší odhad -> cm/s na displeji nezávisle na velikosti okna i rozlišení.
-const POINTER_WINDOW = 60; // ms – průměr rychlosti přes posledních 60 ms (7–8 vzorků při 125 Hz)
+// ms – rychlost = dráha za posledních 30 ms (2026-10-05 Oliver: „aktuální rychlost“, ať víření naskočí hned;
+// dřív 60 ms). 125 Hz myš = ~4 vzorky, 1000 Hz = 30 – kratší okno by u levných myší skákalo.
+const POINTER_WINDOW = 30;
 const pointer = { pts: [], mmPerPx: 0.25 };
 if (typeof window !== 'undefined') {
   try { if (window.matchMedia('(pointer: coarse)').matches) pointer.mmPerPx = 0.16; } catch { /* starý prohlížeč */ }
@@ -116,8 +118,8 @@ export function pointerSpeedPx(now = performance.now()) {
   const last = p[p.length - 1];
   if (n === 0 || now - last > 500) return n === 0 ? null : 0;
   // okno končí u poslední události, dokud chodí (mezera do dalšího vzorku by rychlost ředila o ~10 %);
-  // po zastavení (> 40 ms bez události) končí v „teď“ -> rychlost klesne k 0
-  const from = (now - last < 40 ? last : now) - POINTER_WINDOW;
+  // po zastavení (> 25 ms bez události) končí v „teď“ -> rychlost klesne k 0
+  const from = (now - last < 25 ? last : now) - POINTER_WINDOW;
   let len = 0;
   for (let i = 1; i < n; i++) {
     const t = p[i * 3 + 2];
@@ -461,14 +463,14 @@ class Fluid {
     gl.autoClear = false;
     const m = this.m;
 
-    // rychlost tahu (výšky obrazovky/s): ze skutečných pointer událostí (pointerSpeedPx, průměr 60 ms);
+    // rychlost tahu (výšky obrazovky/s): ze skutečných pointer událostí (pointerSpeedPx, dráha za 30 ms);
     // bez nich (syntetický pointer) ze snímků, vyhlazená ~50 ms – myš posílá pozice jinou frekvencí než snímky
     const aspect = width / height;
     const rawSp = moved ? Math.hypot((pu - this.prev.x) * aspect, pv - this.prev.y) / dt : 0;
     const evPx = pointerSpeedPx(now * 1000);
     // záloha ze snímků (vždy, levné); pointer události platí, jen když dávají smysl – kurzor se hýbe a události
     // hlásí 0 (rozbité časy) = použij snímky
-    this.frameSpeed = (this.frameSpeed ?? 0) + (rawSp - (this.frameSpeed ?? 0)) * (1 - Math.exp(-dt / 0.05));
+    this.frameSpeed = (this.frameSpeed ?? 0) + (rawSp - (this.frameSpeed ?? 0)) * (1 - Math.exp(-dt / 0.03));
     const evOk = evPx !== null && !(moved && evPx < 1 && this.frameSpeed > 0.05);
     this.speedSrc = evOk ? 'events' : 'frames';
     this.speed = evOk ? evPx / height : this.frameSpeed;

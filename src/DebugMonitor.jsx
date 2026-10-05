@@ -94,14 +94,14 @@ export function CanvasDebugTracker() {
 
 // UI overlay zobrazený v rohu obrazovky s automatickým zápisem na disk
 // Aktuální rychlost myši vedle FPS (cm/s na displeji – stejná, jakou bere 2D voda pro práh víření).
-// Vlastní interval 100 ms, ať se kvůli ní nepřekresluje celý HUD.
+// Vlastní interval 50 ms, ať se kvůli ní nepřekresluje celý HUD.
 function MouseSpeed() {
   const [cm, setCm] = useState(0);
   useEffect(() => {
     const id = setInterval(() => {
       const fs = fluidSpeed();
       setCm(fs ? fs.cm : (pointerSpeedCm(performance.now()) ?? 0));
-    }, 100);
+    }, 50);
     return () => clearInterval(id);
   }, []);
   return <span style={{ color: '#ec4899', fontSize: 10, fontVariantNumeric: 'tabular-nums', minWidth: 52, textAlign: 'right' }}>{cm.toFixed(0)} cm/s</span>;
