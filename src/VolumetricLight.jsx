@@ -1462,8 +1462,12 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
 
     // Screen-space projection
     projRef.current.copy(lightPosRef.current).project(camera);
+    // Kamera drží šířku záběru (CameraRig) -> svislé FOV se s poměrem stran mění a světlo nad DNA by na širokém
+    // monitoru odjelo vysoko nad obrazovku (2,7 výšky při 1600×700 vs 1,3 na výšku) a záře by zmizela.
+    // NDC y je úměrné poměru stran -> přepočet na referenční poměr `refAspect` = záře je vždy stejně vysoko.
+    const lightAspect = size.width / Math.max(1, size.height);
     const screenX = (projRef.current.x + 1.0) * 0.5;
-    const screenY = (projRef.current.y + 1.0) * 0.5;
+    const screenY = (projRef.current.y * ((vl.refAspect ?? 0.82) / lightAspect) + 1.0) * 0.5;
 
     // Visibility test
     camera.getWorldDirection(camDirRef.current);
