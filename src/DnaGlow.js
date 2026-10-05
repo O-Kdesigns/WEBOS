@@ -37,7 +37,7 @@ const INK = `${TEX_LOD0}
 uniform sampler2D uInk, uSharp, uFluid;
 uniform vec2 uTexel, uFluidTexel, uTvPos;
 uniform vec4 uTvInv;
-uniform float uDt, uFluidOn, uFlow, uFade, uEmit, uThr, uRise, uSpread, uWMin, uWMax, uAspect, uTvVis;
+uniform float uDt, uFluidOn, uFlow, uFade, uEmit, uThr, uRise, uSpread, uWMin, uWMax, uAspect, uTvVis, uFloor, uPres;
 varying vec2 vUv;
 vec3 sharp() {
   vec2 o = uTexel * 0.25;
@@ -57,7 +57,14 @@ void main() {
     vec2 td = (vUv - uTvPos) * vec2(uAspect, 1.0);
     vec2 ab = abs(vec2(dot(uTvInv.xy, td), dot(uTvInv.zw, td)));
     float tv = (1.0 - smoothstep(0.9, 1.05, max(ab.x, ab.y))) * smoothstep(0.05, 0.5, uTvVis);
-    ink += max(sharp() - uThr, 0.0) * w * uEmit * uDt * (1.0 - tv);
+    // zdroj = jas particlů + minimální jas v barvě particlu (uFloor): tmavé particly (nahoře/dole, daleko od světla
+    // TV a paprsků) pouštějí vodu taky viditelnou. Dřív jen jas nad prahem -> voda byla vidět jen u jasného středu
+    // u televize (Oliver 2026-10-05: „víření se spouští jen na televizi“). uPres = je tu particl, ne pozadí.
+    vec3 s = sharp();
+    float sm = max(s.r, max(s.g, s.b));
+    float pres = smoothstep(uPres, uPres * 3.0, sm);
+    vec3 src = max(s - uThr, 0.0) + s / max(sm, 1e-4) * uFloor * pres;
+    ink += src * w * uEmit * uDt * (1.0 - tv);
   }
   // (strop jasu se dělá až při skládání – VolumetricLight, uDnaInkMax)
   gl_FragColor = vec4(min(ink, vec3(8.0)), 1.0);
@@ -71,6 +78,8 @@ export const DNA_GLOW_DEFAULTS = {
   tint: 0.35,        // aura: 0 = barvy particlů, 1 = barva tvLight.color
   inkTint: 0.35,     // inkoust (2D voda): 0 = barvy particlů, 1 = barva tvLight.color
   ink: 0.7,          // síla inkoustu = viditelná 2D voda (0 = vypnuto, průchod se přeskočí)
+  inkFloor: 0.08,    // minimální jas vody v barvě particlu – voda je vidět i u tmavých particlů (0 = jen jasné particly jako dřív)
+  inkPresence: 0.01, // jas (nejsilnější kanál), od kterého je v pixelu particl a ne pozadí (#0a0a0f ≈ 0.003)
   inkMax: 0.25,      // měkký strop jasu viditelné vody (luminance, VolumetricLight): k / (1 + jas/inkMax) – víc vody = větší plocha, ne víc světla
   emit: 10,          // kolik inkoustu particly pustí za s ve vodě
   fade: 2.2,         // útlum inkoustu (1/s) – krátký: ukazuje vodu teď, ne dlouhé stopy
@@ -107,7 +116,7 @@ export class DnaGlow {
       ink: mk(INK, {
         uInk: { value: null }, uFluid: { value: null }, uTexel: { value: new THREE.Vector2() }, uFluidTexel: { value: new THREE.Vector2() },
         uDt: { value: 0 }, uFluidOn: { value: 0 }, uFlow: { value: 1 }, uFade: { value: 0.9 }, uEmit: { value: 6 }, uThr: { value: 0.05 },
-        uRise: { value: 0.012 }, uSpread: { value: 0.6 }, uWMin: { value: 8 }, uWMax: { value: 40 },
+        uRise: { value: 0.012 }, uSpread: { value: 0.6 }, uWMin: { value: 8 }, uWMax: { value: 40 }, uFloor: { value: 0.08 }, uPres: { value: 0.01 },
         uSharp: { value: null }, uTvPos: { value: new THREE.Vector2() }, uTvInv: { value: new THREE.Vector4() }, uAspect: { value: 1 }, uTvVis: { value: 0 },
       }),
     };
@@ -167,6 +176,7 @@ export class DnaGlow {
       if (fluidTexel) iu.uFluidTexel.value.copy(fluidTexel);
       iu.uDt.value = dt; iu.uFlow.value = c.flow; iu.uFade.value = c.fade; iu.uEmit.value = c.emit; iu.uThr.value = c.threshold;
       iu.uRise.value = c.rise; iu.uSpread.value = c.spread; iu.uWMin.value = c.waterMin; iu.uWMax.value = c.waterMax;
+      iu.uFloor.value = Math.max(0, c.inkFloor ?? 0.08); iu.uPres.value = Math.max(1e-4, c.inkPresence ?? 0.01);
       this.pass(gl, this.m.ink, this.ink[1]); this.ink.reverse();
       ink = this.ink[0].texture;
     } else if (this.inkIdle !== Infinity) {
