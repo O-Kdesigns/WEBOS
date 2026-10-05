@@ -41,7 +41,7 @@ Podle scénářů je vidět, co je v který moment aktivní a na co to působí.
 |---|-------|-----|-----------|
 | E1 | **Pozadí** | `DarkStudioBackground.jsx` | `backgroundSettings.color` (#0a0a0f), jednobarevné |
 | E2 | **Atmosférický prach** | `AtmosphereDust.jsx` | `atmosphereDust` (4000 bodů, additive, bokeh, 4 barvy) |
-| E3 | **Skla TV / video na deskách** | `TvGlass.jsx` | Blender custom props `tvRim`, `tvRimStrength`, `tvMilk`, `tvBackground`… Video jako portál, lem skla je samosvit. |
+| E3 | **Skla TV / video na deskách** | `TvGlass.jsx` | Blender custom props `tvRim`, `tvRimStrength`, `tvMilk`, `tvBackground`… Video jako portál, lem skla je samosvit. Když hraje video: sklo video nebarví (tón až pod videem), sklo + lem přebírají barvu videa a kolem obrazu svítí ambilight z rozmazaného videa (RT 16×9), particly za rámečkem ztlumené (`tvVidGlow/tvVidReach/tvVidDim/tvVidTint/tvVidFrost`, DEV `__tvVidOverride`). |
 | E4 | **Video plátno INSIDE** | `VolumetricVideoBackground.jsx` | `volumetricVideo` (brightness 2.5, contrast 1.09, **scale 2.6, zDistance 3.2, blur 0.03, vignetteSoftness 0.8**) | Velké rozmazané světlo daleko za obsahem. Dřív to byl malý ostrý obdélník (scale 0.9, z 1.5) přímo za solidy = „divné světlo uprostřed“. |
 | E5 | **Žhavá vrstva tisku** | `SolidPrint.jsx` | `solidPrint` (`coolColor`, `glowColor` #ff5a12, `hotColor`, `intensity`, `band`) – emise na řezu solidu + žhavé jádro přes řez (back-faces) |
 | E6 | **Vlastní záře solidu** | `SolidLink.jsx` `uLookGlow` | `solidLight.selfGlow` (Xelith 0 = vypnuto). Podíl zapečeného světla F6 jako záře: `bakedLight.glow`. |
