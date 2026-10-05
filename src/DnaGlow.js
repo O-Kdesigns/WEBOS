@@ -80,16 +80,17 @@ export const DNA_GLOW_DEFAULTS = {
   aura: 4,           // síla široké záře kolem DNA (× nasvícení září nahoře, topLow/topReach)
   auraRadius: 2.6,   // šíře záře (krok gauss v texelech 1/16) – rozlitá, ne přilepená k DNA
   tint: 0.35,        // aura: 0 = barvy particlů, 1 = barva tvLight.color
-  inkTint: 0.15,     // inkoust (2D voda): 0 = barvy particlů/duhy, 1 = barva tvLight.color (dřív 0.35 – voda byla tyrkysová, ne barevná)
+  inkTint: 0,        // inkoust (2D voda): 0 = barvy particlů (jako DNA), 1 = barva tvLight.color (dřív 0.35 – voda byla tyrkysová)
   ink: 0.7,          // síla inkoustu = viditelná 2D voda (0 = vypnuto, průchod se přeskočí)
   inkFloor: 0.08,    // minimální jas vody v barvě particlu – voda je vidět i u tmavých particlů (0 = jen jasné particly jako dřív)
   inkPresence: 0.01,
-  inkHue: 0.9,       // barva vody: 0 = barva particlů, 1 = duha podle směru proudu (barevné víry)
+  inkHue: 0,         // barva vody: 0 = barva particlů (jako DNA – Oliver: barvy se měnit nemají), 1 = duha podle směru proudu
   inkHueShift: 0,    // posun odstínu duhy (0..1) // jas (nejsilnější kanál), od kterého je v pixelu particl a ne pozadí (#0a0a0f ≈ 0.003)
   inkMax: 0.25,
-  inkWash: 0.8,      // voda jako barevná vrstva: obarví scénu pod sebou (0 = jen přičtené světlo výše)
+  inkWash: 0.8,      // voda jako vrstva: slabý závoj v barvě vody přes tmavé pozadí (inkMilk) + přebarvení (inkRecolor)
   inkWashFull: 0.5,  // jas inkoustu, při kterém je obarvení plné (míň = i slabá voda obarví naplno)
-  inkMilk: 0.05,     // slabé „mléko“ v barvě vody přes tmavé pozadí (přičte se)      // měkký strop jasu viditelné vody (luminance, VolumetricLight): k / (1 + jas/inkMax) – víc vody = větší plocha, ne víc světla
+  inkMilk: 0.1,      // slabé „mléko“ v barvě vody přes tmavé pozadí (přičte se)
+  inkRecolor: 0,     // jak moc voda přebarví particly pod sebou barvou vody (0 = barvy particlů beze změny)      // měkký strop jasu viditelné vody (luminance, VolumetricLight): k / (1 + jas/inkMax) – víc vody = větší plocha, ne víc světla
   emit: 10,          // kolik inkoustu particly pustí za s ve vodě
   fade: 2.2,         // útlum inkoustu (1/s) – krátký: ukazuje vodu teď, ne dlouhé stopy
   flow: 1,           // jak silně inkoust nese proud

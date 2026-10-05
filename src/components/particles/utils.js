@@ -699,8 +699,9 @@ export const ESCAPE_DEFAULTS = {
 
 // Barevná odezva particlů na pohyb (config particlePhysics.stirLook, editor Globální → 🌀 → Barvy pohybu,
 // shader escapeGlsl STIR_*): kdo se hýbe, přelije se do duhy podle směru pohybu a jemně se rozzáří.
+// Výchozí VYPNUTO (2026-10-05 Oliver: „nechci, aby se měnily barvy. Vůbec. Barvy jsou takové, jako jsou na DNA“).
 export const STIR_LOOK_DEFAULTS = {
-  enabled: true,
+  enabled: false,
   tint: 0.65,       // jak moc převezme duhovou barvu (0 = jen záře)
   glow: 0.1,        // záře v barvě pohybu (přičte se; malá = nesvítí)
   speedMin: 0.3,    // world/s – od jaké rychlosti se barví (putovníci ~0.2 zůstanou v klidu)

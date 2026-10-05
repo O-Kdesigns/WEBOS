@@ -171,6 +171,7 @@ const VolumetricLightShader = {
     uDnaInkWash: { value: 0.0 },
     uDnaInkWashFull: { value: 0.5 },
     uDnaInkMilk: { value: 0.0 },
+    uDnaInkRecolor: { value: 0.0 },
     uDnaAura: { value: 4 },
     uDnaInk: { value: 0.7 },
     uDnaTint: { value: 0.35 },
@@ -453,7 +454,7 @@ const VolumetricLightShader = {
     uniform float uDnaGlowOn;
     uniform float uDnaInkOn;
     uniform float uDnaInkMax;
-    uniform float uDnaInkWash, uDnaInkWashFull, uDnaInkMilk;
+    uniform float uDnaInkWash, uDnaInkWashFull, uDnaInkMilk, uDnaInkRecolor;
     uniform float uDnaAura;
     uniform float uDnaInk;
     uniform float uDnaTint;
@@ -673,8 +674,8 @@ const VolumetricLightShader = {
       float inside = 1.0 - smoothstep(0.86, 1.02, max(ab.x, ab.y));
       return 1.0 - uTvRayMask * inside * smoothstep(0.05, 0.5, uTvVis);
     }
-    // 2D voda jako barevná vrstva (ne světlo): obarví scénu pod sebou barvou vody (jas zůstane) + slabé „mléko“
-    // v barvě vody, ať je vidět i na tmavém pozadí. Viditelná a barevná, ale nesvítí (Oliver 2026-10-05).
+    // 2D voda jako vrstva (ne světlo): slabé „mléko“ v barvě vody (= barvy particlů), ať je vidět i na tmavém pozadí,
+    // + volitelné přebarvení scény pod vodou (uDnaInkRecolor, výchozí 0 – Oliver: barvy particlů se měnit nemají).
     vec3 inkWash(vec3 c) {
       if (uDnaInkOn < 0.5 || uDnaGlowOn < 0.5 || uDnaInkWash < 0.001) return c;
       float orbitOn = uTvStrength * (1.0 - uInsideTransition);
@@ -685,7 +686,7 @@ const VolumetricLightShader = {
       vec3 hue = k / a;
       float cov = smoothstep(0.0, uDnaInkWashFull, a) * uDnaInkWash * orbitOn * tvRayMask();
       float l = dot(c, vec3(0.299, 0.587, 0.114));
-      return mix(c, mix(c, l * hue * 1.8, 0.8), cov) + hue * cov * uDnaInkMilk;
+      return mix(c, mix(c, l * hue * 1.8, 0.8), cov * uDnaInkRecolor) + hue * cov * uDnaInkMilk;
     }
     vec3 tvLight(bool isBg) {
       float w = uTvClip > 0.001 && uInsideTransition < 0.999 ? waterMask() : 0.0;
@@ -1806,6 +1807,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         U.uDnaInkWash.value = Math.max(0, dg.inkWash ?? DNA_GLOW_DEFAULTS.inkWash);
         U.uDnaInkWashFull.value = Math.max(0.01, dg.inkWashFull ?? DNA_GLOW_DEFAULTS.inkWashFull);
         U.uDnaInkMilk.value = Math.max(0, dg.inkMilk ?? DNA_GLOW_DEFAULTS.inkMilk);
+        U.uDnaInkRecolor.value = Math.min(1, Math.max(0, dg.inkRecolor ?? DNA_GLOW_DEFAULTS.inkRecolor));
         U.uDnaTint.value = dg.tint ?? 0.35;
         U.uDnaInkTint.value = dg.inkTint ?? DNA_GLOW_DEFAULTS.inkTint;
         U.uDnaObj.value = dg.objects ?? 0.5;
