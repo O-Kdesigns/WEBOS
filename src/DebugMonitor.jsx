@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { fluidSpeed, pointerSpeedCm } from './components/particles/ParticleFluid';
 import { useFrame, useThree } from '@react-three/fiber';
 
 // Globální uložiště pro live statistiky z WebGL smyčky a historii incidentů
@@ -92,6 +93,20 @@ export function CanvasDebugTracker() {
 }
 
 // UI overlay zobrazený v rohu obrazovky s automatickým zápisem na disk
+// Aktuální rychlost myši vedle FPS (cm/s na displeji – stejná, jakou bere 2D voda pro práh víření).
+// Vlastní interval 100 ms, ať se kvůli ní nepřekresluje celý HUD.
+function MouseSpeed() {
+  const [cm, setCm] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const fs = fluidSpeed();
+      setCm(fs ? fs.cm : (pointerSpeedCm(performance.now()) ?? 0));
+    }, 100);
+    return () => clearInterval(id);
+  }, []);
+  return <span style={{ color: '#ec4899', fontSize: 10, fontVariantNumeric: 'tabular-nums', minWidth: 52, textAlign: 'right' }}>{cm.toFixed(0)} cm/s</span>;
+}
+
 // actions = tlačítka vlevo vedle FPS ukazatele (App: ⚙️ Editor)
 export function DebugMonitorHUD({ videoTextureCache, viewMode, activeUrl, activeTitle, actions }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -345,11 +360,7 @@ ${incidentsStr}
       >
         <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: fpsColor }}></span>
         <span style={{ fontWeight: 'bold' }}>{fps} FPS</span>
-        <span style={{ color: '#94a3b8', fontSize: 10 }}>min {fpsMin}</span>
-        <span style={{ color: '#38bdf8', textTransform: 'uppercase', fontSize: 10 }}>{viewMode}</span>
-        {activeBottlenecks.length > 0 && (
-          <span style={{ color: '#ef4444', fontWeight: 'bold' }}>⚠️</span>
-        )}
+        <MouseSpeed />
         <span style={{ color: '#64748b' }}>{isOpen ? '▼' : '▲'}</span>
       </div>
       </div>
