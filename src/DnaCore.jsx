@@ -2,6 +2,7 @@ import { useMemo, useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getFluid } from './components/particles/ParticleFluid';
+import { WANDER_GLSL } from './components/particles/wander';
 import { particleSystems } from './components/particles/utils';
 import { portalFx } from './PortalTransition';
 import { TEX_LOD0 } from './glslTexLod0';
@@ -392,6 +393,8 @@ const coverFrag = /* glsl */`
 // Akumulace odhalení: 1 bod na particl -> úsek podle DOMOVA (DNA cíle), R += odletěl, G += 1.
 // Vlákno: domov blíž než band od středové linky. Příčka: zbytek uvnitř poloměru (příčky vyplňují střed).
 const accVert = /* glsl */`
+  ${WANDER_GLSL}
+  uniform float uWanderS; // velikost GPGPU textury systému (výběr putovníků jako v utils.js)
   #define RUNG_SLOTS ${RUNG_SLOTS}.0
   #define REVEAL_ROWS ${REVEAL_ROWS}.0
   attribute vec2 aUv;
@@ -431,7 +434,10 @@ const accVert = /* glsl */`
       float u = clamp(dot(dna.xz, dirT) / uHelix.z, -1.0, 1.0);
       row = 2.0 + min(floor((u * 0.5 + 0.5) * RUNG_SLOTS), RUNG_SLOTS - 1.0);
     }
-    bool skip = dna.w <= 0.0 || length(dna.xz) > uHelix.z + uAcc.x || x < 0.0 || x > 1.0 || uAcc.w < 0.5;
+    // putovníci (wander.js) jsou od domova pořád daleko -> páteř by odhalovali trvale
+    float wl, wg;
+    bool wanderer = wanderSel(aUv, uWanderS, wl, wg) > 0.5;
+    bool skip = dna.w <= 0.0 || wanderer || length(dna.xz) > uHelix.z + uAcc.x || x < 0.0 || x > 1.0 || uAcc.w < 0.5;
     gl_Position = skip ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(x * 2.0 - 1.0, (row + 0.5) / REVEAL_ROWS * 2.0 - 1.0, 0.0, 1.0);
   }
 `;
@@ -555,7 +561,8 @@ export function DnaCore({ appConfig }) {
     const mat = new THREE.ShaderMaterial({
       vertexShader: accVert, fragmentShader: accFrag,
       uniforms: { tPos: { value: null }, tDna: { value: null }, uHelix: shared.uHelix, uYRange: shared.uYRange, uAcc: { value: new THREE.Vector4() }, uAcc2: { value: new THREE.Vector2() },
-        uVP: { value: new THREE.Matrix4() }, uMode2d: { value: new THREE.Vector3() } },
+        uVP: { value: new THREE.Matrix4() }, uMode2d: { value: new THREE.Vector3() },
+        uWander: { value: new THREE.Vector4() }, uWander2: { value: new THREE.Vector4() }, uWanderS: { value: 1 } },
       blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
       blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
       depthTest: false, depthWrite: false, transparent: true,
@@ -721,6 +728,8 @@ export function DnaCore({ appConfig }) {
       u.tDna.value = pu.tDnaPosition.value;
       u.uAcc.value.set(c.band, c.awayMin, c.awayMax, pu.uTransitionProgress.value < 0.001 ? 1 : 0);
       u.uAcc2.value.set(c.tileAwayMin, Math.max(c.tileAwayMin + 0.01, c.tileAwayMax));
+      if (pu.uWander) { u.uWander.value.copy(pu.uWander.value); u.uWander2.value.copy(pu.uWander2.value); }
+      u.uWanderS.value = sys.size;
       u.uVP.value.copy(s.vp);
       u.uMode2d.value.set(c.reveal2d ? 1 : 0, state.camera.projectionMatrix.elements[0], state.camera.projectionMatrix.elements[5]);
       acc.scene.add(sys.spinePoints);

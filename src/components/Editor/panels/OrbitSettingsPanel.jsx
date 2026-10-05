@@ -2,6 +2,7 @@
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
 import { DNA_CORE_DEFAULTS } from '../../../DnaCore';
 import { DNA_HOLD_DEFAULTS } from '../../particles/utils';
+import { WANDER_DEFAULTS } from '../../particles/wander';
 import { BRAND_LOGO_DEFAULTS } from '../../../BrandLogo';
 import { DNA_GLOW_DEFAULTS } from '../../../DnaGlow';
 
@@ -53,6 +54,8 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
   const updateCore = (field, value) => updateConfig('dnaCore', { ...(appConfig.dnaCore || {}), [field]: value });
   const pp = appConfig.particlePhysics || {};
   const updatePP = (field, value) => updateConfig('particlePhysics', { ...pp, [field]: value });
+  const wander = { ...WANDER_DEFAULTS, ...(pp.wander || {}) };
+  const updateWander = (field, value) => updatePP('wander', { ...(pp.wander || {}), [field]: value });
   const vl = appConfig.volumetricLight || {};
   const updateVL = (field, value) => updateConfig('volumetricLight', { ...vl, [field]: value });
   const updateTvLight = (field, value) => updateConfig('tvLight', { ...(appConfig.tvLight || {}), [field]: value });
@@ -89,6 +92,15 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
         <DenseSlider desc="Náhodné rozhození limitu odjezdu (Vodítko i Dojezd podél DNA) pro každý particl zvlášť. 0 = všichni mají stejný limit (viditelná „stěna“), 1 = od 0,15× do 1,85×." label="Rozhození limitu" min={0} max={1} step={0.01} color="#22d3ee" value={pp.dnaLimitRandom ?? DNA_HOLD_DEFAULTS.dnaLimitRandom} onChange={v => updatePP('dnaLimitRandom', v)} />
         <DenseSlider desc="Jak dlouho particly DNA po strčení myší visí venku, než se začnou vracet (s). Projekt uvnitř má vlastní (Zpoždění návratu)." label="Zdržení návratu DNA" min={0} max={3} step={0.05} color="#22d3ee" value={pp.dnaReturnDelay ?? DNA_HOLD_DEFAULTS.dnaReturnDelay} onChange={v => updatePP('dnaReturnDelay', v)} />
         <DenseSlider desc="Za jak dlouho se návrat DNA rozjede na plnou sílu (s). Víc = pomalejší, línější návrat." label="Rozjezd návratu DNA" min={0} max={4} step={0.05} color="#22d3ee" value={pp.dnaReturnRamp ?? DNA_HOLD_DEFAULTS.dnaReturnRamp} onChange={v => updatePP('dnaReturnRamp', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#22d3ee', marginBottom: '8px' }}>Putovníci kolem DNA</div>
+        <DenseToggle desc="Část particlů DNA žije kolem ní: putuje kolem celé šroubovice trochu dál od vláken, sami nebo ve skupinkách po 2–4, občas si některý dovolí výlet dál. DNA pak nepůsobí hubeně." label="Putovníci" checked={wander.enabled} color="#22d3ee" onChange={v => updateWander('enabled', v)} />
+        <DenseSlider desc="Kolik particlů DNA putuje (podíl, 0.04 = 4 %)." label="Počet" min={0} max={0.3} step={0.005} color="#22d3ee" value={wander.count} onChange={v => updateWander('count', v)} />
+        <DenseSlider desc="Shlukování: 0 = všichni putují sami, 1 = většinou ve skupinkách po 3–4." label="Shlukování" min={0} max={1} step={0.01} color="#22d3ee" value={wander.cluster} onChange={v => updateWander('cluster', v)} />
+        <DenseSlider desc="Jak daleko od vláken DNA se drží (world, každý náhodně 0.3–1×)." label="Jak daleko" min={0} max={3} step={0.05} color="#22d3ee" value={wander.distance} onChange={v => updateWander('distance', v)} />
+        <DenseSlider desc="O kolik dál si občas (každých pár sekund) některý dovolí na výlet (world)." label="Výlety dál" min={0} max={3} step={0.05} color="#22d3ee" value={wander.excursion} onChange={v => updateWander('excursion', v)} />
+        <DenseSlider desc="Rychlost putování kolem DNA (world/s, každý 0.4–1.6×, oběma směry)." label="Rychlost" min={0} max={1.5} step={0.01} color="#22d3ee" value={wander.speed} onChange={v => updateWander('speed', v)} />
+        <DenseSlider desc="Jak volně se drží členové skupinky u sebe (world)." label="Rozptyl skupinky" min={0} max={0.6} step={0.01} color="#22d3ee" value={wander.spread} onChange={v => updateWander('spread', v)} />
         <div style={{ height: '8px' }} />
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#22d3ee', marginBottom: '8px' }}>Jádro DNA (skleněná páteř)</div>
         <DenseToggle desc="Skleněné destičky uvnitř obou vláken DNA + energetická nit s pulzy. Schované v particlech – ukáže se jen tam, odkud particly odletěly, a zhasne dřív, než se vrátí." label="Jádro DNA" checked={core.enabled} color="#22d3ee" onChange={v => updateCore('enabled', v)} />

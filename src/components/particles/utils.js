@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GPUComputationRenderer } from './GPUComputationRenderer'; // kopie s rozlišením v uniformě (sdílené shadery)
 import { FLUID_DEFAULTS, getFluid, createFrontPass, createInjectPass, REST_TARGET_GLSL } from './ParticleFluid';
+import { WANDER_GLSL, WANDER_DEFAULTS } from './wander';
 import { prof } from '../../debug/GpuProfiler';
 import { TEX_LOD0 } from '../../glslTexLod0';
 import { mark } from '../../debug/FrameProbe';
@@ -18,7 +19,7 @@ export const getColors = () => [
 ];
 
 // --- GPGPU SHADERS ---
-const fragmentShaderVel = TEX_LOD0 + REST_TARGET_GLSL + `
+const fragmentShaderVel = TEX_LOD0 + REST_TARGET_GLSL + WANDER_GLSL + `
 uniform vec3 uMousePos;
 uniform vec3 uMouseDir;
 uniform vec3 uMouseVel;
@@ -128,6 +129,11 @@ void main() {
     vec4 vel = texture2D(textureVelocity, uv);
     vec4 dnaP = texture2D(tDnaPosition, uv);
     float dnaRest = (1.0 - step(0.001, uTransitionProgress)) * (1.0 - step(dnaP.w, 0.0));
+    // domov v DNA; putovník (wander.js) má místo něj pohyblivou dráhu kolem DNA
+    float wLeader, wGroup;
+    vec3 home = dnaP.xyz;
+    if (dnaRest > 0.5 && wanderSel(uv, resolution.x, wLeader, wGroup) > 0.5)
+        home = wanderTarget(uv, resolution.x, wLeader, wGroup, tDnaPosition, dnaP.y);
     // odtržený particl se připojí zpět, jakmile začne morph do projektu (nebo je odtržení vypnuté)
     float esc = step(1.5, vel.w) * dnaRest * uEscOn * uPhysReturn;
     // ... nebo sám po uEscLife s (pak ho oblouky návratu dovedou domů)
@@ -137,7 +143,7 @@ void main() {
     vec3 edgeN = vec3(0.0);
     vec3 vel0 = vel.xyz;
     if (dnaRest > 0.5 && uDnaLeash > 0.0 && vel.w < 1.5 && uPhysReturn > 0.5) {
-        vec3 off = pos.xyz - dnaP.xyz;
+        vec3 off = pos.xyz - home;
         float ol = length(off);
         float lim = dnaLimit(uv, pos.xyz, ol);
         if (ol > 1e-5) {
@@ -236,7 +242,7 @@ void main() {
     if (esc > 0.5) {
         // VOLNÝ: pluje pomalým vířivým proudem prostorem, drží se v okolí domova (měkké vodítko),
         // rychlost se jen pomalu blíží cestovní -> strčení myší dojíždí dlouho (vesmír)
-        vec3 toH = dnaP.xyz - pos.xyz;
+        vec3 toH = home - pos.xyz;
         float dh = length(toH);
         float ph = fract(sin(dot(uv, vec2(39.3468, 11.1353))) * 24634.6345) * 6.2831853;
         vec3 q = pos.xyz * uEscScale + vec3(0.0, uTime * 0.07, 0.0);
@@ -255,7 +261,7 @@ void main() {
         vec4 base = texture2D(tBasePosition, uv);
         float offset = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
         vec3 local = base.xyz + vec3(0.0, sin(uTime * uFloatSpeed + offset) * uFloatAmplitude, 0.0);
-        vec3 tgt = projRest > 0.5 ? (uFinalMat * vec4(local, 1.0)).xyz : dnaP.xyz;
+        vec3 tgt = projRest > 0.5 ? (uFinalMat * vec4(local, 1.0)).xyz : home;
         // u hranice vodítka se návrat zapne hned (nečeká na zpoždění po strčení) -> particl se stočí obloukem zpět
         float r = max(returnRampOf(vel.w), edge * edge);
         // Řízení místo pružiny: particl si drží rychlost a jen postupně stáčí směr k cíli omezeným
@@ -309,7 +315,7 @@ void main() {
 }
 `;
 
-const fragmentShaderPos = TEX_LOD0 + `
+const fragmentShaderPos = TEX_LOD0 + WANDER_GLSL + `
 uniform float uTime;
 uniform float uFloatSpeed;
 uniform float uFloatAmplitude;
@@ -405,6 +411,10 @@ void main() {
     // Their DNA-state target is relative to the camera height so the cube follows the camera.
     float isReserve = step(dna.w, 0.0);
     vec3 dnaTarget = dna.xyz + vec3(0.0, uCameraY * isReserve, 0.0);
+    // putovník kolem DNA (wander.js) – cíl v DNA je jeho dráha
+    float wLeader, wGroup;
+    if (isReserve < 0.5 && wanderSel(uv, resolution.x, wLeader, wGroup) > 0.5)
+        dnaTarget = wanderTarget(uv, resolution.x, wLeader, wGroup, tDnaPosition, dna.y);
     float dnaScale = abs(dna.w);
     
     // --- ORGANIC MORPH EFFECT ---
@@ -571,6 +581,10 @@ export function useGPGPU(count, particlesData, gl) {
     // návrat pružinou (velocity shader) potřebuje stejný cíl i náběh jako poziční shader
     Object.assign(velVar.material.uniforms, { uPhysReturn: pu.uPhysReturn, uReturnDelay: pu.uReturnDelay, uReturnRamp: pu.uReturnRamp,
       uTime: pu.uTime, uFloatSpeed: pu.uFloatSpeed, uFloatAmplitude: pu.uFloatAmplitude });
+    // putovníci kolem DNA (wander.js) – sdílené uniformy obou shaderů
+    pu.uWander = { value: new THREE.Vector4() };
+    pu.uWander2 = { value: new THREE.Vector4() };
+    Object.assign(velVar.material.uniforms, { uWander: pu.uWander, uWander2: pu.uWander2 });
 
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);
@@ -833,6 +847,13 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       velUniforms.uDnaShape.value.set(dnaShape.th0, dnaShape.k, dnaShape.R);
       for (let i = 0; i < MAX_RUNGS; i++) velUniforms.uDnaRungY.value[i] = dnaShape.rungs[i] ?? 0;
       velUniforms.uDnaRungN.value = Math.min(MAX_RUNGS, dnaShape.rungs.length);
+    }
+    // putovníci kolem DNA (config particlePhysics.wander, DEV window.__wanderOverride)
+    {
+      const wd = { ...WANDER_DEFAULTS, ...(phys.wander || {}), ...(import.meta.env.DEV ? window.__wanderOverride : null) };
+      const on = wd.enabled && dnaShape.valid && wd.count > 0;
+      posUniforms.uWander.value.set(Math.min(1, Math.max(0, wd.count)), Math.min(1, Math.max(0, wd.cluster)), Math.max(0, wd.distance), on ? dnaShape.R : 0);
+      posUniforms.uWander2.value.set(wd.speed, Math.max(0, wd.excursion), state.clock.getElapsedTime(), Math.max(0, wd.spread));
     }
     // odtržené particly (jen v klidu DNA)
     const esc = { ...ESCAPE_DEFAULTS, ...(phys.escape || {}) };
