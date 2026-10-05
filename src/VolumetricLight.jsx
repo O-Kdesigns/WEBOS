@@ -170,6 +170,7 @@ const VolumetricLightShader = {
     uDnaAura: { value: 4 },
     uDnaInk: { value: 0.7 },
     uDnaTint: { value: 0.35 },
+    uDnaInkTint: { value: 0.35 },
     uDnaObj: { value: 0.5 },
     uDnaTopLow: { value: 0.3 },   // aura dole (daleko od záře nahoře) – 1 = všude stejně
     uDnaTopReach: { value: 1.5 }, // vzdálenost od světla nad DNA (výšky obrazovky), kde aura klesne na uDnaTopLow
@@ -450,6 +451,7 @@ const VolumetricLightShader = {
     uniform float uDnaAura;
     uniform float uDnaInk;
     uniform float uDnaTint;
+    uniform float uDnaInkTint;
     uniform float uDnaObj;
     uniform float uDnaTopLow;
     uniform float uDnaTopReach;
@@ -677,9 +679,13 @@ const VolumetricLightShader = {
         float topD = length(vec2((vUv.x - uLightScreenPos.x) * 0.6, vUv.y - uLightScreenPos.y));
         float top = mix(uDnaTopLow, 1.0, 1.0 - smoothstep(0.25, uDnaTopReach, topD));
         vec3 g = texture2D(tDnaAura, vUv).rgb * uDnaAura * top;
-        if (uDnaInkOn > 0.5) g += texture2D(tDnaInk, vUv).rgb * uDnaInk;
-        float gLum = dot(g, vec3(0.299, 0.587, 0.114));
-        L += mix(g, uTvColor * gLum * 2.0, uDnaTint) * orbitOn * (isBg ? 1.0 : uDnaObj) * tvRayMask();
+        g = mix(g, uTvColor * dot(g, vec3(0.299, 0.587, 0.114)) * 2.0, uDnaTint);
+        // inkoust (2D voda) má vlastní míru barvy particlů (uDnaInkTint)
+        if (uDnaInkOn > 0.5) {
+          vec3 k = texture2D(tDnaInk, vUv).rgb * uDnaInk;
+          g += mix(k, uTvColor * dot(k, vec3(0.299, 0.587, 0.114)) * 2.0, uDnaInkTint);
+        }
+        L += g * orbitOn * (isBg ? 1.0 : uDnaObj) * tvRayMask();
       } else if (orbitOn > 0.001 && uOrbitFogOn > 0.5) {
         // mlha ve světě: vrstvy jsou za DNA -> přes objekty jen část (uOrbitFogObj)
         L += texture2D(tOrbitFog, vUv).rgb * uOrbitFogStrength * orbitOn * (isBg ? 1.0 : uOrbitFogObj) * tvRayMask();
@@ -1775,6 +1781,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         U.uDnaAura.value = dg.aura ?? 4;
         U.uDnaInk.value = dg.ink ?? 0.7;
         U.uDnaTint.value = dg.tint ?? 0.35;
+        U.uDnaInkTint.value = dg.inkTint ?? dg.tint ?? 0.35;
         U.uDnaObj.value = dg.objects ?? 0.5;
         U.uDnaTopLow.value = dg.topLow ?? 0.3;
         U.uDnaTopReach.value = dg.topReach ?? 1.5;

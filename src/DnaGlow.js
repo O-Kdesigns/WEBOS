@@ -67,7 +67,8 @@ export const DNA_GLOW_DEFAULTS = {
   threshold: 0.03,   // jas particlů (tBlur, lineárně), od kterého svítí do prostoru
   aura: 4,           // síla široké záře kolem DNA (× nasvícení září nahoře, topLow/topReach)
   auraRadius: 2.6,   // šíře záře (krok gauss v texelech 1/16) – rozlitá, ne přilepená k DNA
-  tint: 0.35,        // 0 = barvy particlů, 1 = barva tvLight.color
+  tint: 0.35,        // aura: 0 = barvy particlů, 1 = barva tvLight.color
+  inkTint: 0.35,     // inkoust (2D voda): 0 = barvy particlů, 1 = barva tvLight.color
   ink: 0.7,          // síla inkoustu světla
   emit: 10,          // kolik inkoustu particly pustí za s ve vodě
   fade: 2.2,         // útlum inkoustu (1/s) – krátký: ukazuje vodu teď, ne dlouhé stopy

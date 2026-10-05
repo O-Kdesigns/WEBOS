@@ -3,6 +3,7 @@ import { ParticleSettingsPanel } from './ParticleSettingsPanel';
 import { DNA_CORE_DEFAULTS } from '../../../DnaCore';
 import { DNA_HOLD_DEFAULTS } from '../../particles/utils';
 import { BRAND_LOGO_DEFAULTS } from '../../../BrandLogo';
+import { DNA_GLOW_DEFAULTS } from '../../../DnaGlow';
 
 export const DenseSlider = ({ label, desc, min, max, step, value, onChange, unit = '', color = '#10b981' }) => (
   <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 45px', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
@@ -57,6 +58,8 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
   const updateTvLight = (field, value) => updateConfig('tvLight', { ...(appConfig.tvLight || {}), [field]: value });
   const logoCfg = { ...BRAND_LOGO_DEFAULTS, ...(appConfig.brandLogo || {}) };
   const updateLogo = (field, value) => updateConfig('brandLogo', { ...logoCfg, [field]: value });
+  const glow = { ...DNA_GLOW_DEFAULTS, ...(appConfig.dnaGlow || {}) };
+  const updateGlow = (field, value) => updateConfig('dnaGlow', { ...(appConfig.dnaGlow || {}), [field]: value });
   
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
@@ -119,6 +122,31 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
         <DenseSlider desc="O kolik paprsky zeslábnou při rozvíření DNA myší (rozházené svítící particly jinak dělají paprsky přes celou obrazovku)." label="Útlum při víření" min={0} max={1} step={0.05} color="#22d3ee" value={vl.stirCut ?? 0.6} onChange={v => updateVL('stirCut', v)} />
         <DenseSlider desc="O kolik paprsky zeslábnou při scrollu (podle rychlosti jízdy kamery)." label="Útlum při scrollu" min={0} max={1} step={0.05} color="#22d3ee" value={vl.scrollCut ?? 0.5} onChange={v => updateVL('scrollCut', v)} />
         <DenseSlider desc="O kolik paprsky (i mlha z prachu) slábnou přes sklo aktivní televize – jinak kladou závoj přes video. 0 = jako dřív." label="Paprsky přes sklo TV" min={0} max={1} step={0.05} color="#22d3ee" value={appConfig.tvLight?.rayMask ?? 0.85} onChange={v => updateTvLight('rayMask', v)} />
+      </DashboardCard>
+
+      <DashboardCard title="Světlo DNA a 2D voda (ORBIT)" icon="✨" color="#a78bfa">
+        <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 8 }}>Záře z DNA particlů do prostoru + svítící „inkoust“, který particly pouštějí tam, kde je voda rozhýbe. Fyzika vody (jak daleko se rozjede): Uvnitř → 🧲 → Voda.</div>
+        <DenseToggle desc="Světlo DNA particlů (DnaGlow). Vypnuto = stará mlha z prachu s paprsky." label="Světlo DNA" checked={glow.enabled} color="#a78bfa" onChange={v => updateGlow('enabled', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#a78bfa', marginBottom: '8px' }}>2D voda (inkoust z particlů)</div>
+        <DenseSlider desc="Jak moc má viditelná voda barvu particlů, ze kterých vznikla. 1 = čisté barvy particlů, 0 = jen tyrkysová barva světla (jas zůstává z particlů)." label="Barva particlů ve vodě" min={0} max={1} step={0.01} color="#a78bfa" value={1 - glow.inkTint} onChange={v => updateGlow('inkTint', +(1 - v).toFixed(2))} />
+        <DenseSlider desc="Kolik inkoustu particly pustí, když je voda rozhýbe (za s). Víc = hustší, výraznější voda." label="Kolik se tvoří" min={0} max={40} step={0.5} color="#a78bfa" value={glow.emit} onChange={v => updateGlow('emit', v)} />
+        <DenseSlider desc="Jas viditelné vody." label="Jas vody" min={0} max={4} step={0.05} color="#a78bfa" value={glow.ink} onChange={v => updateGlow('ink', v)} />
+        <DenseSlider desc="Jak rychle viditelná voda mizí (1/s). Míň = delší svítící stopy za particly." label="Mizení" min={0.1} max={6} step={0.05} color="#a78bfa" value={glow.fade} onChange={v => updateGlow('fade', v)} />
+        <DenseSlider desc="Jak moc se viditelná voda rozpíjí do okolí (texely za snímek). 0 = drží velikost štětce." label="Rozpíjení" min={0} max={1} step={0.01} color="#a78bfa" value={glow.spread} onChange={v => updateGlow('spread', v)} />
+        <DenseSlider desc="Jak silně viditelnou vodu nese proud (1 = přesně s vodou)." label="Unášení proudem" min={0} max={2} step={0.05} color="#a78bfa" value={glow.flow} onChange={v => updateGlow('flow', v)} />
+        <DenseSlider desc="Stoupání viditelné vody vzhůru (výšky obrazovky/s), jako teplý kouř." label="Stoupání" min={0} max={0.1} step={0.002} color="#a78bfa" value={glow.rise} onChange={v => updateGlow('rise', v)} />
+        <DenseSlider desc="Od jaké rychlosti vody (buněk/s) particly začnou pouštět inkoust. Míň = svítí i pomalá voda (větší plocha)." label="Práh rychlosti vody" min={1} max={60} step={1} color="#a78bfa" value={glow.waterMin} onChange={v => updateGlow('waterMin', v)} />
+        <DenseSlider desc="Rychlost vody (buněk/s), při které particly pouštějí inkoust naplno." label="Plně od rychlosti" min={2} max={120} step={1} color="#a78bfa" value={glow.waterMax} onChange={v => updateGlow('waterMax', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#a78bfa', marginBottom: '8px' }}>Záře kolem DNA</div>
+        <DenseSlider desc="Síla široké záře z particlů do prostoru." label="Síla záře" min={0} max={10} step={0.1} color="#a78bfa" value={glow.aura} onChange={v => updateGlow('aura', v)} />
+        <DenseSlider desc="Šíře záře – jak daleko od DNA se rozlije." label="Rozlití záře" min={0.5} max={6} step={0.1} color="#a78bfa" value={glow.auraRadius} onChange={v => updateGlow('auraRadius', v)} />
+        <DenseSlider desc="Jak moc má záře barvu particlů (1) nebo tyrkysovou barvu světla (0)." label="Barva particlů v záři" min={0} max={1} step={0.01} color="#a78bfa" value={1 - glow.tint} onChange={v => updateGlow('tint', +(1 - v).toFixed(2))} />
+        <DenseSlider desc="Záře dole, daleko od záře nahoře (1 = všude stejně silná, míň = dole jako by nedosvítilo)." label="Záře dole" min={0} max={1} step={0.01} color="#a78bfa" value={glow.topLow} onChange={v => updateGlow('topLow', v)} />
+        <DenseSlider desc="Jak daleko od záře nahoře záře kolem DNA slábne (výšky obrazovky)." label="Dosah světla shora" min={0.5} max={3} step={0.05} color="#a78bfa" value={glow.topReach} onChange={v => updateGlow('topReach', v)} />
+        <DenseSlider desc="Od jakého jasu particlů světlo do prostoru vychází (záře i inkoust). Víc = svítí jen nejjasnější." label="Práh jasu particlů" min={0} max={0.3} step={0.005} color="#a78bfa" value={glow.threshold} onChange={v => updateGlow('threshold', v)} />
+        <DenseSlider desc="Kolik záře je vidět přes particly a televizi (0 = jen v pozadí)." label="Přes objekty" min={0} max={1} step={0.01} color="#a78bfa" value={glow.objects} onChange={v => updateGlow('objects', v)} />
       </DashboardCard>
 
       <DashboardCard title="Pohyb a Kamera" icon="🚀" color="#f43f5e">
