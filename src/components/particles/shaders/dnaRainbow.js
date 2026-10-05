@@ -52,6 +52,15 @@ export function buildDnaPalette(THREE, appConfig, pages) {
     if (real.length >= DNA_PALETTE_MAX) break;
   }
   if (real.length < 2) real.push(new THREE.Color('#3b82f6'), new THREE.Color('#6df73b'));
+  // Světlé barvy (bílá z page.color) by v DNA svítily výrazně víc než ostatní -> zastropujeme
+  // jejich jas na nejjasnější sytou barvu v paletě (bílá = šedá stejného jasu).
+  const hsl = { h: 0, s: 0, l: 0 };
+  const saturated = real.filter((c) => c.getHSL(hsl).s > 0.5);
+  const cap = Math.max(...(saturated.length ? saturated : real).map((c) => c.getLuminance()));
+  for (const c of real) {
+    const lum = c.getLuminance();
+    if (lum > cap && lum > 0) c.multiplyScalar(cap / lum);
+  }
   const colors = real.slice();
   while (colors.length < DNA_PALETTE_MAX) colors.push(real[colors.length % real.length]);
   return { colors, count: real.length };
