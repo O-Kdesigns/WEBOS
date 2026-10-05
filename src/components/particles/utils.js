@@ -132,8 +132,8 @@ void main() {
     // domov v DNA; putovník (wander.js) má místo něj pohyblivou dráhu kolem DNA
     float wLeader, wGroup;
     vec3 home = dnaP.xyz;
-    if (dnaRest > 0.5 && wanderSel(uv, resolution.x, wLeader, wGroup) > 0.5)
-        home = wanderTarget(uv, resolution.x, wLeader, wGroup, tDnaPosition, dnaP.y);
+    if (dnaRest > 0.5 && wanderSel(uv, resolution.x, dnaP, tDnaPosition, wLeader, wGroup) > 0.5)
+        home = wanderTarget(uv, resolution.x, wLeader, wGroup, tDnaPosition, dnaP.xyz);
     // odtržený particl se připojí zpět, jakmile začne morph do projektu (nebo je odtržení vypnuté)
     float esc = step(1.5, vel.w) * dnaRest * uEscOn * uPhysReturn;
     // ... nebo sám po uEscLife s (pak ho oblouky návratu dovedou domů)
@@ -413,8 +413,8 @@ void main() {
     vec3 dnaTarget = dna.xyz + vec3(0.0, uCameraY * isReserve, 0.0);
     // putovník kolem DNA (wander.js) – cíl v DNA je jeho dráha
     float wLeader, wGroup;
-    if (isReserve < 0.5 && wanderSel(uv, resolution.x, wLeader, wGroup) > 0.5)
-        dnaTarget = wanderTarget(uv, resolution.x, wLeader, wGroup, tDnaPosition, dna.y);
+    if (isReserve < 0.5 && wanderSel(uv, resolution.x, dna, tDnaPosition, wLeader, wGroup) > 0.5)
+        dnaTarget = wanderTarget(uv, resolution.x, wLeader, wGroup, tDnaPosition, dna.xyz);
     float dnaScale = abs(dna.w);
     
     // --- ORGANIC MORPH EFFECT ---
@@ -584,7 +584,8 @@ export function useGPGPU(count, particlesData, gl) {
     // putovníci kolem DNA (wander.js) – sdílené uniformy obou shaderů
     pu.uWander = { value: new THREE.Vector4() };
     pu.uWander2 = { value: new THREE.Vector4() };
-    Object.assign(velVar.material.uniforms, { uWander: pu.uWander, uWander2: pu.uWander2 });
+    pu.uWander3 = { value: new THREE.Vector4() };
+    Object.assign(velVar.material.uniforms, { uWander: pu.uWander, uWander2: pu.uWander2, uWander3: pu.uWander3 });
 
     const error = gpuCompute.init();
     if (error !== null) console.error("GPGPU Error:", error);
@@ -852,8 +853,9 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     {
       const wd = { ...WANDER_DEFAULTS, ...(phys.wander || {}), ...(import.meta.env.DEV ? window.__wanderOverride : null) };
       const on = wd.enabled && dnaShape.valid && wd.count > 0;
-      posUniforms.uWander.value.set(Math.min(1, Math.max(0, wd.count)), Math.min(1, Math.max(0, wd.cluster)), Math.max(0, wd.distance), on ? dnaShape.R : 0);
+      posUniforms.uWander.value.set(Math.min(1, Math.max(0, wd.count)), Math.min(1, Math.max(0, wd.cluster)), Math.max(0, wd.distance), on ? 1 : 0);
       posUniforms.uWander2.value.set(wd.speed, Math.max(0, wd.excursion), state.clock.getElapsedTime(), Math.max(0, wd.spread));
+      posUniforms.uWander3.value.set(dnaShape.th0, dnaShape.k, dnaShape.R, Math.max(0, wd.travel));
     }
     // odtržené particly (jen v klidu DNA)
     const esc = { ...ESCAPE_DEFAULTS, ...(phys.escape || {}) };

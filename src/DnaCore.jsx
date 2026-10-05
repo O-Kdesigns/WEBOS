@@ -436,7 +436,7 @@ const accVert = /* glsl */`
     }
     // putovníci (wander.js) jsou od domova pořád daleko -> páteř by odhalovali trvale
     float wl, wg;
-    bool wanderer = wanderSel(aUv, uWanderS, wl, wg) > 0.5;
+    bool wanderer = wanderSel(aUv, uWanderS, dna, tDna, wl, wg) > 0.5;
     bool skip = dna.w <= 0.0 || wanderer || length(dna.xz) > uHelix.z + uAcc.x || x < 0.0 || x > 1.0 || uAcc.w < 0.5;
     gl_Position = skip ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(x * 2.0 - 1.0, (row + 0.5) / REVEAL_ROWS * 2.0 - 1.0, 0.0, 1.0);
   }
@@ -562,7 +562,7 @@ export function DnaCore({ appConfig }) {
       vertexShader: accVert, fragmentShader: accFrag,
       uniforms: { tPos: { value: null }, tDna: { value: null }, uHelix: shared.uHelix, uYRange: shared.uYRange, uAcc: { value: new THREE.Vector4() }, uAcc2: { value: new THREE.Vector2() },
         uVP: { value: new THREE.Matrix4() }, uMode2d: { value: new THREE.Vector3() },
-        uWander: { value: new THREE.Vector4() }, uWander2: { value: new THREE.Vector4() }, uWanderS: { value: 1 } },
+        uWander: { value: new THREE.Vector4() }, uWander2: { value: new THREE.Vector4() }, uWander3: { value: new THREE.Vector4() }, uWanderS: { value: 1 } },
       blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
       blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
       depthTest: false, depthWrite: false, transparent: true,
@@ -728,7 +728,7 @@ export function DnaCore({ appConfig }) {
       u.tDna.value = pu.tDnaPosition.value;
       u.uAcc.value.set(c.band, c.awayMin, c.awayMax, pu.uTransitionProgress.value < 0.001 ? 1 : 0);
       u.uAcc2.value.set(c.tileAwayMin, Math.max(c.tileAwayMin + 0.01, c.tileAwayMax));
-      if (pu.uWander) { u.uWander.value.copy(pu.uWander.value); u.uWander2.value.copy(pu.uWander2.value); }
+      if (pu.uWander) { u.uWander.value.copy(pu.uWander.value); u.uWander2.value.copy(pu.uWander2.value); u.uWander3.value.copy(pu.uWander3.value); }
       u.uWanderS.value = sys.size;
       u.uVP.value.copy(s.vp);
       u.uMode2d.value.set(c.reveal2d ? 1 : 0, state.camera.projectionMatrix.elements[0], state.camera.projectionMatrix.elements[5]);
