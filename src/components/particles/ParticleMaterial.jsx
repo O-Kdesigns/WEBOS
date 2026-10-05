@@ -6,7 +6,7 @@ import { a } from '@react-spring/three';
 import './shaders/VideoRefractionMaterial';
 import './shaders/JellyVideoMaterial';
 import { attachParticleLink } from '../../SolidLink';
-import { ESC_VERTEX } from './shaders/escapeGlsl';
+import { ESC_VERTEX, STIR_VERTEX_HEAD, STIR_VERTEX, STIR_FRAG_HEAD } from './shaders/escapeGlsl';
 import { DNA_RAINBOW_GLSL, buildDnaPalette } from './shaders/dnaRainbow';
 import pagesConfig from '../../settings.json';
 
@@ -94,6 +94,8 @@ export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 
     Object.assign(shader.uniforms, {
       tVelocities: { value: null }, uEscColor: { value: new THREE.Color('#ffb347') }, uEscTint: { value: 0 },
       uEscFlash: { value: 0 }, uEscFlashTime: { value: 0.6 }, uEscGlow: { value: 0 }, uEscPop: { value: 0 }, uEscLife: { value: 25 },
+      // barevná odezva na pohyb (escapeGlsl STIR_*)
+      uStirLook: { value: new THREE.Vector4(0, 0, 0.3, 1.5) }, uStirHue: { value: 0 }, uStirHold: { value: 0 }, uStirInside: { value: 0 }, uVelDt: { value: 1 / 60 },
     });
 
     shader.vertexShader = `
@@ -106,6 +108,7 @@ export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 
       varying float vEsc;
       varying float vEscFlash;
       varying vec3 vWorldPos;
+      ${STIR_VERTEX_HEAD}
       ${shader.vertexShader}
     `;
     shader.fragmentShader = `
@@ -126,6 +129,7 @@ export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 
         return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
       }
       ${DNA_RAINBOW_GLSL}
+      ${STIR_FRAG_HEAD}
       ${shader.fragmentShader}
     `.replace('#include <emissivemap_fragment>', `
       #include <emissivemap_fragment>
@@ -136,6 +140,11 @@ export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 
       diffuseColor.rgb = mix(dnaPaletteBlend(dnaField), diffuseColor.rgb, smoothstep(0.0, 1.0, uTransitionProgress));
       diffuseColor.rgb = mix(diffuseColor.rgb, uEscColor, vEsc * uEscTint);
       totalEmissiveRadiance += uEscColor * (vEscFlash * uEscFlash + vEsc * uEscGlow);
+      // pohyb: přelití do duhy podle směru + jemná záře
+      vec3 stirC = stirRainbow(vStirDir, 0.0, uTime);
+      float stirK = vStir * mix(1.0, uStirInside, smoothstep(0.0, 1.0, uTransitionProgress));
+      diffuseColor.rgb = mix(diffuseColor.rgb, (dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)) * 1.5 + 0.03) * stirC, stirK * uStirLook.x);
+      totalEmissiveRadiance += stirC * (stirK * uStirLook.y);
     `);
 
     shader.vertexShader = shader.vertexShader.replace(
@@ -145,6 +154,7 @@ export function ParticleMaterial({ settings, appConfig, videoTexture, opacity = 
       vec3 computedPos = computedData.xyz;
       float computedScale = computedData.w;
       ${ESC_VERTEX}
+      ${STIR_VERTEX}
 
       vec3 transformed = position * computedScale;
       transformed += computedPos;

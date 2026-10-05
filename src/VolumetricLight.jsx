@@ -168,6 +168,9 @@ const VolumetricLightShader = {
     uDnaGlowOn: { value: 0.0 },
     uDnaInkOn: { value: 0.0 },
     uDnaInkMax: { value: 0.25 },
+    uDnaInkWash: { value: 0.0 },
+    uDnaInkWashFull: { value: 0.5 },
+    uDnaInkMilk: { value: 0.0 },
     uDnaAura: { value: 4 },
     uDnaInk: { value: 0.7 },
     uDnaTint: { value: 0.35 },
@@ -450,6 +453,7 @@ const VolumetricLightShader = {
     uniform float uDnaGlowOn;
     uniform float uDnaInkOn;
     uniform float uDnaInkMax;
+    uniform float uDnaInkWash, uDnaInkWashFull, uDnaInkMilk;
     uniform float uDnaAura;
     uniform float uDnaInk;
     uniform float uDnaTint;
@@ -669,6 +673,20 @@ const VolumetricLightShader = {
       float inside = 1.0 - smoothstep(0.86, 1.02, max(ab.x, ab.y));
       return 1.0 - uTvRayMask * inside * smoothstep(0.05, 0.5, uTvVis);
     }
+    // 2D voda jako barevná vrstva (ne světlo): obarví scénu pod sebou barvou vody (jas zůstane) + slabé „mléko“
+    // v barvě vody, ať je vidět i na tmavém pozadí. Viditelná a barevná, ale nesvítí (Oliver 2026-10-05).
+    vec3 inkWash(vec3 c) {
+      if (uDnaInkOn < 0.5 || uDnaGlowOn < 0.5 || uDnaInkWash < 0.001) return c;
+      float orbitOn = uTvStrength * (1.0 - uInsideTransition);
+      if (orbitOn < 0.001) return c;
+      vec3 k = texture2D(tDnaInk, vUv).rgb;
+      float a = max(k.r, max(k.g, k.b));
+      if (a < 1e-4) return c;
+      vec3 hue = k / a;
+      float cov = smoothstep(0.0, uDnaInkWashFull, a) * uDnaInkWash * orbitOn * tvRayMask();
+      float l = dot(c, vec3(0.299, 0.587, 0.114));
+      return mix(c, mix(c, l * hue * 1.8, 0.8), cov) + hue * cov * uDnaInkMilk;
+    }
     vec3 tvLight(bool isBg) {
       float w = uTvClip > 0.001 && uInsideTransition < 0.999 ? waterMask() : 0.0;
       vec2 asp = vec2(uAspect, 1.0);
@@ -814,7 +832,7 @@ const VolumetricLightShader = {
 
       // If purely in ORBIT mode, return early for speed
       if (uInsideTransition <= 0.001) {
-        gl_FragColor = vec4(cinematicFinish(orbitColor + tvLight(cineBg), cineBg), baseColor.a);
+        gl_FragColor = vec4(cinematicFinish(inkWash(orbitColor) + tvLight(cineBg), cineBg), baseColor.a);
         return;
       }
 
@@ -1057,7 +1075,7 @@ const VolumetricLightShader = {
       // 3. Plynulé prolnutí mezi ORBIT a INSIDE
       // ==========================================
       float t = smoothstep(0.0, 1.0, uInsideTransition);
-      vec3 finalColor = mix(orbitColor, finalInside, t);
+      vec3 finalColor = mix(inkWash(orbitColor), finalInside, t);
       if (uPrintRays > 0.001) {
         // žhavá vrstva prosvítí i přes mlhu INSIDE + paprsky k televizi
         if (uPrintSolo > 0.5) finalColor = vec3(0.02);
@@ -1785,8 +1803,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         U.uDnaAura.value = dg.aura ?? 4;
         U.uDnaInk.value = dg.ink ?? DNA_GLOW_DEFAULTS.ink;
         U.uDnaInkMax.value = Math.max(0.01, dg.inkMax ?? DNA_GLOW_DEFAULTS.inkMax);
+        U.uDnaInkWash.value = Math.max(0, dg.inkWash ?? DNA_GLOW_DEFAULTS.inkWash);
+        U.uDnaInkWashFull.value = Math.max(0.01, dg.inkWashFull ?? DNA_GLOW_DEFAULTS.inkWashFull);
+        U.uDnaInkMilk.value = Math.max(0, dg.inkMilk ?? DNA_GLOW_DEFAULTS.inkMilk);
         U.uDnaTint.value = dg.tint ?? 0.35;
-        U.uDnaInkTint.value = dg.inkTint ?? dg.tint ?? 0.35;
+        U.uDnaInkTint.value = dg.inkTint ?? DNA_GLOW_DEFAULTS.inkTint;
         U.uDnaObj.value = dg.objects ?? 0.5;
         U.uDnaTopLow.value = dg.topLow ?? 0.3;
         U.uDnaTopReach.value = dg.topReach ?? 1.5;

@@ -3,7 +3,7 @@ import { shaderMaterial } from '@react-three/drei';
 import { extend } from '@react-three/fiber';
 import { TEX_LOD0 } from '../../../glslTexLod0';
 import { PARTICLE_DECL, BAKE_LIFT_GLSL } from '../../../SolidLink';
-import { ESC_VERTEX } from './escapeGlsl';
+import { ESC_VERTEX, STIR_VERTEX_HEAD, STIR_VERTEX, STIR_FRAG_HEAD } from './escapeGlsl';
 import { DNA_RAINBOW_GLSL, DNA_PALETTE_MAX } from './dnaRainbow';
 
 export const JellyVideoMaterialImpl = shaderMaterial(
@@ -38,6 +38,12 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     uEscGlow: 0.0,
     uEscPop: 0.0,
     uEscLife: 25.0,
+    // barevná odezva na pohyb (escapeGlsl STIR_*, plní useParticleLogic)
+    uStirLook: new THREE.Vector4(0, 0, 0.3, 1.5),
+    uStirHue: 0.0,
+    uStirHold: 0.0,
+    uStirInside: 0.0,
+    uVelDt: 1 / 60,
     // barva ze zapečeného světla solidu (UV nejbližšího bodu solidu na particl, GeometryParticleObject + SolidLink)
     tSurfUV: null,
     uBakeOn: 0.0
@@ -59,6 +65,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   varying vec3 vBake;
   varying float vEsc;
   varying float vEscFlash;
+  ${STIR_VERTEX_HEAD}
   
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -80,6 +87,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
     vec3 computedPos = computedData.xyz;
     float computedScale = computedData.w;
     ${ESC_VERTEX}
+    ${STIR_VERTEX}
 
     // zapečené světlo solidu v místě, kde particl na solidu sedí (mip 2 = průměr okolí ~1 cm, ne jeden texel)
     vec4 surfUV = texture2D(tSurfUV, aComputeUV);
@@ -185,6 +193,7 @@ export const JellyVideoMaterialImpl = shaderMaterial(
   varying float vEscFlash;
   varying vec3 vBake;
   uniform float uBakePTint, uBakePGlow;
+  ${STIR_FRAG_HEAD}
 
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
   float snoise(vec2 v){
@@ -444,6 +453,14 @@ export const JellyVideoMaterialImpl = shaderMaterial(
       float bkLum = dot(finalColor, vec3(0.299, 0.587, 0.114));
       vec3 bkHue = vBake / bkPeak;
       finalColor = mix(finalColor, bkLum * bkHue * 1.8, clamp(bkPeak, 0.0, 1.0) * uBakePTint) + vBake * uBakePGlow;
+    }
+
+    // pohyb: přelití do duhy podle směru (drží stínování kuličky) + jemná záře
+    float stirK = vStir * mix(1.0, uStirInside, vidMix);
+    if (stirK > 0.001) {
+      vec3 stirC = stirRainbow(vStirDir, vRand.x, uTime);
+      float stirL = dot(finalColor, vec3(0.299, 0.587, 0.114));
+      finalColor = mix(finalColor, (stirL * 1.5 + 0.03) * stirC, stirK * uStirLook.x) + stirC * (stirK * uStirLook.y);
     }
 
     // odtržený: převezme barvu a slabě září, v bodě zlomu HDR záblesk (bloom)

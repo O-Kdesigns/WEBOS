@@ -672,6 +672,10 @@ export const DNA_HOLD_DEFAULTS = {
   dnaEdge: 0.6,        // 0..0,7 – měkkost hranice: od (1 − dnaEdge)·limit voda ztrácí sílu ven a particl se stočí zpět (dřív dnaBrake = zastavení u limitu)
   dnaFrontShell: 4,    // world – jak hluboko do DNA voda sahá (od nejbližšího particlu); 4 = celá DNA (obě vlákna)
   dnaLimitRandom: 0.85, // 0..1 – náhodné rozhození limitu pro každý particl (0,85 -> 0,28–1,72×), 0 = všichni stejně
+  // „show“ nad prahem víření (fluid.stirSpeed): DNA se smí rozvířit víc – vodítko a síla vody × tohle při plném
+  // víření, po tahu se za `afterglow` plynule vrátí (obálka fluid.stirEnv). 1 = jako pod prahem.
+  stirLeash: 2.2,
+  stirForce: 1.6,
 };
 
 // Odtržené particly (config particlePhysics.escape, editor Uvnitř → Odtržené particly)
@@ -691,6 +695,19 @@ export const ESCAPE_DEFAULTS = {
   flashTime: 0.6,    // s – doznění záblesku
   glow: 0.1,         // trvalá záře volných
   pop: 0.4,          // zvětšení při záblesku
+};
+
+// Barevná odezva particlů na pohyb (config particlePhysics.stirLook, editor Globální → 🌀 → Barvy pohybu,
+// shader escapeGlsl STIR_*): kdo se hýbe, přelije se do duhy podle směru pohybu a jemně se rozzáří.
+export const STIR_LOOK_DEFAULTS = {
+  enabled: true,
+  tint: 0.65,       // jak moc převezme duhovou barvu (0 = jen záře)
+  glow: 0.1,        // záře v barvě pohybu (přičte se; malá = nesvítí)
+  speedMin: 0.3,    // world/s – od jaké rychlosti se barví (putovníci ~0.2 zůstanou v klidu)
+  speedMax: 1.6,    // world/s – plná barva
+  hue: 0,           // posun odstínu duhy (0..1)
+  hold: 0.8,        // barva i podle dotyku myši/vody (vel.w, dozní za ~2 s) – stopa za pomalým tahem
+  inside: 0.15,     // síla uvnitř projektu (INSIDE má barvy videa; 0 = jen v ORBITu)
 };
 
 // --- LOGIKA ---
@@ -817,7 +834,10 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
         velUniforms.uDt.value = Math.min(Math.max(delta, 1 / 240), 1 / 30);
         // celková síla: násobí vše, co voda particlům dává (proud i vlny); v klidu DNA (ORBIT) × dnaForce
         const inDna = posUniforms.uTransitionProgress.value < 0.001;
-        velUniforms.uFluidForce.value = mouseMult * Math.max(0, fluidCfg.strength ?? 1) * (inDna ? Math.max(0, phys.dnaForce ?? DNA_HOLD_DEFAULTS.dnaForce) : 1);
+        // nad prahem víření (show) v klidu DNA silnější voda (stirForce × obálka víření)
+        const stirK = inDna ? (fluid.stirEnv ?? 0) : 0;
+        velUniforms.uFluidForce.value = mouseMult * Math.max(0, fluidCfg.strength ?? 1) * (inDna ? Math.max(0, phys.dnaForce ?? DNA_HOLD_DEFAULTS.dnaForce) : 1)
+          * (1 + (Math.max(0, phys.stirForce ?? DNA_HOLD_DEFAULTS.stirForce) - 1) * stirK);
         velUniforms.uCoupling.value = fluidCfg.coupling;
         velUniforms.uFriction.value = fluidCfg.friction;
         velUniforms.uFrontShell.value = fluidCfg.frontShell;
@@ -851,7 +871,13 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       const arc = Math.min(1, Math.max(0, phys.returnArc ?? 0.5));
       velUniforms.uReturnTurn.value = omega * omega * 0.08 * Math.pow(40, 1 - 2 * arc);
     }
-    velUniforms.uDnaLeash.value = Math.max(0, phys.dnaLeash ?? DNA_HOLD_DEFAULTS.dnaLeash);
+    // vodítko DNA – nad prahem víření (show) volnější (stirLeash × obálka víření), po tahu se plynule stáhne
+    {
+      const fl = fluidOn ? getFluid(state.gl) : null;
+      const stirK = fl && posUniforms.uTransitionProgress.value < 0.001 ? (fl.stirEnv ?? 0) : 0;
+      velUniforms.uDnaLeash.value = Math.max(0, phys.dnaLeash ?? DNA_HOLD_DEFAULTS.dnaLeash)
+        * (1 + (Math.max(0, phys.stirLeash ?? DNA_HOLD_DEFAULTS.stirLeash) - 1) * stirK);
+    }
     velUniforms.uDnaLimRand.value = Math.min(1, Math.max(0, phys.dnaLimitRandom ?? DNA_HOLD_DEFAULTS.dnaLimitRandom));
     velUniforms.uDnaSlide.value.set(Math.max(0, phys.dnaSlide ?? DNA_HOLD_DEFAULTS.dnaSlide), Math.min(0.7, Math.max(0.05, phys.dnaEdge ?? DNA_HOLD_DEFAULTS.dnaEdge)), dnaShape.valid ? 1 : 0);
     if (compute.dnaShapeVer !== dnaShape.version) {
@@ -935,6 +961,15 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
       mu.uEscGlow.value = esc.glow;
       mu.uEscPop.value = esc.pop;
       if (mu.uEscLife) mu.uEscLife.value = Math.min(59, esc.life);
+      if (mu.uStirLook) {
+        const sl = { ...STIR_LOOK_DEFAULTS, ...(phys.stirLook || {}), ...(import.meta.env.DEV ? window.__stirLookOverride : null) };
+        const on = sl.enabled !== false;
+        mu.uStirLook.value.set(on ? sl.tint : 0, on ? sl.glow : 0, Math.max(0, sl.speedMin), Math.max(sl.speedMin + 0.01, sl.speedMax));
+        mu.uStirHue.value = sl.hue || 0;
+        if (mu.uStirHold) mu.uStirHold.value = on ? Math.max(0, sl.hold ?? 0.8) : 0;
+        if (mu.uStirInside) mu.uStirInside.value = Math.max(0, sl.inside ?? 0.15);
+        mu.uVelDt.value = velUniforms.uDt.value;
+      }
     }
     
     if (meshRef.current.material) {

@@ -1,7 +1,7 @@
 ﻿import React from 'react';
 import { ParticleSettingsPanel } from './ParticleSettingsPanel';
 import { DNA_CORE_DEFAULTS } from '../../../DnaCore';
-import { DNA_HOLD_DEFAULTS } from '../../particles/utils';
+import { DNA_HOLD_DEFAULTS, STIR_LOOK_DEFAULTS } from '../../particles/utils';
 import { WANDER_DEFAULTS } from '../../particles/wander';
 import { BRAND_LOGO_DEFAULTS } from '../../../BrandLogo';
 import { DNA_GLOW_DEFAULTS } from '../../../DnaGlow';
@@ -78,6 +78,8 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
   const pp = appConfig.particlePhysics || {};
   const updatePP = (field, value) => updateConfig('particlePhysics', { ...pp, [field]: value });
   const wander = { ...WANDER_DEFAULTS, ...(pp.wander || {}) };
+  const stirLook = { ...STIR_LOOK_DEFAULTS, ...(pp.stirLook || {}) };
+  const updateStirLook = (field, value) => updatePP('stirLook', { ...(pp.stirLook || {}), [field]: value });
   const updateWander = (field, value) => updatePP('wander', { ...(pp.wander || {}), [field]: value });
   const fluidCfg = pp.fluid || {};
   const updateFluid = (field, value) => updatePP('fluid', { ...fluidCfg, [field]: value });
@@ -112,6 +114,23 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
       <DashboardCard title="Rozvíření DNA (myš v ORBITu)" icon="🌀" color="#22d3ee">
         <PointerSpeedReadout />
         <DenseSlider desc="Od jaké skutečné rychlosti kurzoru (cm/s na displeji) se DNA začne vířit (particly tvoří vodu). Pomalejší tah particly jen strčí, rychlejší hned víří naplno. 0 = víří každý tah. (Totéž jako Uvnitř → Voda → Práh víření.)" label="Práh víření" unit=" cm/s" min={0} max={100} step={1} color="#22d3ee" value={fluidCfg.stirSpeed ?? FLUID_DEFAULTS.stirSpeed} onChange={v => updateFluid('stirSpeed', v)} />
+        <DenseSlider desc="Nad prahem myš vhání proud PŘÍMO do vody (× tohle) -> víří kdekoliv, kudy jede, i nad prázdnem. 0 = vodu tvoří jen particly, které myš strčí." label="Voda z myši (show)" min={0} max={3} step={0.05} color="#22d3ee" value={fluidCfg.stirMouse ?? FLUID_DEFAULTS.stirMouse} onChange={v => updateFluid('stirMouse', v)} />
+        <DenseSlider desc="Vlny (rozrážení) z tahu nad prahem. 0 = bez vln." label="Vlny z myši (show)" min={0} max={3} step={0.05} color="#22d3ee" value={fluidCfg.stirMouseWave ?? FLUID_DEFAULTS.stirMouseWave} onChange={v => updateFluid('stirMouseWave', v)} />
+        <DenseSlider desc="Víření vody v ORBITu (DNA). Míň = větší, plynulejší víry, víc = drobné roztřepené vírky. Uvnitř projektu platí Uvnitř → Voda → Víření." label="Víření vody (ORBIT)" min={0} max={60} step={0.5} color="#22d3ee" value={fluidCfg.stirCurl ?? FLUID_DEFAULTS.stirCurl} onChange={v => updateFluid('stirCurl', v)} />
+        <DenseSlider desc="Nad prahem smí DNA odletět dál: vodítko × tohle při plném víření, po tahu se za ~2 s plynule stáhne zpět. 1 = jako pod prahem." label="Volnost při show" min={1} max={5} step={0.05} color="#22d3ee" value={pp.stirLeash ?? DNA_HOLD_DEFAULTS.stirLeash} onChange={v => updatePP('stirLeash', v)} />
+        <DenseSlider desc="Nad prahem tlačí voda na DNA silněji (× tohle při plném víření)." label="Síla vody při show" min={1} max={4} step={0.05} color="#22d3ee" value={pp.stirForce ?? DNA_HOLD_DEFAULTS.stirForce} onChange={v => updatePP('stirForce', v)} />
+        <DenseSlider desc="Jak široko kolem kurzoru myš strčí particly (pod i nad prahem). Víc = i pomalý tah viditelně rozhrne vlákno." label="Strčení – šířka" min={0.1} max={2} step={0.05} color="#22d3ee" value={fluidCfg.pushRadius ?? FLUID_DEFAULTS.pushRadius} onChange={v => updateFluid('pushRadius', v)} />
+        <DenseSlider desc="Jak silně myš particly strčí (× Síla tahu). Víc = výraznější reakce na pomalý tah." label="Strčení – síla" min={0} max={5} step={0.05} color="#22d3ee" value={fluidCfg.pushGain ?? FLUID_DEFAULTS.pushGain} onChange={v => updateFluid('pushGain', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#22d3ee', marginBottom: '8px' }}>Barvy pohybu (particly)</div>
+        <DenseToggle desc="Particl, který se hýbe nebo se ho dotkla myš/voda, se přelije do duhy podle směru pohybu a jemně se rozzáří." label="Barvy pohybu" checked={stirLook.enabled !== false} color="#22d3ee" onChange={v => updateStirLook('enabled', v)} />
+        <DenseSlider desc="Jak moc particl převezme duhovou barvu (stínování kuličky zůstane)." label="Přebarvení" min={0} max={1} step={0.01} color="#22d3ee" value={stirLook.tint} onChange={v => updateStirLook('tint', v)} />
+        <DenseSlider desc="Záře v barvě pohybu (přičte se ke kuličce). Malá = nesvítí." label="Záře" min={0} max={1} step={0.01} color="#22d3ee" value={stirLook.glow} onChange={v => updateStirLook('glow', v)} />
+        <DenseSlider desc="Barva i podle dotyku myši/vody – za pomalým tahem zůstane barevná stopa, za ~2 s dozní." label="Stopa dotyku" min={0} max={1} step={0.01} color="#22d3ee" value={stirLook.hold} onChange={v => updateStirLook('hold', v)} />
+        <DenseSlider desc="Od jaké rychlosti particlu (world/s) se barví. Putovníci jezdí ~0.2." label="Barva od rychlosti" min={0} max={2} step={0.01} color="#22d3ee" value={stirLook.speedMin} onChange={v => updateStirLook('speedMin', v)} />
+        <DenseSlider desc="Rychlost particlu (world/s), při které je barva plná." label="Plná barva od" min={0.1} max={5} step={0.05} color="#22d3ee" value={stirLook.speedMax} onChange={v => updateStirLook('speedMax', v)} />
+        <DenseSlider desc="Posun odstínu duhy." label="Odstín" min={0} max={1} step={0.01} color="#22d3ee" value={stirLook.hue} onChange={v => updateStirLook('hue', v)} />
+        <DenseSlider desc="Síla barev pohybu uvnitř projektu (tam mají particly barvy videa). 0 = jen v ORBITu." label="Uvnitř projektu" min={0} max={1} step={0.01} color="#22d3ee" value={stirLook.inside} onChange={v => updateStirLook('inside', v)} />
         <DenseSlider desc="Násobek síly vody (myši) jen v klidu DNA v ORBITu. Projekt uvnitř má plnou sílu. Menší = menší bordel při kroužení." label="Síla myši na DNA" min={0} max={2} step={0.05} color="#22d3ee" value={pp.dnaForce ?? DNA_HOLD_DEFAULTS.dnaForce} onChange={v => updatePP('dnaForce', v)} />
         <DenseSlider desc="Jak hluboko do DNA voda sahá od nejbližšího particlu (world). Malá hodnota = hýbe se jen přední vrstva a zadní vlákno tam, kde se kříží s předním, zůstane v klidu (hluché místo). 4 = celá DNA. Uvnitř projektu platí Hloubka přední vrstvy (Voda)." label="Hloubka víření DNA" min={0.1} max={6} step={0.05} color="#22d3ee" value={pp.dnaFrontShell ?? DNA_HOLD_DEFAULTS.dnaFrontShell} onChange={v => updatePP('dnaFrontShell', v)} />
         <DenseSlider desc="Jak daleko smí particl DNA odletět od svého místa (world, každý náhodně 0.6–1.4×). Dál ho měkká stěna nepustí – šroubovice zůstane čitelná i při silném kroužení. 0 = bez omezení (starý stav: odletěly až o poloměr DNA)." label="Vodítko DNA" min={0} max={1.5} step={0.01} color="#22d3ee" value={pp.dnaLeash ?? DNA_HOLD_DEFAULTS.dnaLeash} onChange={v => updatePP('dnaLeash', v)} />
@@ -175,6 +194,11 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
         <DenseSlider desc="Jas viditelné vody. 0 = voda není vidět." label="Jas vody" min={0} max={4} step={0.05} color="#a78bfa" value={glow.ink} onChange={v => updateGlow('ink', v)} />
         <DenseSlider desc="Minimální jas vody v barvě particlů: i tmavé particly (daleko od světla TV a paprsků) pouštějí viditelnou vodu. 0 = vodu pouští jen jasné particly (pak je vidět hlavně u televize)." label="Viditelnost u tmavých particlů" min={0} max={0.4} step={0.005} color="#a78bfa" value={glow.inkFloor} onChange={v => updateGlow('inkFloor', v)} />
         <DenseSlider desc="Měkký strop jasu vody: tmavá voda zůstane vidět, jasná se k tomuhle stropu jen blíží a nepřepálí se. Víc vody = větší plocha, ne víc světla. Víc = svítivější." label="Strop jasu vody" min={0.02} max={2} step={0.01} color="#a78bfa" value={glow.inkMax} onChange={v => updateGlow('inkMax', v)} />
+        <DenseSlider desc="Barva vody: 0 = barva particlů, ze kterých vznikla, 1 = duha podle směru proudu (barevné víry)." label="Duha ve vodě" min={0} max={1} step={0.01} color="#a78bfa" value={glow.inkHue} onChange={v => updateGlow('inkHue', v)} />
+        <DenseSlider desc="Posun odstínu duhy ve vodě." label="Odstín vody" min={0} max={1} step={0.01} color="#a78bfa" value={glow.inkHueShift} onChange={v => updateGlow('inkHueShift', v)} />
+        <DenseSlider desc="Voda jako barevná vrstva: obarví particly a scénu pod sebou barvou vody (nesvítí). 0 = voda je jen přičtené světlo (Jas vody)." label="Obarvení vodou" min={0} max={1} step={0.01} color="#a78bfa" value={glow.inkWash} onChange={v => updateGlow('inkWash', v)} />
+        <DenseSlider desc="Jak hustá voda obarví naplno. Míň = i slabá voda obarví naplno." label="Obarvení naplno od" min={0.02} max={2} step={0.01} color="#a78bfa" value={glow.inkWashFull} onChange={v => updateGlow('inkWashFull', v)} />
+        <DenseSlider desc="Slabé „mléko“ v barvě vody přes tmavé pozadí (přičte se), ať je voda vidět i mimo particly." label="Mléko vody" min={0} max={0.5} step={0.005} color="#a78bfa" value={glow.inkMilk} onChange={v => updateGlow('inkMilk', v)} />
         <DenseSlider desc="Jak rychle viditelná voda mizí (1/s). Míň = delší svítící stopy za particly." label="Mizení" min={0.1} max={6} step={0.05} color="#a78bfa" value={glow.fade} onChange={v => updateGlow('fade', v)} />
         <DenseSlider desc="Jak moc se viditelná voda rozpíjí do okolí (texely za snímek). 0 = drží velikost štětce." label="Rozpíjení" min={0} max={1} step={0.01} color="#a78bfa" value={glow.spread} onChange={v => updateGlow('spread', v)} />
         <DenseSlider desc="Jak silně viditelnou vodu nese proud (1 = přesně s vodou)." label="Unášení proudem" min={0} max={2} step={0.05} color="#a78bfa" value={glow.flow} onChange={v => updateGlow('flow', v)} />

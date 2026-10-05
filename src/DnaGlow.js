@@ -37,7 +37,7 @@ const INK = `${TEX_LOD0}
 uniform sampler2D uInk, uSharp, uFluid;
 uniform vec2 uTexel, uFluidTexel, uTvPos;
 uniform vec4 uTvInv;
-uniform float uDt, uFluidOn, uFlow, uFade, uEmit, uThr, uRise, uSpread, uWMin, uWMax, uAspect, uTvVis, uFloor, uPres;
+uniform float uDt, uFluidOn, uFlow, uFade, uEmit, uThr, uRise, uSpread, uWMin, uWMax, uAspect, uTvVis, uFloor, uPres, uHueMix, uHueShift;
 varying vec2 vUv;
 vec3 sharp() {
   vec2 o = uTexel * 0.25;
@@ -63,7 +63,11 @@ void main() {
     vec3 s = sharp();
     float sm = max(s.r, max(s.g, s.b));
     float pres = smoothstep(uPres, uPres * 3.0, sm);
-    vec3 src = max(s - uThr, 0.0) + s / max(sm, 1e-4) * uFloor * pres;
+    // barva: odstín particlů smíchaný s duhou podle směru proudu (uHueMix) -> víry mají barevné pruhy
+    float hh = fract(atan(f.y, f.x) / 6.2831853 + 0.5 + uHueShift);
+    vec3 flowHue = clamp(abs(fract(hh + vec3(0.0, 2.0, 1.0) / 3.0) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+    vec3 col = mix(s / max(sm, 1e-4), flowHue, uHueMix);
+    vec3 src = col * (max(sm - uThr, 0.0) + uFloor * pres);
     ink += src * w * uEmit * uDt * (1.0 - tv);
   }
   // (strop jasu se dělá až při skládání – VolumetricLight, uDnaInkMax)
@@ -76,11 +80,16 @@ export const DNA_GLOW_DEFAULTS = {
   aura: 4,           // síla široké záře kolem DNA (× nasvícení září nahoře, topLow/topReach)
   auraRadius: 2.6,   // šíře záře (krok gauss v texelech 1/16) – rozlitá, ne přilepená k DNA
   tint: 0.35,        // aura: 0 = barvy particlů, 1 = barva tvLight.color
-  inkTint: 0.35,     // inkoust (2D voda): 0 = barvy particlů, 1 = barva tvLight.color
+  inkTint: 0.15,     // inkoust (2D voda): 0 = barvy particlů/duhy, 1 = barva tvLight.color (dřív 0.35 – voda byla tyrkysová, ne barevná)
   ink: 0.7,          // síla inkoustu = viditelná 2D voda (0 = vypnuto, průchod se přeskočí)
   inkFloor: 0.08,    // minimální jas vody v barvě particlu – voda je vidět i u tmavých particlů (0 = jen jasné particly jako dřív)
-  inkPresence: 0.01, // jas (nejsilnější kanál), od kterého je v pixelu particl a ne pozadí (#0a0a0f ≈ 0.003)
-  inkMax: 0.25,      // měkký strop jasu viditelné vody (luminance, VolumetricLight): k / (1 + jas/inkMax) – víc vody = větší plocha, ne víc světla
+  inkPresence: 0.01,
+  inkHue: 0.9,       // barva vody: 0 = barva particlů, 1 = duha podle směru proudu (barevné víry)
+  inkHueShift: 0,    // posun odstínu duhy (0..1) // jas (nejsilnější kanál), od kterého je v pixelu particl a ne pozadí (#0a0a0f ≈ 0.003)
+  inkMax: 0.25,
+  inkWash: 0.8,      // voda jako barevná vrstva: obarví scénu pod sebou (0 = jen přičtené světlo výše)
+  inkWashFull: 0.5,  // jas inkoustu, při kterém je obarvení plné (míň = i slabá voda obarví naplno)
+  inkMilk: 0.05,     // slabé „mléko“ v barvě vody přes tmavé pozadí (přičte se)      // měkký strop jasu viditelné vody (luminance, VolumetricLight): k / (1 + jas/inkMax) – víc vody = větší plocha, ne víc světla
   emit: 10,          // kolik inkoustu particly pustí za s ve vodě
   fade: 2.2,         // útlum inkoustu (1/s) – krátký: ukazuje vodu teď, ne dlouhé stopy
   flow: 1,           // jak silně inkoust nese proud
@@ -116,7 +125,7 @@ export class DnaGlow {
       ink: mk(INK, {
         uInk: { value: null }, uFluid: { value: null }, uTexel: { value: new THREE.Vector2() }, uFluidTexel: { value: new THREE.Vector2() },
         uDt: { value: 0 }, uFluidOn: { value: 0 }, uFlow: { value: 1 }, uFade: { value: 0.9 }, uEmit: { value: 6 }, uThr: { value: 0.05 },
-        uRise: { value: 0.012 }, uSpread: { value: 0.6 }, uWMin: { value: 8 }, uWMax: { value: 40 }, uFloor: { value: 0.08 }, uPres: { value: 0.01 },
+        uRise: { value: 0.012 }, uSpread: { value: 0.6 }, uWMin: { value: 8 }, uWMax: { value: 40 }, uFloor: { value: 0.08 }, uPres: { value: 0.01 }, uHueMix: { value: 0.6 }, uHueShift: { value: 0 },
         uSharp: { value: null }, uTvPos: { value: new THREE.Vector2() }, uTvInv: { value: new THREE.Vector4() }, uAspect: { value: 1 }, uTvVis: { value: 0 },
       }),
     };
@@ -177,6 +186,7 @@ export class DnaGlow {
       iu.uDt.value = dt; iu.uFlow.value = c.flow; iu.uFade.value = c.fade; iu.uEmit.value = c.emit; iu.uThr.value = c.threshold;
       iu.uRise.value = c.rise; iu.uSpread.value = c.spread; iu.uWMin.value = c.waterMin; iu.uWMax.value = c.waterMax;
       iu.uFloor.value = Math.max(0, c.inkFloor ?? 0.08); iu.uPres.value = Math.max(1e-4, c.inkPresence ?? 0.01);
+      iu.uHueMix.value = Math.min(1, Math.max(0, c.inkHue ?? 0.6)); iu.uHueShift.value = c.inkHueShift ?? 0;
       this.pass(gl, this.m.ink, this.ink[1]); this.ink.reverse();
       ink = this.ink[0].texture;
     } else if (this.inkIdle !== Infinity) {

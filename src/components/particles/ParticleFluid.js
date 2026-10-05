@@ -35,7 +35,19 @@ export const FLUID_DEFAULTS = {
   // cukání na hraně). Dřív zvlášť `stirFull` (plynulý náběh až do něj) – s 200 cm/s dával normální tah 5–15 % víření
   // a práh „nic nedělal“ (Oliver 2026-10-05) -> zrušeno, uložené stirFull se ignoruje.
   // (do 2026-10-05 výšky obrazovky/s, výchozí 0 = vířil každý tah – Oliver: „hned to začne dělat“)
-  stirSpeed: 12,
+  stirSpeed: 80,           // 2026-10-05 Oliver: „80 cm/s považuji za hranici, kde se má přidat víření“
+  // nad prahem myš navíc vhání proud PŘÍMO do vody (× síla víření) -> víří kdekoliv na obrazovce, i nad prázdnem.
+  // Dřív vodu tvořily jen strčené particly – nad prázdným místem / řídkými particly nevzniklo nic a práh „nic nedělal“.
+  // 0 = jen voda z particlů. stirMouseWave = vlny (rozrážení) z tahu nad prahem.
+  stirMouse: 1,
+  stirMouseWave: 1,
+  // [particles] strčení myší (pod i nad prahem): vlastní poloměr (jako pavelRadius) a násobek síly × splatForce.
+  // Širší a silnější než štětec vody -> i pomalý tah viditelně rozhrne vlákno (dřív se hnuly jen particly přímo pod kurzorem).
+  // [particles] víření vody v ORBITu (místo `curl`, který platí i uvnitř projektu): menší = větší, plynulejší víry
+  // (28.5 dělalo drobné roztřepené vírky, voda vypadala jako šum)
+  stirCurl: 12,
+  pushRadius: 0.6,
+  pushGain: 1.5,
   // [particles] zóna kolem dráhy myši: vodu z particlů smí tvořit jen tam, kudy kurzor nedávno projel (× síla víření
   // podle rychlosti). Mimo zónu je voda jen nese, další vodu z nich nedělá -> víření se nerozleze po celé DNA ani
   // při rychlém tahu a drží se myši. Poloměr ve výškách obrazovky, mizení = časová konstanta v s.
@@ -519,7 +531,9 @@ class Fluid {
     this.waveCEff = this.waveC;
 
     // výška vlny: rychlost vln roste s myší -> vlna je už sama vyrovnaná, jen mírný růst (1 výška obrazovky/s = waveHeight)
-    const wavePush = fromParticles ? 0 : cfg.waveHeight * Math.min(3, Math.pow(sp, Math.max(0, cfg.waveGrowth)));
+    // [particles] vlny z myši jen nad prahem víření (× síla víření)
+    const wavePush = cfg.waveHeight * Math.min(3, Math.pow(sp, Math.max(0, cfg.waveGrowth)))
+      * (fromParticles ? this.stirLevel * Math.max(0, cfg.stirMouseWave ?? 1) : 1);
     const wu = m.wave.uniforms;
     // zdroj = posun stopy od posledního kroku vln (při pomalých vlnách nemusí být krok v každém snímku)
     if (!this.waveSrc) this.waveSrc = new THREE.Vector2(pu, pv);
@@ -601,19 +615,30 @@ class Fluid {
       if (aspect < 1) dx *= aspect; else dy /= aspect;
       sa.uPoint.value.set(pu, pv);
       sa.uAspect.value = aspect;
-      sa.uRadius.value = Math.max(0.01, cfg.pavelRadius) / 100 * Math.max(1, aspect);
-      // [particles] tah jde jen do pole strčení (particly), ne do vody
+      const waterRadius = Math.max(0.01, cfg.pavelRadius) / 100 * Math.max(1, aspect);
+      // [particles] tah jde do pole strčení (cítí ho jen particly) – pod prahem víření jen to
       const tgt = fromParticles ? this.pushRT : this.vel;
+      const pushK = fromParticles ? Math.max(0, cfg.pushGain ?? 1) : 1;
+      sa.uRadius.value = fromParticles ? Math.max(0.01, cfg.pushRadius ?? cfg.pavelRadius) / 100 * Math.max(1, aspect) : waterRadius;
       sa.uTarget.value = tgt[0].texture;
-      sa.uColor.value.set(dx * cfg.splatForce, dy * cfg.splatForce, 0);
+      sa.uColor.value.set(dx * cfg.splatForce * pushK, dy * cfg.splatForce * pushK, 0);
       sa.uMask.value = 1;
       this.pass(m.splatAdd, tgt[1]); tgt.reverse();
-      if (dyeOn && !fromParticles) {
+      sa.uRadius.value = waterRadius;
+      // [particles] nad prahem navíc přímo do vody (× síla víření) -> víření kdekoliv, kudy myš jede
+      const mouseWater = fromParticles ? this.stirLevel * Math.max(0, cfg.stirMouse ?? 1) : 0;
+      if (mouseWater > 0.001) {
+        sa.uTarget.value = this.vel[0].texture;
+        sa.uColor.value.set(dx * cfg.splatForce * mouseWater, dy * cfg.splatForce * mouseWater, 0);
+        this.pass(m.splatAdd, this.vel[1]); this.swapVel();
+      }
+      if (dyeOn && (!fromParticles || mouseWater > 0.001)) {
         // barva tahu jako Pavel: náhodný odstín ×0.15, mění se ~10× za s
         this.colorT = (this.colorT ?? 1) + dt * 10;
         if (this.colorT >= 1 || !this.dyeColor) { this.colorT %= 1; this.dyeColor = new THREE.Color().setHSL(Math.random(), 1, 0.5).multiplyScalar(0.15); }
         sa.uTarget.value = this.dye[0].texture;
-        sa.uColor.value.set(this.dyeColor.r, this.dyeColor.g, this.dyeColor.b);
+        const dk = fromParticles ? mouseWater : 1;
+        sa.uColor.value.set(this.dyeColor.r * dk, this.dyeColor.g * dk, this.dyeColor.b * dk);
         sa.uMask.value = 0;
         this.pass(m.splatAdd, this.dye[1]); this.dye.reverse();
       }
@@ -639,7 +664,7 @@ class Fluid {
     const v = m.vorticity.uniforms;
     // [particles] po doznění utichne i víření (vorticity confinement by jinak zbytek proudu držel roztočený)
     const calmK = fromParticles ? Math.min(1, Math.max(0, (sinceStir - (cfg.afterglow ?? 2)) / 0.5)) : 0;
-    v.uVel.value = this.vel[0].texture; v.uCurl.value = this.curlRT.texture; v.uCurlStrength.value = cfg.curl * (1 - calmK); v.uDt.value = dt;
+    v.uVel.value = this.vel[0].texture; v.uCurl.value = this.curlRT.texture; v.uCurlStrength.value = (fromParticles ? (cfg.stirCurl ?? cfg.curl) : cfg.curl) * (1 - calmK); v.uDt.value = dt;
     this.pass(m.vorticity, this.vel[1]); this.swapVel();
 
     m.divergence.uniforms.uVel.value = this.vel[0].texture;

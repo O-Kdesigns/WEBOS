@@ -104,7 +104,8 @@
       "wake": 1,
       "splatRadius": 0.01,
       "strength": 1,
-      "splatForce": 1500
+      "splatForce": 1500,
+      "stirSpeed": 80
     },
     "returnDamping": 0.4
   },
