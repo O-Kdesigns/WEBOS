@@ -146,6 +146,8 @@ const VolumetricLightShader = {
     uTvAxA: { value: new THREE.Vector2(0.1, 0.0) },   // půl šířky TV na obrazovce (aspect prostor)
     uTvAxB: { value: new THREE.Vector2(0.0, 0.1) },   // půl výšky TV na obrazovce
     uTvInv: { value: new THREE.Vector4(10, 0, 0, 10) }, // inverze [A B] -> lokální souřadnice obdélníku TV
+    uTvHInv: { value: new THREE.Matrix3() },            // obrazovka (aspect prostor) -> obdélník TV 0..1, perspektivně přesně (homografie)
+    uTvHOn: { value: 0 },
     uTvHalo: { value: 0.35 },
     uTvRayMask: { value: 0.85 },                        // o kolik paprsky (P1 + prach P13) slábnou přes sklo aktivní TV
     uFluidTexel: { value: new THREE.Vector2(1 / 228, 1 / 128) },
@@ -1795,9 +1797,11 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         const r = dnaGlow.step(gl, {
           src: U.tBlur.value, sharp: sceneTarget.texture, w: blurTargets.bw,
           tv: { pos: U.uTvPos.value, inv: U.uTvInv.value, aspect: size.width / Math.max(1, size.height), vis: U.uTvVis.value }, h: blurTargets.bh, fluid: fl.velocity, fluidTexel: U.uFluidTexel.value,
+          motion: fl.motionFresh && fl.frameId !== dnaGlow.motionId ? fl.motion : null,
           dt: Math.min(Math.max(delta, 1 / 240), 1 / 30), cfg: dg,
         });
         prof.end();
+        dnaGlow.motionId = fl.frameId;
         U.tDnaAura.value = r.aura;
         U.tDnaInk.value = r.ink || dummyTexture;
         U.uDnaInkOn.value = r.ink ? 1 : 0;

@@ -851,6 +851,10 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
           Math.max(16, Math.round(fh * state.size.width / state.size.height)), fh, fluidCfg.frontPointSize);
         prof.end();
         velUniforms.tFront.value = compute.front.texture;
+        // voda se hýbe s prostorem (ParticleFluid.computeMotion): hloubka vody = nejbližší particly,
+        // jinde přední vlákno DNA (kamera od osy − poloměr DNA)
+        fluid.offerFront(compute, compute.front.texture, compute.size);
+        fluid.refDepth = Math.max(0.5, Math.hypot(worldCameraPos.current.x, worldCameraPos.current.z) - (dnaShape.R || 1.6));
       }
     }
     velUniforms.uFluidOn.value = fluidOn ? 1 : 0;

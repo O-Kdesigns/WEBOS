@@ -37,7 +37,8 @@ const INK = `${TEX_LOD0}
 uniform sampler2D uInk, uSharp, uFluid;
 uniform vec2 uTexel, uFluidTexel, uTvPos;
 uniform vec4 uTvInv;
-uniform float uDt, uFluidOn, uFlow, uFade, uEmit, uThr, uRise, uSpread, uWMin, uWMax, uAspect, uTvVis, uFloor, uPres, uHueMix, uHueShift;
+uniform float uDt, uFluidOn, uFlow, uFade, uEmit, uThr, uRise, uSpread, uWMin, uWMax, uAspect, uTvVis, uFloor, uPres, uHueMix, uHueShift, uMotionOn;
+uniform sampler2D uMotion;
 varying vec2 vUv;
 vec3 sharp() {
   vec2 o = uTexel * 0.25;
@@ -48,6 +49,8 @@ void main() {
   vec2 f = uFluidOn > 0.5 ? texture2D(uFluid, vUv).xy : vec2(0.0);
   vec2 v = f * uFluidTexel * uFlow + vec2(0.0, uRise);
   vec2 c = vUv - v * uDt;
+  // voda se hýbe s prostorem (scroll/rotace kamery, ParticleFluid.computeMotion)
+  if (uMotionOn > 0.5) c += texture2D(uMotion, vUv).xy;
   vec2 d = uTexel * uSpread;
   vec3 ink = (texture2D(uInk, c + vec2(d.x, 0.0)).rgb + texture2D(uInk, c - vec2(d.x, 0.0)).rgb
             + texture2D(uInk, c + vec2(0.0, d.y)).rgb + texture2D(uInk, c - vec2(0.0, d.y)).rgb) * 0.25;
@@ -126,7 +129,7 @@ export class DnaGlow {
       ink: mk(INK, {
         uInk: { value: null }, uFluid: { value: null }, uTexel: { value: new THREE.Vector2() }, uFluidTexel: { value: new THREE.Vector2() },
         uDt: { value: 0 }, uFluidOn: { value: 0 }, uFlow: { value: 1 }, uFade: { value: 0.9 }, uEmit: { value: 6 }, uThr: { value: 0.05 },
-        uRise: { value: 0.012 }, uSpread: { value: 0.6 }, uWMin: { value: 8 }, uWMax: { value: 40 }, uFloor: { value: 0.08 }, uPres: { value: 0.01 }, uHueMix: { value: 0.6 }, uHueShift: { value: 0 },
+        uRise: { value: 0.012 }, uSpread: { value: 0.6 }, uWMin: { value: 8 }, uWMax: { value: 40 }, uFloor: { value: 0.08 }, uPres: { value: 0.01 }, uHueMix: { value: 0.6 }, uHueShift: { value: 0 }, uMotion: { value: null }, uMotionOn: { value: 0 },
         uSharp: { value: null }, uTvPos: { value: new THREE.Vector2() }, uTvInv: { value: new THREE.Vector4() }, uAspect: { value: 1 }, uTvVis: { value: 0 },
       }),
     };
@@ -155,7 +158,7 @@ export class DnaGlow {
   }
 
   // src = tBlur (1/4 scény, w × h); vrátí { aura, ink } textury (ink null, když nic nesvítí)
-  step(gl, { src, sharp, tv, w, h, fluid, fluidTexel, dt, cfg }) {
+  step(gl, { src, sharp, tv, w, h, fluid, fluidTexel, motion, dt, cfg }) {
     this.resize(gl, w, h);
     const c = { ...DNA_GLOW_DEFAULTS, ...cfg };
     const prev = gl.getRenderTarget(), ac = gl.autoClear;
@@ -188,6 +191,7 @@ export class DnaGlow {
       iu.uRise.value = c.rise; iu.uSpread.value = c.spread; iu.uWMin.value = c.waterMin; iu.uWMax.value = c.waterMax;
       iu.uFloor.value = Math.max(0, c.inkFloor ?? 0.08); iu.uPres.value = Math.max(1e-4, c.inkPresence ?? 0.01);
       iu.uHueMix.value = Math.min(1, Math.max(0, c.inkHue ?? 0.6)); iu.uHueShift.value = c.inkHueShift ?? 0;
+      iu.uMotion.value = motion || null; iu.uMotionOn.value = motion ? 1 : 0;
       this.pass(gl, this.m.ink, this.ink[1]); this.ink.reverse();
       ink = this.ink[0].texture;
     } else if (this.inkIdle !== Infinity) {

@@ -92,6 +92,7 @@ export const FLUID_DEFAULTS = {
   waveDrift: 0.015,       // rozrážení: jak daleko vlna particly odsune od tahu ven (pak je vrátí pružina)
   waveForce: 6,           // jak silně vlna tlačí particly (od tahu ven)
   idleSleep: 5,           // s bez pohybu myši -> simulace se uspí (nejdřív až proud dozní)
+  followSpace: true,      // voda se hýbe s prostorem při scrollu/rotaci kamery (false = přilepená na obrazovce)
 };
 
 // --- Skutečná rychlost kurzoru ---
@@ -210,6 +211,39 @@ void main(){
   float cov = min(1.0, j.z * uCover) * texture2D(uZone, vUv).w;
   gl_FragColor = vec4(texture2D(uSrc, vUv).rgb + uColor * cov * uAmount, 1.0);
 }`;
+
+// Pohyb prostoru na obrazovce (scroll = kamera jede po výšce, rotace = obíhá osu DNA): kam se místo obrazovky
+// posunulo od minulého snímku. Voda „leží“ na nejbližších particlech (mapa hloubky klidových cílů, průměr 3×3),
+// kde žádné nejsou, v hloubce předního vlákna uD0. Výstup xy = uv minule − uv teď.
+const MOTION = HEAD + `
+uniform sampler2D uFront; uniform float uHasFront; uniform vec2 uFrontTexel;
+uniform float uD0; uniform vec2 uProjXY; uniform mat4 uCamWorld; uniform mat4 uPrevVP;
+float depthAt(vec2 uv) {
+  if (uHasFront < 0.5) return uD0;
+  float s = 0.0, n = 0.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    float f = texture2D(uFront, uv + vec2(float(i), float(j)) * uFrontTexel * 2.0).x;
+    if (f > 0.0) { s += 1.0 / f; n += 1.0; }
+  }
+  return n > 0.0 ? mix(uD0, s / n, n / 9.0) : uD0; // k okraji particlů plynule do uD0 (bez trhání)
+}
+void main(){
+  float d = depthAt(vUv);
+  vec2 ndc = vUv * 2.0 - 1.0;
+  vec4 world = uCamWorld * vec4(ndc.x * d / uProjXY.x, ndc.y * d / uProjXY.y, -d, 1.0);
+  vec4 clip = uPrevVP * world;
+  vec2 prevUv = clip.xy / max(clip.w, 1e-4) * 0.5 + 0.5;
+  gl_FragColor = vec4(prevUv - vUv, 0.0, 1.0);
+}`;
+
+// Přenesení pole podle pohybu prostoru (pole minule v místě, kde to místo bylo); mimo obrazovku = nic
+export const REPROJECT_GLSL = `
+vec2 reprojectUv(sampler2D motion, vec2 uv) { return uv + texture2D(motion, uv).xy; }
+float onScreen(vec2 p) { return step(0.0, p.x) * step(p.x, 1.0) * step(0.0, p.y) * step(p.y, 1.0); }
+`;
+const REPROJECT = HEAD + REPROJECT_GLSL + `
+uniform sampler2D uSrc; uniform sampler2D uMotion;
+void main(){ vec2 p = reprojectUv(uMotion, vUv); gl_FragColor = texture2D(uSrc, p) * onScreen(p); }`;
 
 // Advekce barviva (jiné rozlišení než proud) – jako Pavel: výsledek / (1 + útlum·dt)
 const ADVECT_DYE = HEAD + `
@@ -384,6 +418,9 @@ class Fluid {
       inject: mk(INJECT, { uVel: { value: null }, uInj: { value: null }, uZone: { value: null }, uStrength: { value: 0.9 }, uCover: { value: 0.5 }, uGain: { value: 1 }, uMax: { value: 150 } }),
       pushFade: mk(PUSH_FADE, { uSrc: { value: null }, uFade: { value: 1 }, uZoneFade: { value: 1 } }),
       zone: mk(ZONE, { uSrc: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uRadius: { value: 0.1 }, uAspect: { value: 1 }, uLevel: { value: 0 } }),
+      motion: mk(MOTION, { uFront: { value: null }, uHasFront: { value: 0 }, uFrontTexel: { value: new THREE.Vector2() }, uD0: { value: 4.5 },
+        uProjXY: { value: new THREE.Vector2(1, 1) }, uCamWorld: { value: new THREE.Matrix4() }, uPrevVP: { value: new THREE.Matrix4() } }),
+      reproject: mk(REPROJECT, { uSrc: { value: null }, uMotion: { value: null } }),
       dyeInject: mk(DYE_INJECT, { uSrc: { value: null }, uInj: { value: null }, uZone: { value: null }, uColor: { value: new THREE.Vector3() }, uCover: { value: 0.5 }, uAmount: { value: 0 } }),
     };
     this.w = 0; this.h = 0;
@@ -396,6 +433,10 @@ class Fluid {
     this.wave = null;
     this.push = null;          // [particles] strčení myší (jen pro particly)
     this.injectTarget = null;  // [particles] sem particle systémy kreslí svou rychlost (aditivně), spotřebuje další update
+    // pohyb prostoru (scroll/rotace kamery): motion = textura posunu, motionFresh = platí pro tento snímek
+    this.motion = null; this.motionFresh = false;
+    this.prevVP = new THREE.Matrix4(); this.curVP = new THREE.Matrix4(); this.hasPrevVP = false;
+    this.front = null; this.frontOwner = null; this.refDepth = 4.5;
     const reset = () => this.prev.set(NaN, NaN);
     window.addEventListener('blur', reset);
     window.addEventListener('focus', reset);
@@ -425,6 +466,7 @@ class Fluid {
     this.waveRT = [makeTarget(w, h), makeTarget(w, h)];
     this.pushRT = [makeTarget(w, h), makeTarget(w, h)];
     this.injRT = makeTarget(w, h);
+    this.motionRT = makeTarget(w, h);
     Object.values(this.m).forEach((m) => m.uniforms.uTexel.value.copy(this.texel));
     this.clear();
   }
@@ -446,6 +488,46 @@ class Fluid {
 
   swapVel() { this.vel.reverse(); }
 
+  // mapa nejbližších particlů pro hloubku vody (nabízí ji každý particle systém, bere se ta největší)
+  offerFront(owner, texture, size) {
+    if (!this.frontOwner || this.frontOwner === owner || this.frontOwner.disposed || size > (this.frontSize ?? 0)) {
+      this.frontOwner = owner; this.frontSize = size; this.front = texture;
+    }
+  }
+
+  // pohyb prostoru za snímek -> motionRT (jen když se kamera pohnula); vrací true, když je co přenášet
+  computeMotion(camera) {
+    this.motionFresh = false;
+    camera.updateMatrixWorld();
+    this.curVP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    const e = this.curVP.elements, p = this.prevVP.elements;
+    let moved = false;
+    for (let i = 0; i < 16; i++) if (Math.abs(e[i] - p[i]) > 1e-6) { moved = true; break; }
+    const had = this.hasPrevVP;
+    this.hasPrevVP = true;
+    if (!moved || !had) { this.prevVP.copy(this.curVP); this.motionFresh = false; return false; }
+    const u = this.m.motion.uniforms;
+    const fr = this.front && !this.frontOwner?.disposed ? this.front : null;
+    u.uFront.value = fr; u.uHasFront.value = fr ? 1 : 0;
+    if (fr?.image) u.uFrontTexel.value.set(1 / fr.image.width, 1 / fr.image.height);
+    u.uD0.value = this.refDepth;
+    u.uProjXY.value.set(camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5]);
+    u.uCamWorld.value.copy(camera.matrixWorld);
+    u.uPrevVP.value.copy(this.prevVP);
+    this.prevVP.copy(this.curVP);
+    this.pass(this.m.motion, this.motionRT);
+    this.motion = this.motionRT.texture;
+    this.motionFresh = true;
+    return true;
+  }
+
+  // přenese pole (ping-pong dvojici [teď, volné]) podle pohybu prostoru
+  reproject(pair) {
+    const u = this.m.reproject.uniforms;
+    u.uSrc.value = pair[0].texture; u.uMotion.value = this.motion;
+    this.pass(this.m.reproject, pair[1]); pair.reverse();
+  }
+
   // Jednou za snímek (volá ho první particle systém, další snímek už mají hotový).
   update(state, delta, cfg) {
     if (this.frameDone) return;
@@ -458,6 +540,20 @@ class Fluid {
 
     const now = performance.now() / 1000;
     const dt = Math.min(Math.max(delta, 1 / 240), 1 / 30);
+    // čítač snímků vody: pohyb prostoru (motionFresh) platí jen pro snímek frameId – spotřebitel (inkoust DnaGlow)
+    // si pamatuje poslední použité frameId, ať pohyb nepřenese 2× (clock.elapsedTime se mění i uprostřed snímku)
+    this.frameId = (this.frameId ?? 0) + 1;
+    // voda se hýbe s prostorem: scroll/rotace kamery -> pole vody se přenesou tam, kam se to místo posunulo
+    // (jinak voda zůstala přilepená na obrazovce jako plochá vrstva – Oliver 2026-10-05)
+    {
+      const gl = this.gl, pt = gl.getRenderTarget(), ac = gl.autoClear;
+      gl.autoClear = false;
+      if (cfg.followSpace !== false && this.computeMotion(state.camera) && this.active) {
+        this.reproject(this.vel); this.reproject(this.waveRT); this.reproject(this.pushRT);
+        if (this.dye && this.dyeLive) this.reproject(this.dye);
+      }
+      gl.autoClear = ac; gl.setRenderTarget(pt);
+    }
     // pozice kurzoru přímo z pointer událostí okna (clientX/Y vůči canvasu), ne z R3F state.pointer:
     // R3F ji počítá z offsetX vůči prvku pod kurzorem – když si myš zachytí jiný prvek (DIV), stála
     // state.pointer na místě, voda neviděla pohyb a víření nikdy nenaskočilo (Oliver 2026-10-05: „funguje jen
@@ -731,7 +827,7 @@ class Fluid {
   }
 
   dispose() {
-    [...(this.vel || []), ...(this.p || []), ...(this.waveRT || []), ...(this.dye || []), ...(this.pushRT || []), this.injRT, this.div, this.curlRT].forEach((t) => t?.dispose());
+    [...(this.vel || []), ...(this.p || []), ...(this.waveRT || []), ...(this.dye || []), ...(this.pushRT || []), this.injRT, this.motionRT, this.div, this.curlRT].forEach((t) => t?.dispose());
     this.dye = null;
   }
 }
