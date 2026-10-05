@@ -69,7 +69,7 @@ export const DNA_GLOW_DEFAULTS = {
   auraRadius: 2.6,   // šíře záře (krok gauss v texelech 1/16) – rozlitá, ne přilepená k DNA
   tint: 0.35,        // aura: 0 = barvy particlů, 1 = barva tvLight.color
   inkTint: 0.35,     // inkoust (2D voda): 0 = barvy particlů, 1 = barva tvLight.color
-  ink: 0.7,          // síla inkoustu světla
+  ink: 0,            // síla inkoustu světla (0 = vypnuto, průchod se přeskočí; 2026-10-05 Oliver: záře z vody nechce, dřív 0.7)
   emit: 10,          // kolik inkoustu particly pustí za s ve vodě
   fade: 2.2,         // útlum inkoustu (1/s) – krátký: ukazuje vodu teď, ne dlouhé stopy
   flow: 1,           // jak silně inkoust nese proud
@@ -154,7 +154,8 @@ export class DnaGlow {
     }
 
     // inkoust: jen když voda běží, nebo ještě dohasíná (po ~6/fade s je pryč -> přeskočit)
-    this.inkIdle = fluid ? 0 : this.inkIdle + dt;
+    // jas 0 = inkoust vypnutý (bez průchodu)
+    this.inkIdle = fluid && (c.ink ?? 0) > 0 ? 0 : this.inkIdle + dt;
     let ink = null;
     if (this.inkIdle < 6 / Math.max(0.05, c.fade)) {
       const iu = this.m.ink.uniforms;

@@ -7,7 +7,7 @@ import { printFx } from './SolidPrint';
 import { tvRegistry, tvGlassFx } from './TvGlass';
 import { getFluid } from './components/particles/ParticleFluid';
 import { OrbitFog } from './OrbitFog';
-import { DnaGlow } from './DnaGlow';
+import { DnaGlow, DNA_GLOW_DEFAULTS } from './DnaGlow';
 import { PrintSteam } from './PrintSteam';
 import { prof } from './debug/GpuProfiler';
 import { TEX_LOD0 } from './glslTexLod0';
@@ -1779,7 +1779,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         U.tDnaInk.value = r.ink || dummyTexture;
         U.uDnaInkOn.value = r.ink ? 1 : 0;
         U.uDnaAura.value = dg.aura ?? 4;
-        U.uDnaInk.value = dg.ink ?? 0.7;
+        U.uDnaInk.value = dg.ink ?? DNA_GLOW_DEFAULTS.ink;
         U.uDnaTint.value = dg.tint ?? 0.35;
         U.uDnaInkTint.value = dg.inkTint ?? dg.tint ?? 0.35;
         U.uDnaObj.value = dg.objects ?? 0.5;
