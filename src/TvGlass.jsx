@@ -18,9 +18,9 @@ import { TEX_LOD0 } from './glslTexLod0';
 // rozpouští po pixelech podle vzdálenosti (uNear) -> kamera projede sklem bez bliknutí.
 // Když hraje video: video se kreslí AŽ po tónování skla (sklo ho nebarví) a sklo přebírá barvu videa –
 // rozmazané video (malý RT 16×9, 1× za snímek na video) prosvítá do matného skla kolem obrazu jako
-// ambilight, particly za rámečkem se ztlumí a rozmlží (dřív v rámečku rušily ostré tečky).
-//   tvVidGlow (0.7), tvVidReach (0.35 = dosah záře, podíl menší poloosy skla), tvVidDim (0.25 = jas
-//   scény za sklem u videa), tvVidTint (1 = sklo do barvy videa), tvVidFrost (1.5 = víc matu u videa)
+// ambilight, obraz má ostrou hranu, particly za rámečkem se ztlumí (dřív v rámečku rušily ostré tečky).
+//   tvVidGlow (0.35), tvVidReach (0.35 = dosah záře, podíl menší poloosy skla), tvVidDim (0.25 = jas
+//   scény za sklem u videa), tvVidTint (1 = sklo do barvy videa), tvVidFrost (0; >0 = víc matu u videa)
 //   DEV: window.__tvVidOverride = { glow, reach, dim, tint, frost }
 
 const FBO_SCALE = 0.5;
@@ -124,16 +124,17 @@ const fragmentShader = `${TEX_LOD0}
     // video jako portál uvnitř skla (rovina GlassDesk = střed tloušťky)
     float tVid = -depth / (sdn * adn);
     float vidOn = (uHasVideo > 0.5 && tVid > 0.0) ? 1.0 : 0.0;
-    vec2 vuv = vec2(0.5);
-    float glowW = 0.0;
-    if (vidOn > 0.5) {
-      vec3 pv = vLocal + dIn * tVid;
-      vuv = vec2(dot(pv, uVidU.xyz) + uVidU.w, dot(pv, uVidV.xyz) + uVidV.w);
-      vuv += wob * 0.004 * uDistort;
-      // vzdálenost od obrazu v lokálních jednotkách skla -> záře videa v matném skle kolem obrazu
-      vec2 o = (max(-vuv, 0.0) + max(vuv - 1.0, 0.0)) / max(vec2(length(uVidU.xyz), length(uVidV.xyz)), vec2(1e-4));
-      glowW = exp(-length(o) / max(uVidReach * min(uHalf.x, uHalf.y), 1e-3)) * uVidAmb;
-    }
+    // (počítá se vždy, mimo if: fwidth potřebuje sousední pixely)
+    vec3 pv = vLocal + dIn * max(tVid, 0.0);
+    vec2 vuv = vec2(dot(pv, uVidU.xyz) + uVidU.w, dot(pv, uVidV.xyz) + uVidV.w);
+    vuv += wob * 0.004 * uDistort;
+    // obraz jako zaoblený obdélník v lokálních jednotkách skla: ostrá vyhlazená hrana (ne rozmlžený přechod)
+    vec2 vScale = max(vec2(length(uVidU.xyz), length(uVidV.xyz)), vec2(1e-4));
+    float sdVid = sdRR((vuv - 0.5) / vScale, 0.5 / vScale, uRadius * 0.6);
+    float aaVid = max(fwidth(sdVid), 1e-5);
+    float vidM = vidOn * (1.0 - smoothstep(-aaVid, aaVid, sdVid));
+    // záře videa v matném skle kolem obrazu (ambilight), slábne se vzdáleností od hrany
+    float glowW = vidOn * uVidAmb * exp(-max(sdVid, 0.0) / max(uVidReach * min(uHalf.x, uHalf.y), 1e-3));
 
     // lom scény za sklem (screen-space), disperze + matné rozmazání
     vec2 suv = gl_FragCoord.xy / uRes;
@@ -173,11 +174,8 @@ const fragmentShader = `${TEX_LOD0}
     // světlo videa rozptýlené v matném skle kolem obrazu (ambilight)
     col += amb * uVidGlow * glowW * (0.75 + smudge * 0.5);
 
-    // video až po tónování skla -> sklo ho nebarví; měkký okraj přechází do záře, ne do scény
-    float vidM = 0.0;
-    if (vidOn > 0.5) {
-      vec2 e = min(vuv, 1.0 - vuv);
-      vidM = smoothstep(0.0, 0.07, e.x) * smoothstep(0.0, 0.1, e.y);
+    // video až po tónování skla -> sklo ho nebarví
+    if (vidM > 0.0) {
       vec3 vid = texture2D(tVideo, clamp(vuv, 0.0, 1.0)).rgb;
       col = mix(col, vid, vidM);
     }
@@ -290,7 +288,7 @@ const BLUR_FRAG = `${TEX_LOD0}
     gl_FragColor = vec4(s / 36.0, 1.0);
   }
 `;
-const VID_DEFAULTS = { glow: 0.7, reach: 0.35, dim: 0.25, tint: 1, frost: 1.5 };
+const VID_DEFAULTS = { glow: 0.35, reach: 0.35, dim: 0.25, tint: 1, frost: 0 };
 
 function createVideoBlur() {
   const material = new THREE.ShaderMaterial({
