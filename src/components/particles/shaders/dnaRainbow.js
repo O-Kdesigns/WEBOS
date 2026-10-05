@@ -37,6 +37,8 @@ export const DNA_RAINBOW_GLSL = `
 // Vrací VŽDY pole délky DNA_PALETTE_MAX (three.js `PureArrayUniform` čte přesně tolik prvků,
 // kolik má pole deklarované v shaderu - kratší JS pole shodilo upload s "toArray of undefined").
 // `count` říká shaderu, kolik prvků od začátku je "opravdových" (zbytek je jen padding).
+const lumOf = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+
 export function buildDnaPalette(THREE, appConfig, pages) {
   const dustColors = appConfig?.atmosphereDust?.colors || [];
   const pageColors = (pages || [])
@@ -56,9 +58,9 @@ export function buildDnaPalette(THREE, appConfig, pages) {
   // jejich jas na nejjasnější sytou barvu v paletě (bílá = šedá stejného jasu).
   const hsl = { h: 0, s: 0, l: 0 };
   const saturated = real.filter((c) => c.getHSL(hsl).s > 0.5);
-  const cap = Math.max(...(saturated.length ? saturated : real).map((c) => c.getLuminance()));
+  const cap = Math.max(...(saturated.length ? saturated : real).map((c) => lumOf(c)));
   for (const c of real) {
-    const lum = c.getLuminance();
+    const lum = lumOf(c);
     if (lum > cap && lum > 0) c.multiplyScalar(cap / lum);
   }
   const colors = real.slice();
