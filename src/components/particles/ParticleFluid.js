@@ -29,6 +29,9 @@ export const FLUID_DEFAULTS = {
   // a vířilo samo dál desítky sekund („autoplay“, Oliver 2026-10-05).
   afterglow: 2,
   calm: 3,
+  // [particles] práh rychlosti myši pro víření (výšky obrazovky/s): pomalejší tah particly jen strčí, vodu z nich
+  // netvoří; víření (a doznění `afterglow`) běží jen od posledního tahu nad prahem. 0 = víří každý tah.
+  stirSpeed: 0,
   splatForce: 6000,       // [pavel] síla tahu (Pavel 6000): posun kurzoru za snímek × tohle = přidaný proud
   pavelCurve: 0.5,        // [pavel] odezva na rychlost myši: 1 = lineární (jako Pavel), menší = pomalý tah silnější, rychlý slabší
   pavelMaxSpeed: 2.5,     // [pavel] strop (výšky obrazovky/s): rychlejší švih už skoro nesílí -> nerozvíří všechno
@@ -369,6 +372,10 @@ class Fluid {
     const rawSp = moved ? Math.hypot((pu - this.prev.x) * aspect, pv - this.prev.y) / dt : 0;
     this.speed = (this.speed ?? 0) + (rawSp - (this.speed ?? 0)) * (1 - Math.exp(-dt / 0.05));
     const sp = Math.max(this.speed, 1e-4);
+    // [particles] víření jen od tahu rychlejšího než stirSpeed (doznění se počítá od posledního takového)
+    if (this.lastStir === undefined) this.lastStir = -1e9;
+    if (moved && this.speed >= (cfg.stirSpeed ?? 0)) this.lastStir = now;
+    const sinceStir = now - this.lastStir;
     // křivka odezvy: sqrt-ish + měkký strop -> out = výsledná rychlost proudu (výšky obrazovky/s)
     const cap = Math.max(0.1, cfg.maxSpeed);
     const out = cap * Math.tanh(Math.pow(sp, Math.max(0.1, cfg.speedCurve)) / cap);
@@ -406,7 +413,7 @@ class Fluid {
     for (let i = 0; i < steps; i++) {
       wu.uPush.value = i === 0 && srcMoved ? wavePush : 0;
       // [particles] vlny z pohybu particlů: přírůstek ∝ sbíhání proudu × čas (stejný tvar jako posun stopy myši / poloměr)
-      wu.uInjPush.value = fromParticles && i === 0 ? cfg.waveHeight * cfg.injectWave * dt * Math.max(0, 1 - (now - this.lastMove) / Math.max(0.01, cfg.afterglow ?? 2)) ** 2 : 0;
+      wu.uInjPush.value = fromParticles && i === 0 ? cfg.waveHeight * cfg.injectWave * dt * Math.max(0, 1 - sinceStir / Math.max(0.01, cfg.afterglow ?? 2)) ** 2 : 0;
       wu.uWave.value = this.waveRT[0].texture;
       this.pass(m.wave, this.waveRT[1]); this.waveRT.reverse();
     }
@@ -428,7 +435,7 @@ class Fluid {
       const iu = m.inject.uniforms;
       iu.uVel.value = this.vel[0].texture; iu.uInj.value = this.injRT.texture;
       // doznění: po afterglow s od posledního pohybu myši particly vodu netvoří (žádné samovolné víření)
-      const after = Math.max(0.01, cfg.afterglow ?? 2), env = Math.max(0, 1 - (now - this.lastMove) / after);
+      const after = Math.max(0.01, cfg.afterglow ?? 2), env = Math.max(0, 1 - sinceStir / after);
       this.injectEnv = env * env;
       iu.uStrength.value = Math.min(1, Math.max(0, cfg.inject)) * this.injectEnv; iu.uCover.value = cfg.injectCover;
       this.pass(m.inject, this.vel[1]); this.swapVel();
@@ -483,7 +490,7 @@ class Fluid {
 
     const v = m.vorticity.uniforms;
     // [particles] po doznění utichne i víření (vorticity confinement by jinak zbytek proudu držel roztočený)
-    const calmK = fromParticles ? Math.min(1, Math.max(0, (now - this.lastMove - (cfg.afterglow ?? 2)) / 0.5)) : 0;
+    const calmK = fromParticles ? Math.min(1, Math.max(0, (sinceStir - (cfg.afterglow ?? 2)) / 0.5)) : 0;
     v.uVel.value = this.vel[0].texture; v.uCurl.value = this.curlRT.texture; v.uCurlStrength.value = cfg.curl * (1 - calmK); v.uDt.value = dt;
     this.pass(m.vorticity, this.vel[1]); this.swapVel();
 
