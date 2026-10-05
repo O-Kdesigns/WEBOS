@@ -19,6 +19,7 @@ export const FLUID_DEFAULTS = {
   // (jako loď) -> voda nese a strká další particly. Kde nejsou particly, myš s vodou nic neudělá.
   // 'mouse' = dřívější chování: myš vhání proud i vlny přímo do vody.
   source: 'particles',
+  insideSource: 'mouse',  // zdroj vody mimo klid DNA (průlet + INSIDE); 'mouse' = jako do 2026-10-05 (Oliver: v INSIDE lepší)
   pushFade: 0.3,          // [particles] s – jak rychle mizí strčení myší (první náraz do particlů)
   inject: 0.9,            // [particles] jak silně se proud v buňce přizpůsobí rychlosti particlů (za snímek)
   injectCover: 0.5,       // [particles] 1 / počet strčených particlů v buňce mřížky pro plné pokrytí

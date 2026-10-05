@@ -654,7 +654,11 @@ function disposeCompute(c) {
 function mergeFluidCfg(prev, src) {
   const ov = import.meta.env.DEV ? window.__fluidOverride : null; // DEV ladění
   if (prev && prev.src === src && prev.ov === ov) return prev;
-  return { ...FLUID_DEFAULTS, ...(src || {}), ...(ov || {}), src, ov };
+  const cfg = { ...FLUID_DEFAULTS, ...(src || {}), ...(ov || {}), src, ov };
+  // mimo klid DNA (průlet + INSIDE) vlastní zdroj vody: voda z particlů (source) je jen pro ORBIT,
+  // INSIDE má myš vhánějící vodu přímo (insideSource 'mouse' = chování do 2026-10-05, Oliver: uvnitř to bylo lepší)
+  cfg.inside = { ...cfg, source: cfg.insideSource };
+  return cfg;
 }
 
 // Klid DNA v ORBITu (config particlePhysics.dnaForce / dnaLeash, editor Uvnitř → Fyzika)
@@ -784,7 +788,8 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
     localCameraPos.current.copy(worldCameraPos.current).applyMatrix4(invMat.current);
 
     // Vodnatá fyzika (ParticleFluid.js) nahrazuje starý štětec; config particlePhysics.fluid.enabled = false -> starý štětec
-    const fluidCfg = fluidCfgRef.current = mergeFluidCfg(fluidCfgRef.current, phys.fluid);
+    fluidCfgRef.current = mergeFluidCfg(fluidCfgRef.current, phys.fluid);
+    const fluidCfg = dnaRest ? fluidCfgRef.current : fluidCfgRef.current.inside;
     let fluidOn = false;
     if (fluidCfg.enabled) {
       const fluid = getFluid(state.gl);
