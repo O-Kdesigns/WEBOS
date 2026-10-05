@@ -24,6 +24,11 @@ export const FLUID_DEFAULTS = {
   injectCover: 0.5,       // [particles] 1 / počet strčených particlů v buňce mřížky pro plné pokrytí
   injectPointSize: 2,     // [particles] velikost particlu v mřížce (buňky)
   injectWave: 1,          // [particles] vlny z pohybu particlů (× waveHeight)
+  // [particles] doznění: particly tvoří vodu jen `afterglow` s po posledním pohybu myši (síla plynule klesá k 0),
+  // pak voda utichne útlumem navíc `calm` (1/s). Bez toho se strkání particlů vodou a vody particly řetězilo
+  // a vířilo samo dál desítky sekund („autoplay“, Oliver 2026-10-05).
+  afterglow: 2,
+  calm: 3,
   splatForce: 6000,       // [pavel] síla tahu (Pavel 6000): posun kurzoru za snímek × tohle = přidaný proud
   pavelCurve: 0.5,        // [pavel] odezva na rychlost myši: 1 = lineární (jako Pavel), menší = pomalý tah silnější, rychlý slabší
   pavelMaxSpeed: 2.5,     // [pavel] strop (výšky obrazovky/s): rychlejší švih už skoro nesílí -> nerozvíří všechno
@@ -347,7 +352,10 @@ class Fluid {
       this.lastMove = now;
     }
     // uspat až když proud skoro dozněl (95 %), jinak by dojezd uťal
-    if (this.active && now - this.lastMove > Math.max(cfg.idleSleep, 3 / Math.max(0.05, Math.min(cfg.dissipation, cfg.trailFade)))) this.active = false;
+    const sleepAfter = cfg.source === 'particles'
+      ? Math.max(1, (cfg.afterglow ?? 2) + 3 / Math.max(0.05, Math.min(cfg.dissipation + (cfg.calm ?? 3), cfg.trailFade)))
+      : Math.max(cfg.idleSleep, 3 / Math.max(0.05, Math.min(cfg.dissipation, cfg.trailFade)));
+    if (this.active && now - this.lastMove > sleepAfter) this.active = false;
     if (!this.active) { this.prev.set(pu, pv); this.velocity = null; this.wave = null; this.push = null; this.injectTarget = null; return; }
     const fromParticles = cfg.source === 'particles';
 
@@ -398,7 +406,7 @@ class Fluid {
     for (let i = 0; i < steps; i++) {
       wu.uPush.value = i === 0 && srcMoved ? wavePush : 0;
       // [particles] vlny z pohybu particlů: přírůstek ∝ sbíhání proudu × čas (stejný tvar jako posun stopy myši / poloměr)
-      wu.uInjPush.value = fromParticles && i === 0 ? cfg.waveHeight * cfg.injectWave * dt : 0;
+      wu.uInjPush.value = fromParticles && i === 0 ? cfg.waveHeight * cfg.injectWave * dt * Math.max(0, 1 - (now - this.lastMove) / Math.max(0.01, cfg.afterglow ?? 2)) ** 2 : 0;
       wu.uWave.value = this.waveRT[0].texture;
       this.pass(m.wave, this.waveRT[1]); this.waveRT.reverse();
     }
@@ -419,7 +427,10 @@ class Fluid {
       // rychlost strčených particlů z minulého snímku -> proud (pak běží tlak, víření, advekce jako dřív)
       const iu = m.inject.uniforms;
       iu.uVel.value = this.vel[0].texture; iu.uInj.value = this.injRT.texture;
-      iu.uStrength.value = Math.min(1, Math.max(0, cfg.inject)); iu.uCover.value = cfg.injectCover;
+      // doznění: po afterglow s od posledního pohybu myši particly vodu netvoří (žádné samovolné víření)
+      const after = Math.max(0.01, cfg.afterglow ?? 2), env = Math.max(0, 1 - (now - this.lastMove) / after);
+      this.injectEnv = env * env;
+      iu.uStrength.value = Math.min(1, Math.max(0, cfg.inject)) * this.injectEnv; iu.uCover.value = cfg.injectCover;
       this.pass(m.inject, this.vel[1]); this.swapVel();
     }
     if (moved && pavel) {
@@ -471,7 +482,9 @@ class Fluid {
     this.pass(m.curl, this.curlRT);
 
     const v = m.vorticity.uniforms;
-    v.uVel.value = this.vel[0].texture; v.uCurl.value = this.curlRT.texture; v.uCurlStrength.value = cfg.curl; v.uDt.value = dt;
+    // [particles] po doznění utichne i víření (vorticity confinement by jinak zbytek proudu držel roztočený)
+    const calmK = fromParticles ? Math.min(1, Math.max(0, (now - this.lastMove - (cfg.afterglow ?? 2)) / 0.5)) : 0;
+    v.uVel.value = this.vel[0].texture; v.uCurl.value = this.curlRT.texture; v.uCurlStrength.value = cfg.curl * (1 - calmK); v.uDt.value = dt;
     this.pass(m.vorticity, this.vel[1]); this.swapVel();
 
     m.divergence.uniforms.uVel.value = this.vel[0].texture;
@@ -491,6 +504,8 @@ class Fluid {
 
     const a = m.advect.uniforms;
     a.uVel.value = this.vel[0].texture; a.uDt.value = dt; a.uDissipation.value = cfg.dissipation; a.uTrailFade.value = cfg.trailFade;
+    // [particles] po doznění voda rychle utichne
+    if (fromParticles) a.uDissipation.value += (cfg.calm ?? 3) * calmK;
     a.uMaxFlow.value = Math.max(0.1, cfg.maxFlow ?? 3) * this.h;
     this.pass(m.advect, this.vel[1]); this.swapVel();
 
