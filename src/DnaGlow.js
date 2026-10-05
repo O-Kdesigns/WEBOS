@@ -30,12 +30,20 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
 }`;
 
-// inkoust: advekce proudem, difuze (4 vzorky kolem), stoupání, útlum; přítok = světlo particlů × rychlost vody
+// inkoust: advekce proudem, difuze (4 vzorky kolem), stoupání, útlum; přítok = světlo particlů × rychlost vody.
+// Zdroj je ostrá scéna (box 4×4 px), ne rozmazaný tBlur – inkoust drží velikost particlů a štětce vody.
+// Plocha aktivní TV nepouští (video není particl).
 const INK = `${TEX_LOD0}
-uniform sampler2D uInk, uSrc, uFluid;
-uniform vec2 uTexel, uFluidTexel;
-uniform float uDt, uFluidOn, uFlow, uFade, uEmit, uThr, uRise, uSpread, uWMin, uWMax;
+uniform sampler2D uInk, uSharp, uFluid;
+uniform vec2 uTexel, uFluidTexel, uTvPos;
+uniform vec4 uTvInv;
+uniform float uDt, uFluidOn, uFlow, uFade, uEmit, uThr, uRise, uSpread, uWMin, uWMax, uAspect, uTvVis;
 varying vec2 vUv;
+vec3 sharp() {
+  vec2 o = uTexel * 0.25;
+  return (texture2D(uSharp, vUv + vec2(-o.x, -o.y)).rgb + texture2D(uSharp, vUv + vec2(o.x, -o.y)).rgb
+        + texture2D(uSharp, vUv + vec2(-o.x, o.y)).rgb + texture2D(uSharp, vUv + vec2(o.x, o.y)).rgb) * 0.25;
+}
 void main() {
   vec2 f = uFluidOn > 0.5 ? texture2D(uFluid, vUv).xy : vec2(0.0);
   vec2 v = f * uFluidTexel * uFlow + vec2(0.0, uRise);
@@ -45,7 +53,12 @@ void main() {
             + texture2D(uInk, c + vec2(0.0, d.y)).rgb + texture2D(uInk, c - vec2(0.0, d.y)).rgb) * 0.25;
   ink *= exp(-uFade * uDt);
   float w = smoothstep(uWMin, uWMax, length(f));
-  ink += max(texture2D(uSrc, vUv).rgb - uThr, 0.0) * w * uEmit * uDt;
+  if (w > 0.0) {
+    vec2 td = (vUv - uTvPos) * vec2(uAspect, 1.0);
+    vec2 ab = abs(vec2(dot(uTvInv.xy, td), dot(uTvInv.zw, td)));
+    float tv = (1.0 - smoothstep(0.9, 1.05, max(ab.x, ab.y))) * smoothstep(0.05, 0.5, uTvVis);
+    ink += max(sharp() - uThr, 0.0) * w * uEmit * uDt * (1.0 - tv);
+  }
   gl_FragColor = vec4(min(ink, vec3(8.0)), 1.0);
 }`;
 
@@ -55,14 +68,14 @@ export const DNA_GLOW_DEFAULTS = {
   aura: 4,           // síla široké záře kolem DNA (× nasvícení září nahoře, topLow/topReach)
   auraRadius: 2.6,   // šíře záře (krok gauss v texelech 1/16) – rozlitá, ne přilepená k DNA
   tint: 0.35,        // 0 = barvy particlů, 1 = barva tvLight.color
-  ink: 1.4,          // síla inkoustu světla
-  emit: 8,           // kolik inkoustu particly pustí za s ve vodě
-  fade: 0.6,         // útlum inkoustu (1/s)
+  ink: 0.7,          // síla inkoustu světla
+  emit: 10,          // kolik inkoustu particly pustí za s ve vodě
+  fade: 2.2,         // útlum inkoustu (1/s) – krátký: ukazuje vodu teď, ne dlouhé stopy
   flow: 1,           // jak silně inkoust nese proud
   rise: 0.012,       // stoupání inkoustu (výšky obrazovky/s)
-  spread: 0.12,      // difuze inkoustu (texely 1/4 za snímek)
-  waterMin: 8,       // rychlost vody (buňky/s), od které particly pouštějí inkoust
-  waterMax: 40,
+  spread: 0,         // difuze inkoustu (texely 1/4 za snímek) – 0 = drží velikost štětce
+  waterMin: 12,      // rychlost vody (buňky/s), od které particly pouštějí inkoust (= dřívější díry tvLight)
+  waterMax: 50,
   objects: 0.5,      // kolik záře je vidět přes objekty
   topLow: 0.3,       // aura dole, daleko od záře nahoře (1 = všude stejně)
   topReach: 1.5,     // vzdálenost od světla nad DNA, kde aura klesne na topLow
@@ -89,9 +102,10 @@ export class DnaGlow {
       extract: mk(EXTRACT, { uSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uThr: { value: 0.05 } }),
       blur: mk(BLUR, { uSrc: { value: null }, uDir: { value: new THREE.Vector2() } }),
       ink: mk(INK, {
-        uInk: { value: null }, uSrc: { value: null }, uFluid: { value: null }, uTexel: { value: new THREE.Vector2() }, uFluidTexel: { value: new THREE.Vector2() },
+        uInk: { value: null }, uFluid: { value: null }, uTexel: { value: new THREE.Vector2() }, uFluidTexel: { value: new THREE.Vector2() },
         uDt: { value: 0 }, uFluidOn: { value: 0 }, uFlow: { value: 1 }, uFade: { value: 0.9 }, uEmit: { value: 6 }, uThr: { value: 0.05 },
         uRise: { value: 0.012 }, uSpread: { value: 0.6 }, uWMin: { value: 8 }, uWMax: { value: 40 },
+        uSharp: { value: null }, uTvPos: { value: new THREE.Vector2() }, uTvInv: { value: new THREE.Vector4() }, uAspect: { value: 1 }, uTvVis: { value: 0 },
       }),
     };
     this.w = 0; this.h = 0;
@@ -119,7 +133,7 @@ export class DnaGlow {
   }
 
   // src = tBlur (1/4 scény, w × h); vrátí { aura, ink } textury (ink null, když nic nesvítí)
-  step(gl, { src, w, h, fluid, fluidTexel, dt, cfg }) {
+  step(gl, { src, sharp, tv, w, h, fluid, fluidTexel, dt, cfg }) {
     this.resize(gl, w, h);
     const c = { ...DNA_GLOW_DEFAULTS, ...cfg };
     const prev = gl.getRenderTarget(), ac = gl.autoClear;
@@ -143,7 +157,8 @@ export class DnaGlow {
     let ink = null;
     if (this.inkIdle < 6 / Math.max(0.05, c.fade)) {
       const iu = this.m.ink.uniforms;
-      iu.uInk.value = this.ink[0].texture; iu.uSrc.value = src; iu.uFluid.value = fluid; iu.uFluidOn.value = fluid ? 1 : 0;
+      iu.uInk.value = this.ink[0].texture; iu.uSharp.value = sharp; iu.uFluid.value = fluid;
+      iu.uTvPos.value.copy(tv.pos); iu.uTvInv.value.copy(tv.inv); iu.uAspect.value = tv.aspect; iu.uTvVis.value = tv.vis; iu.uFluidOn.value = fluid ? 1 : 0;
       iu.uTexel.value.set(1 / w, 1 / h);
       if (fluidTexel) iu.uFluidTexel.value.copy(fluidTexel);
       iu.uDt.value = dt; iu.uFlow.value = c.flow; iu.uFade.value = c.fade; iu.uEmit.value = c.emit; iu.uThr.value = c.threshold;

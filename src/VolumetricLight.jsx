@@ -168,7 +168,7 @@ const VolumetricLightShader = {
     uDnaGlowOn: { value: 0.0 },
     uDnaInkOn: { value: 0.0 },
     uDnaAura: { value: 4 },
-    uDnaInk: { value: 1.4 },
+    uDnaInk: { value: 0.7 },
     uDnaTint: { value: 0.35 },
     uDnaObj: { value: 0.5 },
     uDnaTopLow: { value: 0.3 },   // aura dole (daleko od záře nahoře) – 1 = všude stejně
@@ -1764,7 +1764,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         const fl = getFluid(gl);
         prof.scope('ORBIT světlo DNA');
         const r = dnaGlow.step(gl, {
-          src: U.tBlur.value, w: blurTargets.bw, h: blurTargets.bh, fluid: fl.velocity, fluidTexel: U.uFluidTexel.value,
+          src: U.tBlur.value, sharp: sceneTarget.texture, w: blurTargets.bw,
+          tv: { pos: U.uTvPos.value, inv: U.uTvInv.value, aspect: size.width / Math.max(1, size.height), vis: U.uTvVis.value }, h: blurTargets.bh, fluid: fl.velocity, fluidTexel: U.uFluidTexel.value,
           dt: Math.min(Math.max(delta, 1 / 240), 1 / 30), cfg: dg,
         });
         prof.end();
@@ -1772,7 +1773,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         U.tDnaInk.value = r.ink || dummyTexture;
         U.uDnaInkOn.value = r.ink ? 1 : 0;
         U.uDnaAura.value = dg.aura ?? 4;
-        U.uDnaInk.value = dg.ink ?? 1.4;
+        U.uDnaInk.value = dg.ink ?? 0.7;
         U.uDnaTint.value = dg.tint ?? 0.35;
         U.uDnaObj.value = dg.objects ?? 0.5;
         U.uDnaTopLow.value = dg.topLow ?? 0.3;
