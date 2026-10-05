@@ -171,6 +171,8 @@ const VolumetricLightShader = {
     uDnaInk: { value: 1.4 },
     uDnaTint: { value: 0.35 },
     uDnaObj: { value: 0.5 },
+    uDnaTopLow: { value: 0.3 },   // aura dole (daleko od záře nahoře) – 1 = všude stejně
+    uDnaTopReach: { value: 1.5 }, // vzdálenost od světla nad DNA (výšky obrazovky), kde aura klesne na uDnaTopLow
     tOrbitFog: { value: dummyTexture }, // ORBIT mlha ve světě (OrbitFog.js) – nahrazuje mlhu z prachu
     uOrbitFogOn: { value: 0.0 },
     uOrbitFogObj: { value: 0.3 },
@@ -449,6 +451,8 @@ const VolumetricLightShader = {
     uniform float uDnaInk;
     uniform float uDnaTint;
     uniform float uDnaObj;
+    uniform float uDnaTopLow;
+    uniform float uDnaTopReach;
     uniform float uOrbitFogOn;
     uniform float uOrbitFogObj;
     uniform float uOrbitFogStrength;
@@ -668,7 +672,11 @@ const VolumetricLightShader = {
       float orbitOn = uTvStrength * (1.0 - uInsideTransition);
       if (orbitOn > 0.001 && uDnaGlowOn > 0.5) {
         // světlo DNA particlů: aura + inkoust ve vodě, barva particlů přimíchaná k barvě světla TV
-        vec3 g = texture2D(tDnaAura, vUv).rgb * uDnaAura;
+        // aura = světlo particlů rozptýlené v prostoru, nasvícené září nahoře (světlo nad DNA, uLightScreenPos):
+        // u ní plně, dole jako by tam tolik nedosvítilo
+        float topD = length(vec2((vUv.x - uLightScreenPos.x) * 0.6, vUv.y - uLightScreenPos.y));
+        float top = mix(uDnaTopLow, 1.0, 1.0 - smoothstep(0.25, uDnaTopReach, topD));
+        vec3 g = texture2D(tDnaAura, vUv).rgb * uDnaAura * top;
         if (uDnaInkOn > 0.5) g += texture2D(tDnaInk, vUv).rgb * uDnaInk;
         float gLum = dot(g, vec3(0.299, 0.587, 0.114));
         L += mix(g, uTvColor * gLum * 2.0, uDnaTint) * orbitOn * (isBg ? 1.0 : uDnaObj) * tvRayMask();
@@ -1767,6 +1775,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         U.uDnaInk.value = dg.ink ?? 1.4;
         U.uDnaTint.value = dg.tint ?? 0.35;
         U.uDnaObj.value = dg.objects ?? 0.5;
+        U.uDnaTopLow.value = dg.topLow ?? 0.3;
+        U.uDnaTopReach.value = dg.topReach ?? 1.5;
       }
       if (import.meta.env.DEV) window.__dnaGlow = dnaGlow;
       // ORBIT mlha ve světě (OrbitFog.js) – jen když je výslovně zapnutá (orbitFog.enabled: true)
