@@ -31,10 +31,11 @@ export const FLUID_DEFAULTS = {
   afterglow: 2,
   calm: 3,
   // [particles] práh víření ve SKUTEČNÉ rychlosti kurzoru (cm/s na displeji, viz pointerSpeed níže): pod `stirSpeed`
-  // tah particly jen strčí, vodu z nich netvoří; mezi `stirSpeed` a `stirFull` síla víření plynule roste.
+  // tah particly jen strčí, vodu z nich netvoří; nad prahem víří hned naplno (krátký náběh 30 %, min 2 cm/s, jen proti
+  // cukání na hraně). Dřív zvlášť `stirFull` (plynulý náběh až do něj) – s 200 cm/s dával normální tah 5–15 % víření
+  // a práh „nic nedělal“ (Oliver 2026-10-05) -> zrušeno, uložené stirFull se ignoruje.
   // (do 2026-10-05 výšky obrazovky/s, výchozí 0 = vířil každý tah – Oliver: „hned to začne dělat“)
   stirSpeed: 12,
-  stirFull: 40,
   // [particles] zóna kolem dráhy myši: vodu z particlů smí tvořit jen tam, kudy kurzor nedávno projel (× síla víření
   // podle rychlosti). Mimo zónu je voda jen nese, další vodu z nich nedělá -> víření se nerozleze po celé DNA ani
   // při rychlém tahu a drží se myši. Poloměr ve výškách obrazovky, mizení = časová konstanta v s.
@@ -489,9 +490,9 @@ class Fluid {
     // skutečná rychlost kurzoru na displeji (cm/s) – prahy víření (CSS px × mm/px)
     this.speedCm = this.speed * height * pointer.mmPerPx / 10;
     const sp = Math.max(this.speed, 1e-4);
-    // [particles] síla víření podle skutečné rychlosti (měkký práh stirSpeed..stirFull, cm/s); obálka drží
+    // [particles] síla víření podle skutečné rychlosti (práh stirSpeed cm/s, nad ním hned naplno); obálka drží
     // nejvyšší úroveň a po tahu lineárně klesá k 0 za afterglow s (doznění)
-    const s0 = cfg.stirSpeed ?? 0, s1 = Math.max(s0 + 0.1, cfg.stirFull ?? s0 + 0.1);
+    const s0 = cfg.stirSpeed ?? 0, s1 = s0 + Math.max(2, s0 * 0.3);
     const st = Math.min(1, Math.max(0, (this.speedCm - s0) / (s1 - s0)));
     this.stirLevel = moved ? st * st * (3 - 2 * st) : 0;
     const after = Math.max(0.01, cfg.afterglow ?? 2);
