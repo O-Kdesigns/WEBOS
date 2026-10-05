@@ -92,7 +92,8 @@ export const FLUID_DEFAULTS = {
 // ms – rychlost = dráha za posledních 30 ms (2026-10-05 Oliver: „aktuální rychlost“, ať víření naskočí hned;
 // dřív 60 ms). 125 Hz myš = ~4 vzorky, 1000 Hz = 30 – kratší okno by u levných myší skákalo.
 const POINTER_WINDOW = 30;
-const pointer = { pts: [], mmPerPx: 0.25 };
+// x, y = poslední pozice kurzoru (clientX/Y), has = už přišla událost
+const pointer = { pts: [], mmPerPx: 0.25, x: 0, y: 0, has: false };
 if (typeof window !== 'undefined') {
   try { if (window.matchMedia('(pointer: coarse)').matches) pointer.mmPerPx = 0.16; } catch { /* starý prohlížeč */ }
   const reset = () => { pointer.pts.length = 0; };
@@ -103,6 +104,7 @@ if (typeof window !== 'undefined') {
     // Posun = příjem události − její timeStamp; sedí-li základ (|posun| < 1 s), platí přesné časy vzorků.
     const at = performance.now(), off = at - e.timeStamp, ok = Math.abs(off) < 1000;
     for (const ev of (list && list.length ? list : [e])) pointer.pts.push(ev.clientX, ev.clientY, ok ? ev.timeStamp : ev.timeStamp + off);
+    pointer.x = e.clientX; pointer.y = e.clientY; pointer.has = true;
     const old = at - 200;
     let k = 0; while (k < pointer.pts.length - 3 && pointer.pts[k + 2] < old) k += 3;
     if (k) pointer.pts.splice(0, k);
@@ -443,7 +445,17 @@ class Fluid {
 
     const now = performance.now() / 1000;
     const dt = Math.min(Math.max(delta, 1 / 240), 1 / 30);
-    const pu = state.pointer.x * 0.5 + 0.5, pv = state.pointer.y * 0.5 + 0.5;
+    // pozice kurzoru přímo z pointer událostí okna (clientX/Y vůči canvasu), ne z R3F state.pointer:
+    // R3F ji počítá z offsetX vůči prvku pod kurzorem – když si myš zachytí jiný prvek (DIV), stála
+    // state.pointer na místě, voda neviděla pohyb a víření nikdy nenaskočilo (Oliver 2026-10-05: „funguje jen
+    // nad televizí“; záznam: 3800 událostí, state.pointer pořád 0.345/-0.978). Rect jen při změně velikosti.
+    let pu, pv;
+    if (pointer.has) {
+      const el = this.gl.domElement;
+      if (!this.rect || this.rectW !== width || this.rectH !== height) { this.rect = el.getBoundingClientRect(); this.rectW = width; this.rectH = height; }
+      pu = (pointer.x - this.rect.left) / Math.max(1, this.rect.width);
+      pv = 1 - (pointer.y - this.rect.top) / Math.max(1, this.rect.height);
+    } else { pu = state.pointer.x * 0.5 + 0.5; pv = state.pointer.y * 0.5 + 0.5; }
     // skok kurzoru (vjetí do okna odjinud, dotyk jinde) není tah -> jen přesun bez vln a proudu
     if (Math.hypot((pu - this.prev.x) * width / height, pv - this.prev.y) > Math.max(0.25, 20 * dt)) this.prev.set(NaN, NaN);
     const moved = Number.isFinite(this.prev.x) && (pu !== this.prev.x || pv !== this.prev.y);
