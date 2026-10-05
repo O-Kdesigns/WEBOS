@@ -7,6 +7,7 @@ import { printFx } from './SolidPrint';
 import { tvRegistry, tvGlassFx } from './TvGlass';
 import { getFluid } from './components/particles/ParticleFluid';
 import { OrbitFog } from './OrbitFog';
+import { DnaGlow } from './DnaGlow';
 import { PrintSteam } from './PrintSteam';
 import { prof } from './debug/GpuProfiler';
 import { TEX_LOD0 } from './glslTexLod0';
@@ -162,6 +163,14 @@ const VolumetricLightShader = {
     uDustDecay: { value: 0.96 },
     uDustCap: { value: 0.15 },
     uDustTint: { value: 0.7 },
+    tDnaAura: { value: dummyTexture },  // ORBIT světlo DNA particlů (DnaGlow.js): široká záře
+    tDnaInk: { value: dummyTexture },   // + inkoust světla, který particly pouštějí do vody z myši
+    uDnaGlowOn: { value: 0.0 },
+    uDnaInkOn: { value: 0.0 },
+    uDnaAura: { value: 3 },
+    uDnaInk: { value: 1.4 },
+    uDnaTint: { value: 0.35 },
+    uDnaObj: { value: 0.5 },
     tOrbitFog: { value: dummyTexture }, // ORBIT mlha ve světě (OrbitFog.js) – nahrazuje mlhu z prachu
     uOrbitFogOn: { value: 0.0 },
     uOrbitFogObj: { value: 0.3 },
@@ -432,6 +441,14 @@ const VolumetricLightShader = {
     uniform float uDustTint;
     uniform float uDustTaper;
     uniform sampler2D tOrbitFog;
+    uniform sampler2D tDnaAura;
+    uniform sampler2D tDnaInk;
+    uniform float uDnaGlowOn;
+    uniform float uDnaInkOn;
+    uniform float uDnaAura;
+    uniform float uDnaInk;
+    uniform float uDnaTint;
+    uniform float uDnaObj;
     uniform float uOrbitFogOn;
     uniform float uOrbitFogObj;
     uniform float uOrbitFogStrength;
@@ -649,7 +666,13 @@ const VolumetricLightShader = {
       vec2 asp = vec2(uAspect, 1.0);
       vec3 L = vec3(0.0);
       float orbitOn = uTvStrength * (1.0 - uInsideTransition);
-      if (orbitOn > 0.001 && uOrbitFogOn > 0.5) {
+      if (orbitOn > 0.001 && uDnaGlowOn > 0.5) {
+        // světlo DNA particlů: aura + inkoust ve vodě, barva particlů přimíchaná k barvě světla TV
+        vec3 g = texture2D(tDnaAura, vUv).rgb * uDnaAura;
+        if (uDnaInkOn > 0.5) g += texture2D(tDnaInk, vUv).rgb * uDnaInk;
+        float gLum = dot(g, vec3(0.299, 0.587, 0.114));
+        L += mix(g, uTvColor * gLum * 2.0, uDnaTint) * orbitOn * (isBg ? 1.0 : uDnaObj) * tvRayMask();
+      } else if (orbitOn > 0.001 && uOrbitFogOn > 0.5) {
         // mlha ve světě: vrstvy jsou za DNA -> přes objekty jen část (uOrbitFogObj)
         L += texture2D(tOrbitFog, vUv).rgb * uOrbitFogStrength * orbitOn * (isBg ? 1.0 : uOrbitFogObj) * tvRayMask();
       } else if (orbitOn > 0.001 && uDustFog > 0.001) L += dustFog() * orbitOn * (1.0 - uTvClip * w) * tvRayMask();
@@ -701,6 +724,7 @@ const VolumetricLightShader = {
     }
 
     void main() {
+      if (uTvDebug > 10.5) { gl_FragColor = vec4(texture2D(tDnaAura, vUv).rgb * uDnaAura + (uDnaInkOn > 0.5 ? texture2D(tDnaInk, vUv).rgb * uDnaInk : vec3(0.0)), 1.0); return; } // jen světlo DNA
       if (uTvDebug > 9.5) { gl_FragColor = vec4(texture2D(tOrbitFog, vUv).rgb * 2.0, 1.0); return; } // jen ORBIT mlha
       if (uTvDebug > 8.5) { float iw = insideWater(); gl_FragColor = vec4(iw, particleCover() * 0.5, texture2D(tDye, vUv).r * 4.0, 1.0); return; }
       if (uTvDebug > 6.5) { gl_FragColor = vec4(uTvDebug > 7.5 ? texture2D(tBlur, vUv).rgb * 4.0 : dustFog() * 4.0, 1.0); return; }
@@ -1245,6 +1269,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
   }, [prepass]);
   const steam = useMemo(() => new PrintSteam(), []);
   const orbitFog = useMemo(() => new OrbitFog(), []);
+  const dnaGlow = useMemo(() => new DnaGlow(), []);
+  useEffect(() => () => dnaGlow.dispose(), [dnaGlow]);
   useEffect(() => () => orbitFog.dispose(), [orbitFog]);
   useEffect(() => { steam.prewarm(gl); return () => steam.dispose(); }, [steam, gl]);
 
@@ -1717,7 +1743,30 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
     {
       const of = { ...(appConfig?.orbitFog || {}), ...(import.meta.env.DEV ? window.__orbitFogOverride : null) };
       const U = mat.uniforms;
-      const fogOn = of.enabled !== false && U.uInsideTransition.value < 0.999 && U.uTvStrength.value > 0.001;
+      const dg = { ...(appConfig?.dnaGlow || {}), ...(import.meta.env.DEV ? window.__dnaGlowOverride : null) };
+      const orbitLive = U.uInsideTransition.value < 0.999 && U.uTvStrength.value > 0.001;
+      // světlo DNA particlů (DnaGlow.js) – výchozí; potřebuje tBlur z cinematic řetězce
+      const glowOn = dg.enabled !== false && orbitLive && cineOn;
+      U.uDnaGlowOn.value = glowOn ? 1 : 0;
+      if (glowOn) {
+        const fl = getFluid(gl);
+        prof.scope('ORBIT světlo DNA');
+        const r = dnaGlow.step(gl, {
+          src: U.tBlur.value, w: blurTargets.bw, h: blurTargets.bh, fluid: fl.velocity, fluidTexel: U.uFluidTexel.value,
+          dt: Math.min(Math.max(delta, 1 / 240), 1 / 30), cfg: dg,
+        });
+        prof.end();
+        U.tDnaAura.value = r.aura;
+        U.tDnaInk.value = r.ink || dummyTexture;
+        U.uDnaInkOn.value = r.ink ? 1 : 0;
+        U.uDnaAura.value = dg.aura ?? 3;
+        U.uDnaInk.value = dg.ink ?? 1.4;
+        U.uDnaTint.value = dg.tint ?? 0.35;
+        U.uDnaObj.value = dg.objects ?? 0.5;
+      }
+      if (import.meta.env.DEV) window.__dnaGlow = dnaGlow;
+      // ORBIT mlha ve světě (OrbitFog.js) – jen když je výslovně zapnutá (orbitFog.enabled: true)
+      const fogOn = of.enabled === true && !glowOn && orbitLive;
       U.uOrbitFogOn.value = fogOn ? 1 : 0;
       if (fogOn) {
         const fl = getFluid(gl);
@@ -1759,7 +1808,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         gl.setRenderTarget(prepass.rays);
         gl.render(prepass.scene, quadCamera);
       }
-      if (orbit && U.uTvStrength.value > 0.001 && U.uDustFog.value > 0.001 && U.uOrbitFogOn.value < 0.5) {
+      if (orbit && U.uTvStrength.value > 0.001 && U.uDustFog.value > 0.001 && U.uOrbitFogOn.value < 0.5 && U.uDnaGlowOn.value < 0.5) {
         pu.uMode.value = 1;
         gl.setRenderTarget(prepass.dust);
         gl.render(prepass.scene, quadCamera);
