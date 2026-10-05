@@ -1,28 +1,7 @@
 ﻿import React from 'react';
-import { DenseSlider, DenseToggle, DenseColor, DashboardCard } from './OrbitSettingsPanel';
-import { FLUID_DEFAULTS, pointerSpeedCm } from '../../particles/ParticleFluid';
+import { DenseSlider, DenseToggle, DenseColor, DashboardCard, PointerSpeedReadout } from './OrbitSettingsPanel';
+import { FLUID_DEFAULTS } from '../../particles/ParticleFluid';
 import { ESCAPE_DEFAULTS } from '../../particles/utils';
-
-// Živá skutečná rychlost kurzoru (cm/s na displeji, odhad z CSS px) – podle ní se nastavuje práh víření.
-// Špička = nejvyšší rychlost za poslední 2 s.
-function PointerSpeedReadout() {
-  const [v, setV] = React.useState({ now: 0, peak: 0 });
-  React.useEffect(() => {
-    const hist = [];
-    const id = setInterval(() => {
-      const t = performance.now(), cm = pointerSpeedCm(t) ?? 0;
-      hist.push([t, cm]);
-      while (hist.length && hist[0][0] < t - 2000) hist.shift();
-      setV({ now: cm, peak: Math.max(...hist.map((h) => h[1])) });
-    }, 100);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <div style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 8px', fontVariantNumeric: 'tabular-nums' }}>
-      Rychlost myši teď: <b style={{ color: '#ec4899' }}>{v.now.toFixed(0)} cm/s</b> · špička 2 s: {v.peak.toFixed(0)} cm/s
-    </div>
-  );
-}
 
 export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric, updateInsideFog, updatePhysics, updateParticlePhysics, updateVolumetricVideo, updateVolumetricDepth, updateUi2d, updateUi2dBottomLeft, updateUi2dBottomLeftItem, addUi2dBottomLeftItem, removeUi2dBottomLeftItem, updateUi2dPillButton, openSections, toggleSection, touchSection }) {
   const fluid = appConfig.particlePhysics?.fluid || {};

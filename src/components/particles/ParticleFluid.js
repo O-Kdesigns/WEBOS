@@ -96,8 +96,12 @@ if (typeof window !== 'undefined') {
   const reset = () => { pointer.pts.length = 0; };
   window.addEventListener('pointermove', (e) => {
     const list = e.getCoalescedEvents?.();
-    for (const ev of (list && list.length ? list : [e])) pointer.pts.push(ev.clientX, ev.clientY, ev.timeStamp);
-    const old = e.timeStamp - 200;
+    // časy převedené na hodiny stránky (performance.now): některé prohlížeče/ochrany soukromí dávají timeStamp
+    // v jiném základu (epocha) nebo zaokrouhlený -> porovnání s performance.now by dalo rychlost 0 napořád.
+    // Posun = příjem události − její timeStamp; sedí-li základ (|posun| < 1 s), platí přesné časy vzorků.
+    const at = performance.now(), off = at - e.timeStamp, ok = Math.abs(off) < 1000;
+    for (const ev of (list && list.length ? list : [e])) pointer.pts.push(ev.clientX, ev.clientY, ok ? ev.timeStamp : ev.timeStamp + off);
+    const old = at - 200;
     let k = 0; while (k < pointer.pts.length - 3 && pointer.pts[k + 2] < old) k += 3;
     if (k) pointer.pts.splice(0, k);
   }, { passive: true, capture: true });
@@ -462,10 +466,14 @@ class Fluid {
     const aspect = width / height;
     const rawSp = moved ? Math.hypot((pu - this.prev.x) * aspect, pv - this.prev.y) / dt : 0;
     const evPx = pointerSpeedPx(now * 1000);
-    if (evPx !== null) this.speed = evPx / height;
-    else this.speed = (this.speed ?? 0) + (rawSp - (this.speed ?? 0)) * (1 - Math.exp(-dt / 0.05));
-    // skutečná rychlost kurzoru na displeji (cm/s) – prahy víření; bez událostí odhad z výšek obrazovky
-    this.speedCm = evPx !== null ? pointerSpeedCm(now * 1000) : this.speed * height * pointer.mmPerPx / 10;
+    // záloha ze snímků (vždy, levné); pointer události platí, jen když dávají smysl – kurzor se hýbe a události
+    // hlásí 0 (rozbité časy) = použij snímky
+    this.frameSpeed = (this.frameSpeed ?? 0) + (rawSp - (this.frameSpeed ?? 0)) * (1 - Math.exp(-dt / 0.05));
+    const evOk = evPx !== null && !(moved && evPx < 1 && this.frameSpeed > 0.05);
+    this.speedSrc = evOk ? 'events' : 'frames';
+    this.speed = evOk ? evPx / height : this.frameSpeed;
+    // skutečná rychlost kurzoru na displeji (cm/s) – prahy víření (CSS px × mm/px)
+    this.speedCm = this.speed * height * pointer.mmPerPx / 10;
     const sp = Math.max(this.speed, 1e-4);
     // [particles] síla víření podle skutečné rychlosti (měkký práh stirSpeed..stirFull, cm/s); obálka drží
     // nejvyšší úroveň a po tahu lineárně klesá k 0 za afterglow s (doznění)
@@ -572,7 +580,7 @@ class Fluid {
       // zesílení z vyhlazené rychlosti, ale ne větší než podle okamžité: na začátku tahu je vyhlazená ~0
       // -> zesílení (∝ rychlost^-0.5) by vyletělo až na strop a první směrový signál by odfoukl všechno
       // (s rychlostí z pointer událostí ten problém není – je hned přesná)
-      const gs = evPx !== null ? sp : Math.max(sp, rawSp);
+      const gs = evOk ? sp : Math.max(sp, rawSp);
       const pk = Math.min(6, pcap * Math.tanh(Math.pow(gs, Math.max(0.1, cfg.pavelCurve)) / pcap) / gs);
       let dx = (pu - this.prev.x) * pk, dy = (pv - this.prev.y) * pk;
       if (aspect < 1) dx *= aspect; else dy /= aspect;
@@ -689,6 +697,8 @@ class Fluid {
 }
 
 let fluid = null;
+// rychlost, kterou voda opravdu použila (pro Editor): cm/s + zdroj ('events' / 'frames'), null = voda spí
+export const fluidSpeed = () => (fluid?.velocity ? { cm: fluid.speedCm ?? 0, src: fluid.speedSrc, stir: fluid.stirLevel ?? 0 } : null);
 export function getFluid(gl) {
   if (!fluid) { fluid = new Fluid(gl); if (import.meta.env.DEV) window.__fluid = fluid; }
   return fluid;

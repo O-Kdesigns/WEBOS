@@ -167,6 +167,7 @@ const VolumetricLightShader = {
     tDnaInk: { value: dummyTexture },   // + inkoust světla, který particly pouštějí do vody z myši
     uDnaGlowOn: { value: 0.0 },
     uDnaInkOn: { value: 0.0 },
+    uDnaInkMax: { value: 0.25 },
     uDnaAura: { value: 4 },
     uDnaInk: { value: 0.7 },
     uDnaTint: { value: 0.35 },
@@ -448,6 +449,7 @@ const VolumetricLightShader = {
     uniform sampler2D tDnaInk;
     uniform float uDnaGlowOn;
     uniform float uDnaInkOn;
+    uniform float uDnaInkMax;
     uniform float uDnaAura;
     uniform float uDnaInk;
     uniform float uDnaTint;
@@ -683,6 +685,8 @@ const VolumetricLightShader = {
         // inkoust (2D voda) má vlastní míru barvy particlů (uDnaInkTint)
         if (uDnaInkOn > 0.5) {
           vec3 k = texture2D(tDnaInk, vUv).rgb * uDnaInk;
+          // měkký strop jasu: tmavá voda zůstane vidět, jasná se nepřepálí (víc vody = větší plocha, ne víc světla)
+          k /= 1.0 + dot(k, vec3(0.299, 0.587, 0.114)) / uDnaInkMax;
           g += mix(k, uTvColor * dot(k, vec3(0.299, 0.587, 0.114)) * 2.0, uDnaInkTint);
         }
         L += g * orbitOn * (isBg ? 1.0 : uDnaObj) * tvRayMask();
@@ -1780,6 +1784,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         U.uDnaInkOn.value = r.ink ? 1 : 0;
         U.uDnaAura.value = dg.aura ?? 4;
         U.uDnaInk.value = dg.ink ?? DNA_GLOW_DEFAULTS.ink;
+        U.uDnaInkMax.value = Math.max(0.01, dg.inkMax ?? DNA_GLOW_DEFAULTS.inkMax);
         U.uDnaTint.value = dg.tint ?? 0.35;
         U.uDnaInkTint.value = dg.inkTint ?? dg.tint ?? 0.35;
         U.uDnaObj.value = dg.objects ?? 0.5;

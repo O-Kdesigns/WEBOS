@@ -59,6 +59,7 @@ void main() {
     float tv = (1.0 - smoothstep(0.9, 1.05, max(ab.x, ab.y))) * smoothstep(0.05, 0.5, uTvVis);
     ink += max(sharp() - uThr, 0.0) * w * uEmit * uDt * (1.0 - tv);
   }
+  // (strop jasu se dělá až při skládání – VolumetricLight, uDnaInkMax)
   gl_FragColor = vec4(min(ink, vec3(8.0)), 1.0);
 }`;
 
@@ -69,7 +70,8 @@ export const DNA_GLOW_DEFAULTS = {
   auraRadius: 2.6,   // šíře záře (krok gauss v texelech 1/16) – rozlitá, ne přilepená k DNA
   tint: 0.35,        // aura: 0 = barvy particlů, 1 = barva tvLight.color
   inkTint: 0.35,     // inkoust (2D voda): 0 = barvy particlů, 1 = barva tvLight.color
-  ink: 0,            // síla inkoustu světla (0 = vypnuto, průchod se přeskočí; 2026-10-05 Oliver: záře z vody nechce, dřív 0.7)
+  ink: 0.7,          // síla inkoustu = viditelná 2D voda (0 = vypnuto, průchod se přeskočí)
+  inkMax: 0.25,      // měkký strop jasu viditelné vody (luminance, VolumetricLight): k / (1 + jas/inkMax) – víc vody = větší plocha, ne víc světla
   emit: 10,          // kolik inkoustu particly pustí za s ve vodě
   fade: 2.2,         // útlum inkoustu (1/s) – krátký: ukazuje vodu teď, ne dlouhé stopy
   flow: 1,           // jak silně inkoust nese proud
