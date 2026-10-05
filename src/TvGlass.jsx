@@ -190,7 +190,7 @@ const fragmentShader = `${TEX_LOD0}
     vec3 col = bg * absorb;
     // s videem jen slabý závoj (čisté sklo); v ledu rozptyl kopíruje žilky -> zmrzlá textura je vidět i na tmavém pozadí
     float iceRidge = smoothstep(0.35, 0.95, ice.z);
-    col += tint * uMilk * (0.6 + smudge * 0.8) * mix(1.0, 0.12 + iceF * (0.15 + 0.55 * iceRidge), iceK);
+    col += tint * uMilk * (0.6 + smudge * 0.8) * mix(1.0, 0.15 + iceF * 0.5 * iceRidge, iceK); // závoj jen v žilkách, ne plochá deska (pod úhlem = mléčný rámeček)
 
     // video až po tónování skla (sklo ho nebarví), lomené ledem; průhledné: tmavá místa propouštějí scénu
     float vidM = 0.0;
@@ -210,7 +210,7 @@ const fragmentShader = `${TEX_LOD0}
     float sheen = smoothstep(0.35, 0.95, R.y);
     float glint = pow(clamp(dot(R, normalize(vec3(0.4, 0.8, 0.45))), 0.0, 1.0), 6.0);
     float sc = scratchLayer(q, 0.35, 1.0) + scratchLayer(q, -0.9, 7.0) * 0.7 + scratchLayer(q, 1.7, 13.0) * 0.5;
-    float surf = 1.0 - vidM * 0.5; // odlesky přes video slabší (nezmléčnit obraz)
+    float surf = 1.0 - vidM * 0.85; // odlesky přes video skoro pryč (pod úhlem jinak zmléční obraz)
     col += vec3(0.85, 0.9, 1.0) * sc * uScratch * (0.1 + glint * 0.5 + sheen * 0.15) * surf;
     col += vec3(0.9, 0.95, 1.0) * (sheen * 0.08 + glint * 0.12) * (0.5 + smudge) * surf;
 
@@ -221,7 +221,9 @@ const fragmentShader = `${TEX_LOD0}
     // hrana svítí do barvy videa (jas zůstává podle tvRim)
     float rmax = max(max(uRim.r, uRim.g), max(uRim.b, 0.05));
     vec3 rim = ambK > 0.5 ? mix(uRim, (tint / tmax) * rmax, clamp(uVidTint, 0.0, 1.0) * 0.6) : uRim;
-    col += rim * uRimStrength * (fres * 1.2 + inner * 0.25 + innerLine * 0.6 + frontLine * 0.25);
+    // s videem: fresnel a pás vnitřního odrazu (pod úhlem široký) jen slabě a ne přes obraz
+    float haze = mix(1.0, 0.35 * (1.0 - vidM), iceK);
+    col += rim * uRimStrength * ((fres * 1.2 + inner * 0.25) * haze + innerLine * 0.6 + frontLine * 0.25);
 
     // "měkká near plane": čím blíž kameře, tím průhlednější (střed se otevře první, okraje poslední)
     float nearFade = smoothstep(uNear.x, uNear.y, distance(cameraPosition, vWP));

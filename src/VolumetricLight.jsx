@@ -432,6 +432,8 @@ const VolumetricLightShader = {
     uniform vec2 uTvAxA;
     uniform vec2 uTvAxB;
     uniform vec4 uTvInv;
+    uniform mat3 uTvHInv;
+    uniform float uTvHOn;
     uniform float uTvHalo;
     uniform float uTvRayMask;
     uniform vec2 uFluidTexel;
@@ -671,8 +673,17 @@ const VolumetricLightShader = {
     // Paprsky přes sklo aktivní TV: závoj přes video (Oliver 2026-09-28) -> na ploše skla ztlumit
     float tvRayMask() {
       if (uTvRayMask < 0.001 || uTvVis < 0.01) return 1.0;
-      vec2 d = (vUv - uTvPos) * vec2(uAspect, 1.0);
-      vec2 ab = abs(vec2(dot(uTvInv.xy, d), dot(uTvInv.zw, d)));
+      vec2 ab;
+      if (uTvHOn > 0.5) {
+        // perspektivně přesně (homografie ze 4 rohů) – afinní odhad pod úhlem neseděl na sklo
+        // a dělal přes TV posunutý tmavý obdélník (Oliver 2026-10-05: „zamlžené rámečky“)
+        vec3 r = uTvHInv * vec3(vUv.x * uAspect, vUv.y, 1.0);
+        if (r.z <= 1e-6) return 1.0;
+        ab = abs(r.xy / r.z * 2.0 - 1.0);
+      } else {
+        vec2 d = (vUv - uTvPos) * vec2(uAspect, 1.0);
+        ab = abs(vec2(dot(uTvInv.xy, d), dot(uTvInv.zw, d)));
+      }
       float inside = 1.0 - smoothstep(0.86, 1.02, max(ab.x, ab.y));
       return 1.0 - uTvRayMask * inside * smoothstep(0.05, 0.5, uTvVis);
     }
@@ -1588,6 +1599,32 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         }
         det = Math.abs(det) < 1e-6 ? 1e-6 : det;
         u.uTvInv.value.set(B.y / det, -B.x / det, -A.y / det, A.x / det);
+        // přesná maska skla: homografie jednotkový čtverec -> 4 promítnuté rohy (Heckbert), invertovaná
+        u.uTvHOn.value = 0;
+        {
+          const P = (t.hc ??= [0, 1, 2, 3].map(() => new THREE.Vector3()));
+          const sgn = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+          let ok = true;
+          for (let k = 0; k < 4; k++) {
+            const v = P[k].copy(part.center).addScaledVector(part.axA, sgn[k][0] * part.half.x)
+              .addScaledVector(part.axB, sgn[k][1] * part.half.y).applyMatrix4(tvMesh.matrixWorld);
+            if ((t.hv ??= new THREE.Vector3()).copy(v).applyMatrix4(camera.matrixWorldInverse).z > -1e-3) ok = false; // roh za kamerou
+            v.project(camera);
+            v.set((v.x + 1) * 0.5 * asp, (v.y + 1) * 0.5, 0);
+          }
+          const [p0, p1, p2, p3] = P;
+          const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+          const dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+          const den = dx1 * dy2 - dx2 * dy1;
+          if (ok && Math.abs(den) > 1e-9) {
+            const g = (dx3 * dy2 - dx2 * dy3) / den, h = (dx1 * dy3 - dx3 * dy1) / den;
+            const H = (t.hm ??= new THREE.Matrix3());
+            H.set(p1.x - p0.x + g * p1.x, p3.x - p0.x + h * p3.x, p0.x,
+                  p1.y - p0.y + g * p1.y, p3.y - p0.y + h * p3.y, p0.y,
+                  g, h, 1);
+            if (Math.abs(H.determinant()) > 1e-12) { u.uTvHInv.value.copy(H).invert(); u.uTvHOn.value = 1; }
+          }
+        }
         const fade = tvMesh.material?.uniforms?.uFade?.value ?? 1;
         // i z boku / shora svítí aspoň facingFloor (záře je barva prostoru), naplno při pohledu v úrovni TV
         target = THREE.MathUtils.lerp(tl.facingFloor ?? 0.55, 1, THREE.MathUtils.smoothstep(facing, tl.facingMin ?? 0.4, tl.facingFull ?? 0.92))
