@@ -1,7 +1,28 @@
 ﻿import React from 'react';
 import { DenseSlider, DenseToggle, DenseColor, DashboardCard } from './OrbitSettingsPanel';
-import { FLUID_DEFAULTS } from '../../particles/ParticleFluid';
+import { FLUID_DEFAULTS, pointerSpeedCm } from '../../particles/ParticleFluid';
 import { ESCAPE_DEFAULTS } from '../../particles/utils';
+
+// Živá skutečná rychlost kurzoru (cm/s na displeji, odhad z CSS px) – podle ní se nastavuje práh víření.
+// Špička = nejvyšší rychlost za poslední 2 s.
+function PointerSpeedReadout() {
+  const [v, setV] = React.useState({ now: 0, peak: 0 });
+  React.useEffect(() => {
+    const hist = [];
+    const id = setInterval(() => {
+      const t = performance.now(), cm = pointerSpeedCm(t) ?? 0;
+      hist.push([t, cm]);
+      while (hist.length && hist[0][0] < t - 2000) hist.shift();
+      setV({ now: cm, peak: Math.max(...hist.map((h) => h[1])) });
+    }, 100);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 8px', fontVariantNumeric: 'tabular-nums' }}>
+      Rychlost myši teď: <b style={{ color: '#ec4899' }}>{v.now.toFixed(0)} cm/s</b> · špička 2 s: {v.peak.toFixed(0)} cm/s
+    </div>
+  );
+}
 
 export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric, updateInsideFog, updatePhysics, updateParticlePhysics, updateVolumetricVideo, updateVolumetricDepth, updateUi2d, updateUi2dBottomLeft, updateUi2dBottomLeftItem, addUi2dBottomLeftItem, removeUi2dBottomLeftItem, updateUi2dPillButton, openSections, toggleSection, touchSection }) {
   const fluid = appConfig.particlePhysics?.fluid || {};
@@ -88,9 +109,15 @@ export function InsideSettingsPanel({ appConfig, updateConfig, updateVolumetric,
         <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#ec4899', marginBottom: '8px' }}>Voda z particlů (jak moc se tvoří)</div>
         <DenseSlider desc="[Voda z particlů] Jak silně rychlost strčených particlů rozhýbe vodu v jejich místě (za snímek). 1 = voda hned převezme rychlost particlů." label="Síla vody z particlů" min={0} max={1} step={0.01} value={fluid.inject ?? FLUID_DEFAULTS.inject} color="#ec4899" onChange={v => updateFluid('inject', v)} />
         <DenseSlider desc="[Voda z particlů] Kolik vody vznikne z jednoho particlu (1 / počet particlů v buňce pro plné pokrytí). Víc = i řídké particly udělají plnou vodu." label="Voda z 1 particlu" min={0.05} max={3} step={0.05} value={fluid.injectCover ?? FLUID_DEFAULTS.injectCover} color="#ec4899" onChange={v => updateFluid('injectCover', v)} />
-        <DenseSlider desc="[Voda z particlů] Velikost stopy jednoho particlu ve vodě (buňky mřížky). Víc = širší proud kolem každého particlu." label="Stopa particlu" min={1} max={6} step={1} value={fluid.injectPointSize ?? FLUID_DEFAULTS.injectPointSize} color="#ec4899" onChange={v => updateFluid('injectPointSize', v)} />
+        <DenseSlider desc="[Voda z particlů] Velikost stopy jednoho particlu ve vodě (buňky mřížky, měkký gauss). Víc = širší proud kolem každého particlu." label="Stopa particlu" min={1} max={12} step={1} value={fluid.injectPointSize ?? FLUID_DEFAULTS.injectPointSize} color="#ec4899" onChange={v => updateFluid('injectPointSize', v)} />
+        <DenseSlider desc="[Voda z particlů] Kolikrát rychleji se voda rozjede než particly, které ji rozhýbaly. Víc = výraznější voda." label="Zesílení vody" min={0.5} max={3} step={0.05} value={fluid.injectGain ?? FLUID_DEFAULTS.injectGain} color="#ec4899" onChange={v => updateFluid('injectGain', v)} />
+        <DenseSlider desc="[Voda z particlů] Měkký strop rychlosti vody z particlů (výšky obrazovky/s). Míň = rychlý tah udělá hodně vody na místě, víc = voda odletí dál od myši." label="Strop rychlosti vody" min={0.2} max={4} step={0.05} value={fluid.injectMax ?? FLUID_DEFAULTS.injectMax} color="#ec4899" onChange={v => updateFluid('injectMax', v)} />
+        <DenseSlider desc="[Voda z particlů] Šířka zóny kolem dráhy myši, kde particly smí tvořit vodu (výšky obrazovky). Mimo zónu je voda jen nese – víření se drží myši i při rychlém tahu." label="Zóna kolem myši" min={0.02} max={0.4} step={0.005} value={fluid.zoneRadius ?? FLUID_DEFAULTS.zoneRadius} color="#ec4899" onChange={v => updateFluid('zoneRadius', v)} />
+        <DenseSlider desc="[Voda z particlů] Jak dlouho zóna za myší vydrží (s, časová konstanta). Víc = voda se tvoří i dál za kurzorem." label="Zóna – mizení" min={0.05} max={3} step={0.05} value={fluid.zoneFade ?? FLUID_DEFAULTS.zoneFade} color="#ec4899" onChange={v => updateFluid('zoneFade', v)} />
         <DenseSlider desc="[Voda z particlů] Vlny, které pohybující se particly zvedají (jako loď), × Výška vlny níže. 0 = bez vln." label="Vlny z particlů" min={0} max={4} step={0.05} value={fluid.injectWave ?? FLUID_DEFAULTS.injectWave} color="#ec4899" onChange={v => updateFluid('injectWave', v)} />
-        <DenseSlider desc="[Voda z particlů] Jak rychle musí myš táhnout, aby se to začalo vířit (výšky obrazovky za s). Pomalejší tah particly jen strčí, vodu z nich netvoří. Doznění se počítá od posledního tahu nad prahem. 0 = víří každý tah." label="Práh rychlosti víření" min={0} max={5} step={0.05} value={fluid.stirSpeed ?? FLUID_DEFAULTS.stirSpeed} color="#ec4899" onChange={v => updateFluid('stirSpeed', v)} />
+        <PointerSpeedReadout />
+        <DenseSlider desc="[Voda z particlů] Od jaké skutečné rychlosti kurzoru (cm/s na displeji) se začne vířit. Pomalejší tah particly jen strčí, vodu z nich netvoří. 0 = víří každý tah." label="Práh víření" unit=" cm/s" min={0} max={100} step={1} value={fluid.stirSpeed ?? FLUID_DEFAULTS.stirSpeed} color="#ec4899" onChange={v => updateFluid('stirSpeed', v)} />
+        <DenseSlider desc="[Voda z particlů] Rychlost kurzoru (cm/s), při které se víří naplno. Mezi prahem a touhle rychlostí síla plynule roste." label="Víření naplno od" unit=" cm/s" min={1} max={200} step={1} value={fluid.stirFull ?? FLUID_DEFAULTS.stirFull} color="#ec4899" onChange={v => updateFluid('stirFull', v)} />
         <DenseSlider desc="[Voda z particlů] Jak dlouho po posledním pohybu myši ještě strkané particly tvoří vodu (s). Síla plynule klesá k nule – potom už nic nevíří samo." label="Doznění po myši" min={0.2} max={10} step={0.1} value={fluid.afterglow ?? FLUID_DEFAULTS.afterglow} color="#ec4899" onChange={v => updateFluid('afterglow', v)} />
         <DenseSlider desc="[Voda z particlů] Jak rychle voda po doznění utichne (útlum za s navíc). Víc = hned klid, míň = ještě chvíli dojíždí." label="Utišení po doznění" min={0} max={10} step={0.1} value={fluid.calm ?? FLUID_DEFAULTS.calm} color="#ec4899" onChange={v => updateFluid('calm', v)} />
         <div style={{ height: '8px' }} />

@@ -22,17 +22,26 @@ export const FLUID_DEFAULTS = {
   insideSource: 'mouse',  // zdroj vody mimo klid DNA (průlet + INSIDE); 'mouse' = jako do 2026-10-05 (Oliver: v INSIDE lepší)
   pushFade: 0.3,          // [particles] s – jak rychle mizí strčení myší (první náraz do particlů)
   inject: 0.9,            // [particles] jak silně se proud v buňce přizpůsobí rychlosti particlů (za snímek)
-  injectCover: 0.5,       // [particles] 1 / počet strčených particlů v buňce mřížky pro plné pokrytí
-  injectPointSize: 2,     // [particles] velikost particlu v mřížce (buňky)
+  injectCover: 1,         // [particles] 1 / počet strčených particlů v buňce mřížky pro plné pokrytí (dřív 0.5)
+  injectPointSize: 5,     // [particles] velikost particlu v mřížce (buňky) – měkký gauss, ne čtverec
   injectWave: 1,          // [particles] vlny z pohybu particlů (× waveHeight)
   // [particles] doznění: particly tvoří vodu jen `afterglow` s po posledním pohybu myši (síla plynule klesá k 0),
   // pak voda utichne útlumem navíc `calm` (1/s). Bez toho se strkání particlů vodou a vody particly řetězilo
   // a vířilo samo dál desítky sekund („autoplay“, Oliver 2026-10-05).
   afterglow: 2,
   calm: 3,
-  // [particles] práh rychlosti myši pro víření (výšky obrazovky/s): pomalejší tah particly jen strčí, vodu z nich
-  // netvoří; víření (a doznění `afterglow`) běží jen od posledního tahu nad prahem. 0 = víří každý tah.
-  stirSpeed: 0,
+  // [particles] práh víření ve SKUTEČNÉ rychlosti kurzoru (cm/s na displeji, viz pointerSpeed níže): pod `stirSpeed`
+  // tah particly jen strčí, vodu z nich netvoří; mezi `stirSpeed` a `stirFull` síla víření plynule roste.
+  // (do 2026-10-05 výšky obrazovky/s, výchozí 0 = vířil každý tah – Oliver: „hned to začne dělat“)
+  stirSpeed: 12,
+  stirFull: 40,
+  // [particles] zóna kolem dráhy myši: vodu z particlů smí tvořit jen tam, kudy kurzor nedávno projel (× síla víření
+  // podle rychlosti). Mimo zónu je voda jen nese, další vodu z nich nedělá -> víření se nerozleze po celé DNA ani
+  // při rychlém tahu a drží se myši. Poloměr ve výškách obrazovky, mizení = časová konstanta v s.
+  zoneRadius: 0.09,
+  zoneFade: 0.45,
+  injectGain: 1.6,        // [particles] voda se rozjede tolikrát rychleji než particly, které ji rozhýbaly
+  injectMax: 1.2,         // [particles] měkký strop rychlosti vody z particlů (výšky obrazovky/s)
   splatForce: 6000,       // [pavel] síla tahu (Pavel 6000): posun kurzoru za snímek × tohle = přidaný proud
   pavelCurve: 0.5,        // [pavel] odezva na rychlost myši: 1 = lineární (jako Pavel), menší = pomalý tah silnější, rychlý slabší
   pavelMaxSpeed: 2.5,     // [pavel] strop (výšky obrazovky/s): rychlejší švih už skoro nesílí -> nerozvíří všechno
@@ -72,6 +81,53 @@ export const FLUID_DEFAULTS = {
   idleSleep: 5,           // s bez pohybu myši -> simulace se uspí (nejdřív až proud dozní)
 };
 
+// --- Skutečná rychlost kurzoru ---
+// Z pointer událostí, ne ze snímků: časová razítka událostí + všechny vzorky myši (getCoalescedEvents –
+// myš posílá 125–1000 Hz, snímek vidí jen poslední pozici). Rychlost ze snímků skákala 0 / 2× (jiná frekvence
+// myši a obrazovky) a při nízkých FPS byla nadsazená (dt oříznuté na 1/30 s).
+// Jednotky: CSS px jsou čtvercové (x i y stejně -> poměr stran nehraje roli) a jsou to úhlové jednotky – prohlížeč
+// je přes devicePixelRatio (škálování Windows, retina) drží na ~0.2–0.26 mm na desktopu (27" 1440p 100 % 0.23 mm,
+// 15" 1080p 125 % 0.22, 4K 27" 150 % 0.23) a ~0.16 mm na mobilu (Android dp = 1/160"). Skutečné DPI prohlížeč
+// neprozradí, tohle je nejlepší odhad -> cm/s na displeji nezávisle na velikosti okna i rozlišení.
+const POINTER_WINDOW = 60; // ms – průměr rychlosti přes posledních 60 ms (7–8 vzorků při 125 Hz)
+const pointer = { pts: [], mmPerPx: 0.25 };
+if (typeof window !== 'undefined') {
+  try { if (window.matchMedia('(pointer: coarse)').matches) pointer.mmPerPx = 0.16; } catch { /* starý prohlížeč */ }
+  const reset = () => { pointer.pts.length = 0; };
+  window.addEventListener('pointermove', (e) => {
+    const list = e.getCoalescedEvents?.();
+    for (const ev of (list && list.length ? list : [e])) pointer.pts.push(ev.clientX, ev.clientY, ev.timeStamp);
+    const old = e.timeStamp - 200;
+    let k = 0; while (k < pointer.pts.length - 3 && pointer.pts[k + 2] < old) k += 3;
+    if (k) pointer.pts.splice(0, k);
+  }, { passive: true, capture: true });
+  // vjetí do okna / nový dotyk = skok, ne tah
+  window.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') reset(); }, { passive: true, capture: true });
+  window.addEventListener('pointerout', (e) => { if (!e.relatedTarget) reset(); }, { passive: true });
+  window.addEventListener('blur', reset);
+}
+// rychlost kurzoru v CSS px/s (dráha za posledních POINTER_WINDOW ms); null = žádná čerstvá data
+export function pointerSpeedPx(now = performance.now()) {
+  const p = pointer.pts, n = p.length / 3;
+  const last = p[p.length - 1];
+  if (n === 0 || now - last > 500) return n === 0 ? null : 0;
+  // okno končí u poslední události, dokud chodí (mezera do dalšího vzorku by rychlost ředila o ~10 %);
+  // po zastavení (> 40 ms bez události) končí v „teď“ -> rychlost klesne k 0
+  const from = (now - last < 40 ? last : now) - POINTER_WINDOW;
+  let len = 0;
+  for (let i = 1; i < n; i++) {
+    const t = p[i * 3 + 2];
+    if (t < from) continue;
+    const d = Math.hypot(p[i * 3] - p[i * 3 - 3], p[i * 3 + 1] - p[i * 3 - 2]);
+    // úsek, který začal před oknem, jen poměrnou částí
+    const t0 = p[i * 3 - 1], f = t0 < from ? (t - from) / Math.max(1e-3, t - t0) : 1;
+    len += d * f;
+  }
+  return len / POINTER_WINDOW * 1000;
+}
+// skutečná rychlost kurzoru na displeji (cm/s, odhad viz výše)
+export const pointerSpeedCm = (now) => { const px = pointerSpeedPx(now); return px === null ? null : px * pointer.mmPerPx / 10; };
+
 const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 const HEAD = `uniform vec2 uTexel; varying vec2 vUv;
 #define S(t, o) texture2D(t, vUv + (o) * uTexel)
@@ -104,7 +160,34 @@ void main(){
   vec4 b = texture2D(uTarget, vUv);
   vec3 add = b.xyz + g * uColor;
   if (uMask > 0.5) add.z = 1.0 - (1.0 - b.z) * (1.0 - g);
-  gl_FragColor = vec4(add, 1.0);
+  gl_FragColor = vec4(add, b.w); // w = zóna víření (pole strčení), nepřepisovat
+}`;
+
+// [particles] pole strčení: xyz (proud + stopa) mizí za pushFade, w = zóna víření za zoneFade
+const PUSH_FADE = HEAD + `
+uniform sampler2D uSrc; uniform float uFade; uniform float uZoneFade;
+void main(){ vec4 c = texture2D(uSrc, vUv); gl_FragColor = vec4(c.xyz * uFade, c.w * uZoneFade); }`;
+
+// [particles] zóna víření: úsečka dráhy kurzoru za snímek (bez děr při rychlém tahu), hodnota = síla víření
+// podle rychlosti myši; MAX -> opakované tahy zónu nepřesytí, jen obnoví
+const ZONE = HEAD + `
+uniform sampler2D uSrc; uniform vec2 uA; uniform vec2 uB; uniform float uRadius; uniform float uAspect; uniform float uLevel;
+void main(){
+  vec4 c = texture2D(uSrc, vUv);
+  vec2 pa = vUv - uA, ba = uB - uA; pa.x *= uAspect; ba.x *= uAspect;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-10), 0.0, 1.0);
+  vec2 d = pa - ba * h;
+  float g = exp(-dot(d, d) / (uRadius * uRadius));
+  gl_FragColor = vec4(c.xyz, max(c.w, g * uLevel));
+}`;
+
+// [particles] barvivo náhledu z vody, kterou tvoří particly (ne z kurzoru) -> náhled ukazuje skutečnou vodu
+const DYE_INJECT = HEAD + `
+uniform sampler2D uSrc; uniform sampler2D uInj; uniform sampler2D uZone; uniform vec3 uColor; uniform float uCover; uniform float uAmount;
+void main(){
+  vec3 j = texture2D(uInj, vUv).xyz;
+  float cov = min(1.0, j.z * uCover) * texture2D(uZone, vUv).w;
+  gl_FragColor = vec4(texture2D(uSrc, vUv).rgb + uColor * cov * uAmount, 1.0);
 }`;
 
 // Advekce barviva (jiné rozlišení než proud) – jako Pavel: výsledek / (1 + útlum·dt)
@@ -117,13 +200,17 @@ void main(){
 
 // [particles] proud v buňce se přizpůsobí průměrné rychlosti strčených particlů (inj: xy = Σ rychlost·váha, z = Σ váha)
 const INJECT = HEAD + `
-uniform sampler2D uVel; uniform sampler2D uInj; uniform float uStrength; uniform float uCover;
+uniform sampler2D uVel; uniform sampler2D uInj; uniform sampler2D uZone; uniform float uStrength; uniform float uCover; uniform float uGain; uniform float uMax;
 void main(){
   vec4 v = texture2D(uVel, vUv);
   vec3 j = texture2D(uInj, vUv).xyz;
   if (j.z > 1e-4) {
-    float cov = min(1.0, j.z * uCover);
-    v.xy += (j.xy / j.z - v.xy) * cov * uStrength;
+    // jen v zóně víření kolem dráhy myši -> voda nese particly i dál, ale novou vodu tvoří jen u myši
+    float cov = min(1.0, j.z * uCover) * texture2D(uZone, vUv).w;
+    // měkký strop rychlosti: rychlý tah udělá hodně vody na místě, ne proud, který odletí přes celou obrazovku
+    vec2 t = j.xy / j.z * uGain; float tl = length(t);
+    t *= uMax * (1.0 - 2.0 / (exp(2.0 * min(tl / uMax, 10.0)) + 1.0)) / max(tl, 1e-4); // tanh
+    v.xy += (t - v.xy) * cov * uStrength;
     v.z = 1.0 - (1.0 - v.z) * (1.0 - cov); // stopa: proud působí na particly jen ve stopě (utils.js)
   }
   gl_FragColor = v;
@@ -197,9 +284,9 @@ void main(){
 const WAVE = HEAD + `
 uniform sampler2D uWave; uniform vec2 uA; uniform vec2 uB; uniform float uRadius; uniform float uAspect;
 uniform float uPush; uniform float uC2; uniform float uDamp; uniform float uLeak;
-uniform sampler2D uInj; uniform float uInjPush; uniform float uInjCover;
-// [particles] průměrná rychlost strčených particlů × pokrytí buňky
-vec2 iv(vec2 o){ vec3 j = S(uInj, o).xyz; return j.z > 1e-4 ? j.xy / j.z * min(1.0, j.z * uInjCover) : vec2(0.0); }
+uniform sampler2D uInj; uniform sampler2D uZone; uniform float uInjPush; uniform float uInjCover;
+// [particles] průměrná rychlost strčených particlů × pokrytí buňky × zóna víření
+vec2 iv(vec2 o){ vec3 j = S(uInj, o).xyz; return j.z > 1e-4 ? j.xy / j.z * min(1.0, j.z * uInjCover) * S(uZone, o).w : vec2(0.0); }
 void main(){
   vec4 c = texture2D(uWave, vUv);
   float L = S(uWave, vec2(-1, 0)).r, R = S(uWave, vec2(1, 0)).r, T = S(uWave, vec2(0, 1)).r, B = S(uWave, vec2(0, -1)).r;
@@ -272,8 +359,11 @@ class Fluid {
       splatAdd: mk(SPLAT_ADD, { uTarget: { value: null }, uPoint: { value: new THREE.Vector2() }, uColor: { value: new THREE.Vector3() }, uRadius: { value: 0.0025 }, uAspect: { value: 1 }, uMask: { value: 0 } }),
       advectDye: mk(ADVECT_DYE, { uVel: { value: null }, uSrc: { value: null }, uVelTexel: { value: new THREE.Vector2() }, uDt: { value: 0 }, uDissipation: { value: 1 } }),
       wave: mk(WAVE, { uWave: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uRadius: { value: 0.03 }, uAspect: { value: 1 }, uPush: { value: 0 }, uC2: { value: 0.4 }, uDamp: { value: 0.99 }, uLeak: { value: 1 },
-        uInj: { value: null }, uInjPush: { value: 0 }, uInjCover: { value: 0.5 } }),
-      inject: mk(INJECT, { uVel: { value: null }, uInj: { value: null }, uStrength: { value: 0.9 }, uCover: { value: 0.5 } }),
+        uInj: { value: null }, uZone: { value: null }, uInjPush: { value: 0 }, uInjCover: { value: 0.5 } }),
+      inject: mk(INJECT, { uVel: { value: null }, uInj: { value: null }, uZone: { value: null }, uStrength: { value: 0.9 }, uCover: { value: 0.5 }, uGain: { value: 1 }, uMax: { value: 150 } }),
+      pushFade: mk(PUSH_FADE, { uSrc: { value: null }, uFade: { value: 1 }, uZoneFade: { value: 1 } }),
+      zone: mk(ZONE, { uSrc: { value: null }, uA: { value: new THREE.Vector2() }, uB: { value: new THREE.Vector2() }, uRadius: { value: 0.1 }, uAspect: { value: 1 }, uLevel: { value: 0 } }),
+      dyeInject: mk(DYE_INJECT, { uSrc: { value: null }, uInj: { value: null }, uZone: { value: null }, uColor: { value: new THREE.Vector3() }, uCover: { value: 0.5 }, uAmount: { value: 0 } }),
     };
     this.w = 0; this.h = 0;
     this.prev = new THREE.Vector2(NaN, NaN);
@@ -367,15 +457,25 @@ class Fluid {
     gl.autoClear = false;
     const m = this.m;
 
-    // rychlost tahu (výšky obrazovky/s), vyhlazená ~50 ms: myš posílá pozice jinou frekvencí než snímky
-    // (165 Hz obrazovka, 125 Hz myš -> surová rychlost skáče 0 / 2×)
+    // rychlost tahu (výšky obrazovky/s): ze skutečných pointer událostí (pointerSpeedPx, průměr 60 ms);
+    // bez nich (syntetický pointer) ze snímků, vyhlazená ~50 ms – myš posílá pozice jinou frekvencí než snímky
     const aspect = width / height;
     const rawSp = moved ? Math.hypot((pu - this.prev.x) * aspect, pv - this.prev.y) / dt : 0;
-    this.speed = (this.speed ?? 0) + (rawSp - (this.speed ?? 0)) * (1 - Math.exp(-dt / 0.05));
+    const evPx = pointerSpeedPx(now * 1000);
+    if (evPx !== null) this.speed = evPx / height;
+    else this.speed = (this.speed ?? 0) + (rawSp - (this.speed ?? 0)) * (1 - Math.exp(-dt / 0.05));
+    // skutečná rychlost kurzoru na displeji (cm/s) – prahy víření; bez událostí odhad z výšek obrazovky
+    this.speedCm = evPx !== null ? pointerSpeedCm(now * 1000) : this.speed * height * pointer.mmPerPx / 10;
     const sp = Math.max(this.speed, 1e-4);
-    // [particles] víření jen od tahu rychlejšího než stirSpeed (doznění se počítá od posledního takového)
+    // [particles] síla víření podle skutečné rychlosti (měkký práh stirSpeed..stirFull, cm/s); obálka drží
+    // nejvyšší úroveň a po tahu lineárně klesá k 0 za afterglow s (doznění)
+    const s0 = cfg.stirSpeed ?? 0, s1 = Math.max(s0 + 0.1, cfg.stirFull ?? s0 + 0.1);
+    const st = Math.min(1, Math.max(0, (this.speedCm - s0) / (s1 - s0)));
+    this.stirLevel = moved ? st * st * (3 - 2 * st) : 0;
+    const after = Math.max(0.01, cfg.afterglow ?? 2);
+    this.stirEnv = Math.max(this.stirLevel, (this.stirEnv ?? 0) - dt / after);
     if (this.lastStir === undefined) this.lastStir = -1e9;
-    if (moved && this.speed >= (cfg.stirSpeed ?? 0)) this.lastStir = now;
+    if (this.stirLevel > 0.01) this.lastStir = now;
     const sinceStir = now - this.lastStir;
     // křivka odezvy: sqrt-ish + měkký strop -> out = výsledná rychlost proudu (výšky obrazovky/s)
     const cap = Math.max(0.1, cfg.maxSpeed);
@@ -410,11 +510,12 @@ class Fluid {
     wu.uDamp.value = Math.exp(-CSTEP / (Math.max(0.02, cfg.waveReach) * this.h));
     wu.uLeak.value = Math.exp(-0.8 * CSTEP / (Math.max(0.05, this.waveC) * this.h));
     wu.uInj.value = this.injRT.texture;
+    wu.uZone.value = this.pushRT[0].texture;
     wu.uInjCover.value = cfg.injectCover;
     for (let i = 0; i < steps; i++) {
       wu.uPush.value = i === 0 && srcMoved ? wavePush : 0;
       // [particles] vlny z pohybu particlů: přírůstek ∝ sbíhání proudu × čas (stejný tvar jako posun stopy myši / poloměr)
-      wu.uInjPush.value = fromParticles && i === 0 ? cfg.waveHeight * cfg.injectWave * dt * Math.max(0, 1 - sinceStir / Math.max(0.01, cfg.afterglow ?? 2)) ** 2 : 0;
+      wu.uInjPush.value = fromParticles && i === 0 ? cfg.waveHeight * cfg.injectWave * dt * this.stirEnv ** 2 : 0;
       wu.uWave.value = this.waveRT[0].texture;
       this.pass(m.wave, this.waveRT[1]); this.waveRT.reverse();
     }
@@ -429,17 +530,39 @@ class Fluid {
       this.ensureDye(Math.max(64, Math.round(dh * aspect)), dh);
     }
     if (fromParticles) {
-      // strčení myší rychle mizí (cítí ho jen particly; dál je nese voda, kterou sami rozpohybují)
-      m.scale.uniforms.uSrc.value = this.pushRT[0].texture; m.scale.uniforms.uValue.value = Math.exp(-dt / Math.max(0.01, cfg.pushFade));
-      this.pass(m.scale, this.pushRT[1]); this.pushRT.reverse();
+      // strčení myší rychle mizí (cítí ho jen particly; dál je nese voda, kterou sami rozpohybují); zóna víření pomaleji
+      const pf = m.pushFade.uniforms;
+      pf.uSrc.value = this.pushRT[0].texture; pf.uFade.value = Math.exp(-dt / Math.max(0.01, cfg.pushFade));
+      pf.uZoneFade.value = Math.exp(-dt / Math.max(0.01, cfg.zoneFade ?? 0.45));
+      this.pass(m.pushFade, this.pushRT[1]); this.pushRT.reverse();
+      // zóna víření podél dráhy kurzoru (síla podle skutečné rychlosti)
+      if (moved && this.stirLevel > 0.001) {
+        const zu = m.zone.uniforms;
+        zu.uSrc.value = this.pushRT[0].texture;
+        zu.uA.value.copy(this.prev); zu.uB.value.set(pu, pv);
+        zu.uRadius.value = Math.max(0.005, cfg.zoneRadius ?? 0.09); zu.uAspect.value = aspect; zu.uLevel.value = this.stirLevel;
+        this.pass(m.zone, this.pushRT[1]); this.pushRT.reverse();
+      }
       // rychlost strčených particlů z minulého snímku -> proud (pak běží tlak, víření, advekce jako dřív)
       const iu = m.inject.uniforms;
-      iu.uVel.value = this.vel[0].texture; iu.uInj.value = this.injRT.texture;
-      // doznění: po afterglow s od posledního pohybu myši particly vodu netvoří (žádné samovolné víření)
-      const after = Math.max(0.01, cfg.afterglow ?? 2), env = Math.max(0, 1 - sinceStir / after);
-      this.injectEnv = env * env;
+      iu.uVel.value = this.vel[0].texture; iu.uInj.value = this.injRT.texture; iu.uZone.value = this.pushRT[0].texture;
+      // doznění: po afterglow s od posledního víření particly vodu netvoří (žádné samovolné víření)
+      this.injectEnv = this.stirEnv * this.stirEnv;
       iu.uStrength.value = Math.min(1, Math.max(0, cfg.inject)) * this.injectEnv; iu.uCover.value = cfg.injectCover;
+      iu.uGain.value = Math.max(0, cfg.injectGain ?? 1);
+      iu.uMax.value = Math.max(0.05, cfg.injectMax ?? 1.2) * this.h;
       this.pass(m.inject, this.vel[1]); this.swapVel();
+      if (dyeOn) {
+        // náhled: barvivo tam, kde particly vodu opravdu tvoří (barva jako Pavel: náhodný odstín, mění se ~10× za s)
+        this.colorT = (this.colorT ?? 1) + dt * 10;
+        if (this.colorT >= 1 || !this.dyeColor) { this.colorT %= 1; this.dyeColor = new THREE.Color().setHSL(Math.random(), 1, 0.5).multiplyScalar(0.15); }
+        const du = m.dyeInject.uniforms;
+        du.uSrc.value = this.dye[0].texture; du.uInj.value = this.injRT.texture; du.uZone.value = this.pushRT[0].texture;
+        du.uColor.value.set(this.dyeColor.r, this.dyeColor.g, this.dyeColor.b);
+        du.uCover.value = cfg.injectCover; du.uAmount.value = 30 * dt * this.injectEnv;
+        du.uTexel.value.copy(this.dyeTexel);
+        this.pass(m.dyeInject, this.dye[1]); this.dye.reverse();
+      }
     }
     if (moved && pavel) {
       // Pavel: splat v aktuálním bodě, proud += posun kurzoru × splatForce (posun y / poměr stran jako u Pavla)
@@ -448,7 +571,8 @@ class Fluid {
       const pcap = Math.max(0.1, cfg.pavelMaxSpeed);
       // zesílení z vyhlazené rychlosti, ale ne větší než podle okamžité: na začátku tahu je vyhlazená ~0
       // -> zesílení (∝ rychlost^-0.5) by vyletělo až na strop a první směrový signál by odfoukl všechno
-      const gs = Math.max(sp, rawSp);
+      // (s rychlostí z pointer událostí ten problém není – je hned přesná)
+      const gs = evPx !== null ? sp : Math.max(sp, rawSp);
       const pk = Math.min(6, pcap * Math.tanh(Math.pow(gs, Math.max(0.1, cfg.pavelCurve)) / pcap) / gs);
       let dx = (pu - this.prev.x) * pk, dy = (pv - this.prev.y) * pk;
       if (aspect < 1) dx *= aspect; else dy /= aspect;
@@ -461,7 +585,7 @@ class Fluid {
       sa.uColor.value.set(dx * cfg.splatForce, dy * cfg.splatForce, 0);
       sa.uMask.value = 1;
       this.pass(m.splatAdd, tgt[1]); tgt.reverse();
-      if (dyeOn) {
+      if (dyeOn && !fromParticles) {
         // barva tahu jako Pavel: náhodný odstín ×0.15, mění se ~10× za s
         this.colorT = (this.colorT ?? 1) + dt * 10;
         if (this.colorT >= 1 || !this.dyeColor) { this.colorT %= 1; this.dyeColor = new THREE.Color().setHSL(Math.random(), 1, 0.5).multiplyScalar(0.15); }
@@ -657,7 +781,12 @@ void main(){
   gl_Position = vec4(n0, 0.0, 1.0);
   gl_PointSize = uPointSize;
 }`;
-const INJ_FRAG = `varying vec3 vOut; void main(){ gl_FragColor = vec4(vOut, 0.0); }`;
+// měkký gauss místo čtverce: particl rozhýbe vodu kolem sebe plynule (větší stopa bez zubatých buněk)
+const INJ_FRAG = `varying vec3 vOut; void main(){
+  vec2 q = gl_PointCoord * 2.0 - 1.0; float r2 = dot(q, q);
+  if (r2 > 1.0) discard;
+  gl_FragColor = vec4(vOut * exp(-3.0 * r2), 0.0);
+}`;
 
 export function createInjectPass(size) {
   const n = size * size;
