@@ -41,6 +41,7 @@ uniform float uFluidForce;
 uniform float uCoupling;
 uniform float uFriction;
 uniform float uFrontShell;
+uniform float uFrontShellDna;
 uniform sampler2D tWave;       // r = výška hladiny (vlny)
 uniform float uWaveForce;
 uniform float uWaveDrift;
@@ -190,7 +191,10 @@ void main() {
             vec2 ruv = rc.xy / max(rc.w, 1e-4) * 0.5 + 0.5;
             float frontInv = texture2D(tFront, ruv).x;
             float behind = frontInv > 0.0 ? rc.w - 1.0 / frontInv : 0.0;
-            float front = 1.0 - smoothstep(uFrontShell * 0.5, uFrontShell, behind);
+            // v klidu DNA vlastní hloubka (dnaFrontShell): jinak zadní vlákno tam, kde se na obrazovce kříží s předním,
+            // zůstalo při víření v klidu („hluché místo“, které se při scrollu posouvá)
+            float shell = dnaRest > 0.5 ? uFrontShellDna : uFrontShell;
+            float front = 1.0 - smoothstep(shell * 0.5, shell, behind);
             // volný particl není ve tvaru -> přední vrstva pro něj neplatí, voda ho tlačí vždy (vlastní síla)
             front = mix(front, uEscMouse, esc);
             vec3 fl = texture2D(tFluid, suv).xyz; // xy = proud, z = stopa myši
@@ -540,7 +544,7 @@ export function useGPGPU(count, particlesData, gl) {
       tPush: { value: null }, uPushOn: { value: 0 },
       uMVP: { value: new THREE.Matrix4() }, uCamRight: { value: new THREE.Vector3() }, uCamUp: { value: new THREE.Vector3() },
       uProj: { value: new THREE.Vector2(1, 1) }, uDt: { value: 1 / 60 }, uFluidForce: { value: 1 }, uCoupling: { value: 0.3 },
-      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
+      uFriction: { value: 0.92 }, uFrontShell: { value: 0.12 }, uFrontShellDna: { value: 4 }, tWave: { value: null }, uWaveForce: { value: 1 }, uWaveDrift: { value: 0 }, uWaveC: { value: 0 }, uWaveCStep: { value: 0.5 }, uHoldDecay: { value: 1 },
       uReturnK: { value: 0 }, uReturnDamp: { value: 0 }, uReturnTurn: { value: 10 },
       uEscOn: { value: 0 }, uEscDist: { value: 0.3 }, uEscChance: { value: 0.1 }, uEscSeed: { value: 0 }, uEscDrift: { value: 0.05 },
       uEscFriction: { value: 0.99 }, uEscLeash: { value: 1.5 }, uEscMouse: { value: 1 }, uEscScale: { value: 1.5 }, uEscLife: { value: 25 }, uReturnPull: { value: 0 }, uDnaLeash: { value: 0 },
@@ -662,6 +666,7 @@ export const DNA_HOLD_DEFAULTS = {
   dnaReturnRamp: 1.3,  // s – rozjezd návratu (projekt: returnRamp 0.8)
   dnaSlide: 0.6,       // world – o kolik dál smí particl od domova, dokud je blízko struktury DNA (0 = nic)
   dnaEdge: 0.6,        // 0..0,7 – měkkost hranice: od (1 − dnaEdge)·limit voda ztrácí sílu ven a particl se stočí zpět (dřív dnaBrake = zastavení u limitu)
+  dnaFrontShell: 4,    // world – jak hluboko do DNA voda sahá (od nejbližšího particlu); 4 = celá DNA (obě vlákna)
   dnaLimitRandom: 0.85, // 0..1 – náhodné rozhození limitu pro každý particl (0,85 -> 0,28–1,72×), 0 = všichni stejně
 };
 
@@ -811,6 +816,7 @@ export function useParticleLogic(meshRef, settings, appConfig, posY, compute) {
         velUniforms.uCoupling.value = fluidCfg.coupling;
         velUniforms.uFriction.value = fluidCfg.friction;
         velUniforms.uFrontShell.value = fluidCfg.frontShell;
+        velUniforms.uFrontShellDna.value = Math.max(0.02, phys.dnaFrontShell ?? DNA_HOLD_DEFAULTS.dnaFrontShell);
         // mapa nejbližších particlů (klidový tvar)
         if (!compute.front) compute.front = createFrontPass(compute.size, compute.targetUniforms);
         const fh = Math.max(16, Math.round(fluidCfg.frontRes));
