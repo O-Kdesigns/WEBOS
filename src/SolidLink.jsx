@@ -327,12 +327,13 @@ export function SolidLinkDriver({ nodes, settings, videoTexture, transitionProgr
     u.uBakeSpec.value = bl.specular;
     u.uBakeGlow.value = bl.glow;
     u.uBakeSheen.value = bl.sheen;
-    // particly u solidu: stejná textura a síla jako solid (emise z GLB × intensity), jen když je solid vidět
+    // particly u solidu: stejná textura a síla jako solid (emise z GLB × intensity), naběhne s průletem
+    // (ne až se začátkem tisku – particly by do té doby byly tmavé barvou videa a pak skočily do rudé)
     linkFx.bakedMesh = null;
     printFx.meshes.forEach(_findBaked);
     const bm = linkFx.bakedMesh;
     u.tBakeLight.value = bm ? bm.material.emissiveMap : null;
-    u.uBakePart.value = bm && bl.enabled && solidsShown ? bm.material.emissiveIntensity * bl.intensity * inside : 0;
+    u.uBakePart.value = bm && bl.enabled ? bm.material.emissiveIntensity * bl.intensity * inside : 0;
     u.uBakePTint.value = bl.particleTint;
     u.uBakePGlow.value = bl.particleGlow;
     u.uBakeLift.value = bl.lift;
