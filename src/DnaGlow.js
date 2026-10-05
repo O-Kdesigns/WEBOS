@@ -52,8 +52,8 @@ void main() {
 export const DNA_GLOW_DEFAULTS = {
   enabled: true,
   threshold: 0.03,   // jas particlů (tBlur, lineárně), od kterého svítí do prostoru
-  aura: 3,           // síla široké záře kolem DNA
-  auraRadius: 1.4,   // šíře záře (krok gauss v texelech 1/16)
+  aura: 4,           // síla široké záře kolem DNA (× nasvícení září nahoře, topLow/topReach)
+  auraRadius: 2.6,   // šíře záře (krok gauss v texelech 1/16) – rozlitá, ne přilepená k DNA
   tint: 0.35,        // 0 = barvy particlů, 1 = barva tvLight.color
   ink: 1.4,          // síla inkoustu světla
   emit: 8,           // kolik inkoustu particly pustí za s ve vodě
@@ -64,6 +64,8 @@ export const DNA_GLOW_DEFAULTS = {
   waterMin: 8,       // rychlost vody (buňky/s), od které particly pouštějí inkoust
   waterMax: 40,
   objects: 0.5,      // kolik záře je vidět přes objekty
+  topLow: 0.3,       // aura dole, daleko od záře nahoře (1 = všude stejně)
+  topReach: 1.5,     // vzdálenost od světla nad DNA, kde aura klesne na topLow
 };
 
 function rt(w, h) {

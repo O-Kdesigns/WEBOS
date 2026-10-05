@@ -167,7 +167,7 @@ const VolumetricLightShader = {
     tDnaInk: { value: dummyTexture },   // + inkoust světla, který particly pouštějí do vody z myši
     uDnaGlowOn: { value: 0.0 },
     uDnaInkOn: { value: 0.0 },
-    uDnaAura: { value: 3 },
+    uDnaAura: { value: 4 },
     uDnaInk: { value: 1.4 },
     uDnaTint: { value: 0.35 },
     uDnaObj: { value: 0.5 },
@@ -1771,7 +1771,7 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         U.tDnaAura.value = r.aura;
         U.tDnaInk.value = r.ink || dummyTexture;
         U.uDnaInkOn.value = r.ink ? 1 : 0;
-        U.uDnaAura.value = dg.aura ?? 3;
+        U.uDnaAura.value = dg.aura ?? 4;
         U.uDnaInk.value = dg.ink ?? 1.4;
         U.uDnaTint.value = dg.tint ?? 0.35;
         U.uDnaObj.value = dg.objects ?? 0.5;
