@@ -321,5 +321,14 @@
   "brandLogo": {
     "enabled": true,
     "scale": 1
+  },
+  "tvGlass": {
+    "ice": 2.5,
+    "iceBand": 0.6,
+    "iceScale": 17,
+    "refract": 0.15,
+    "iri": 0.25,
+    "bg": 0.8,
+    "milk": 0.15
   }
 }
