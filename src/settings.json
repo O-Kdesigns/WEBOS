@@ -157,6 +157,36 @@
       "image": "",
       "color": "#ffffff",
       "videoUrl": "video/showreel (2).mp4"
+    },
+    {
+      "id": "1791274407221",
+      "title": "Nová stránka",
+      "description": "",
+      "travaSettings": {
+        "surfaceModel": "",
+        "surfaceMode": "color",
+        "surfaceTexture": "",
+        "surfaceColor": "#4d9900",
+        "hasBasicGrass": false
+      },
+      "image": "",
+      "color": "#ffffff",
+      "videoUrl": "video/GHOSTDRIVE_OLIVERKANTOR.mp4"
+    },
+    {
+      "id": "1791274414824",
+      "title": "Nová stránka",
+      "description": "",
+      "travaSettings": {
+        "surfaceModel": "",
+        "surfaceMode": "color",
+        "surfaceTexture": "",
+        "surfaceColor": "#4d9900",
+        "hasBasicGrass": false
+      },
+      "image": "",
+      "color": "#ffffff",
+      "videoUrl": "video/ARCANE LOGO.mp4"
     }
   ]
 }
