@@ -32,7 +32,7 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 
 - **Remote:** `git@github.com:O-Kdesigns/WEBOS.git`
 - **SSH klíč:** `~/.ssh/github_webos` (O-Kdesigns účet)
-- **Workflow:** časté commity lokálně → push před odchodem → Cloudflare nasadí sám
+- **Workflow:** časté commity lokálně, **push jen na Oliverův pokyn** (večer „udělej push“) → Cloudflare nasadí sám (viz `../CLAUDE.md`)
 
 ---
 
