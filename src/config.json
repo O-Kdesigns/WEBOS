@@ -107,7 +107,13 @@
       "splatForce": 1500,
       "stirSpeed": 80
     },
-    "returnDamping": 0.4
+    "returnDamping": 0.4,
+    "wander": {
+      "spread": 0.33,
+      "distance": 0.24,
+      "count": 0.235,
+      "excursion": 0.69
+    }
   },
   "cylinderSettings": {
     "count": 30000,
@@ -314,6 +320,6 @@
   },
   "brandLogo": {
     "enabled": true,
-    "scale": 1.45
+    "scale": 1
   }
 }

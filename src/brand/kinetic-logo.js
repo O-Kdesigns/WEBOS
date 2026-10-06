@@ -466,9 +466,11 @@ class KineticLogo extends HTMLElement {
     this._io = new IntersectionObserver(es => { this._onScreen = es[es.length - 1].isIntersecting; this._kick(); }); this._io.observe(this);
     this._visH = () => this._kick(); document.addEventListener('visibilitychange', this._visH);
     if (document.fonts) { this._fontH = () => this._fit(); document.fonts.addEventListener('loadingdone', this._fontH); document.fonts.ready.then(this._fontH); }
+    this._gH = e => { this._gx = e.clientX; this._gy = e.clientY; }; window.addEventListener('pointermove', this._gH, { passive: true });
     this._kick();
   }
   disconnectedCallback() {
+    window.removeEventListener('pointermove', this._gH);
     this._ro && this._ro.disconnect(); this._io && this._io.disconnect();
     document.removeEventListener('visibilitychange', this._visH);
     if (document.fonts && this._fontH) document.fonts.removeEventListener('loadingdone', this._fontH);
@@ -601,6 +603,8 @@ class KineticLogo extends HTMLElement {
      zone around the shown name; once inside, the zone grows to the wider of both names (morph) and
      a larger padding — no flicker at the edge, no flip-back when the morph makes the name shorter.
      Each name has its own box where it really sits (anchor + offset); the stay zone = all boxes.
+     Host pages can extend the stay zone with `logo.stayRects = () => [DOMRect-like…]` (e.g. a link beside the
+     logo): while the logo is already unfolded, a pointer on such a rect keeps it unfolded; it never unfolds it.
      KNOBS ZONE_IN .3 em enter padding · ZONE_STAY .55 em stay padding · .45 half line height em */
   _hitAt(x, y, stay) {
     const r = this.$stage.getBoundingClientRect(), fs = this._fs;
@@ -618,6 +622,9 @@ class KineticLogo extends HTMLElement {
     const was = this._in;
     if (this._over) { const h = this._hitAt(this._px, this._py, was); this._tmx = h.mx; this._tmy = h.my; this._in = h.hit; }
     else this._in = false;
+    // stayRects: host page can set a function returning DOMRects (e.g. a link next to the logo) that extend the
+    // hit zone — but only while the logo is already unfolded (was) and the pointer is on such a rect
+    if (!this._in && was && this.stayRects && this._gx != null) this._in = this.stayRects().some(r => this._gx >= r.left && this._gx <= r.right && this._gy >= r.top && this._gy <= r.bottom);
     if (this.hasAttribute('force-hover')) this._in = true;
     if (this._in !== was) {
       if (this._in && this._hv < .05) { this._mx = this._tmx; this._my = this._tmy; }

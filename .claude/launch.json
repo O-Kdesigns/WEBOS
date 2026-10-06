@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "webos-dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5173, "autoPort": true }
+    { "name": "webos-dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5173, "autoPort": true },
+    { "name": "webos-old-0929", "runtimeExecutable": "node", "runtimeArgs": ["C:/PROJEKTY/BRAND/WEBOS/node_modules/vite/bin/vite.js", "C:/Users/Oliver/AppData/Local/Temp/claude/C--PROJEKTY-BRAND-WEBOS/a29446bc-6ec1-49f0-88eb-13bb3527f30a/scratchpad/webos-old", "--port", "5174", "--strictPort"], "port": 5174 }
   ]
 }

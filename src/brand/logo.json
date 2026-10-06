@@ -1,53 +1,68 @@
 {
-  "savedAt": "2026-10-04T19:42:43.818Z",
+  "savedAt": "2026-10-04T20:27:10.510Z",
   "attrs": {
-    "text": "KANTØR",
+    "text": "Ø/K",
     "font": "Unbounded",
-    "weight": "310",
-    "tracking": "0.8",
-    "energy": "wild",
-    "hover-text": "KANTØR",
+    "weight": "320",
+    "tracking": "0.19",
+    "energy": "lively",
+    "hover-text": "ØLIVER KANTØR",
     "o-blink": "3",
-    "hover-mix": "magnet:0.5",
+    "hover-mix": "magnet:0.14 lens:0.15 tilt:0.12",
     "anchor": "top-left",
-    "offset": "0.4 0.3",
-    "hover-offset": "0.4 0.3",
-    "rare": "0.12",
-    "interval": "6",
-    "rare-set": "glitch orbit sink blackhole mirror solo ignite shatter portal magnify swap",
-    "off": "",
-    "hover-rare-set": "glitch orbit sink blackhole mirror solo ignite shatter portal magnify swap",
-    "hover-off": ""
+    "offset": "2.4 1.98",
+    "hover-offset": "2.4 1.98",
+    "rare": "0.43",
+    "interval": "2.2",
+    "rare-set": "orbit sink blackhole mirror solo shatter portal magnify",
+    "off": "scatter stretch swap underline",
+    "hover-rare-set": "glitch orbit sink blackhole mirror solo ignite shatter magnify",
+    "hover-off": "scatter stretch swap underline"
   },
   "style": {
     "color": "#F2F2F2",
     "accent": "#C4FF00"
   },
   "settings": {
-    "text": "KANTØR",
+    "text": "Ø/K",
     "font": "Unbounded",
-    "weight": 310,
-    "energy": "wild",
-    "hoverText": "KANTØR",
+    "weight": 320,
+    "energy": "lively",
+    "hoverText": "ØLIVER KANTØR",
     "oBlink": true,
     "oBlinkEvery": 3,
-    "rare": 0.12,
-    "interval": 6,
-    "tracking": 0.8,
-    "scale": 1,
+    "rare": 0.43,
+    "interval": 2.2,
+    "tracking": 0.19,
+    "scale": 0.2,
     "anchor": "top-left",
     "offset": [
-      0.4,
-      0.3
+      2.4,
+      1.98
     ],
     "hoverOffset": [
-      0.4,
-      0.3
+      2.4,
+      1.98
     ],
-    "groups": {},
-    "hoverGroups": {},
+    "groups": {
+      "scatter": "off",
+      "underline": "off",
+      "stretch": "off",
+      "swap": "off",
+      "glitch": "normal",
+      "ignite": "normal"
+    },
+    "hoverGroups": {
+      "scatter": "off",
+      "underline": "off",
+      "stretch": "off",
+      "swap": "off",
+      "portal": "normal"
+    },
     "mix": {
-      "magnet": 0.5
+      "magnet": 0.13999999999999999,
+      "lens": 0.15000000000000002,
+      "tilt": 0.12
     }
   }
 }

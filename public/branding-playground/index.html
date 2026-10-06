@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Kantor Brand Identity Playground</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap">
+
+  <style>
+    :root {
+      --bg-darkest: #080808;
+      --bg-dark: #1a1a1a;
+      --bg-panel: #0f0f0f;
+      --text-primary: #f2f2f2;
+      --text-secondary: #b0b0b0;
+      --accent: #c4ff00;
+      --accent-hover: #d9ff33;
+      --accent-dim: rgba(196, 255, 0, 0.2);
+      --border-subtle: #2a2a2a;
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.9);
+      --font-mono: 'Space Mono', monospace;
+      --font-body: 'Inter', system-ui, sans-serif;
+      font-family: var(--font-body);
+      background-color: var(--bg-darkest);
+      color: var(--text-primary);
+      color-scheme: dark;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { background-color: var(--bg-darkest); padding-top: env(safe-area-inset-top, 0); }
+
+    .top-bar {
+      position: fixed;
+      top: env(safe-area-inset-top, 0);
+      left: 0; right: 0;
+      height: 56px;
+      background-color: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 8px;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .brand-buttons { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .brand-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border-subtle);
+      background-color: var(--bg-dark);
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.15s ease-out;
+      border-radius: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .brand-btn:hover { border-color: var(--accent); color: var(--accent); background-color: var(--accent-dim); }
+    .brand-btn.active { background-color: var(--accent); color: var(--bg-darkest); border-color: var(--accent); }
+
+    .custom-input {
+      padding: 6px 10px;
+      border: 1px solid var(--border-subtle);
+      background-color: var(--bg-dark);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      width: 120px;
+      border-radius: 2px;
+      transition: all 0.15s ease-out;
+    }
+    .custom-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 8px var(--accent-dim); }
+
+    .mode-tabs {
+      position: fixed;
+      top: calc(56px + env(safe-area-inset-top, 0));
+      left: 0; right: 0;
+      height: 48px;
+      background-color: var(--bg-dark);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+      z-index: 99;
+    }
+
+    .mode-tab {
+      padding: 8px 0;
+      border: none;
+      background: none;
+      color: var(--text-secondary);
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s ease-out;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .mode-tab:hover { color: var(--text-primary); }
+    .mode-tab.active { color: var(--accent); }
+    .mode-tab.active::after { content: ''; position: absolute; bottom: -8px; left: 0; right: 0; height: 2px; background-color: var(--accent); }
+
+    .app-container {
+      position: fixed;
+      top: calc(104px + env(safe-area-inset-top, 0));
+      left: 0; right: 0;
+      bottom: env(safe-area-inset-bottom, 0);
+      display: flex;
+      gap: 12px;
+      padding: 12px;
+      background-color: var(--bg-darkest);
+    }
+
+    .canvas-area {
+      flex: 1;
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: var(--shadow-md);
+    }
+
+    canvas { width: 100%; height: 100%; display: block; }
+
+    .mode-content { display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+    .mode-content.active { display: block; }
+
+    .hud-panel {
+      width: 200px;
+      background-color: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      padding: 12px;
+      overflow-y: auto;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .hud-section { display: flex; flex-direction: column; gap: 8px; }
+    .hud-label { font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--accent); letter-spacing: 0.5px; text-transform: uppercase; }
+    .slider-container { display: flex; flex-direction: column; gap: 4px; }
+    .slider-label { font-size: 11px; color: var(--text-secondary); display: flex; justify-content: space-between; }
+
+    input[type="range"] {
+      width: 100%; height: 4px;
+      background: var(--bg-dark);
+      border: none;
+      border-radius: 2px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px; height: 12px;
+      background: var(--accent);
+      cursor: pointer;
+      border-radius: 1px;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 12px; height: 12px;
+      background: var(--accent);
+      cursor: pointer;
+      border: none;
+      border-radius: 1px;
+    }
+
+    .toggle-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .toggle-btn {
+      padding: 4px 8px;
+      border: 1px solid var(--border-subtle);
+      background-color: var(--bg-dark);
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all 0.15s ease-out;
+      flex: 1;
+      min-width: 60px;
+    }
+    .toggle-btn.active {
+      background-color: var(--accent);
+      color: var(--bg-darkest);
+      border-color: var(--accent);
+    }
+
+    .export-btn {
+      width: 100%;
+      padding: 8px 12px;
+      background-color: var(--accent);
+      color: var(--bg-darkest);
+      border: none;
+      border-radius: 2px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      transition: all 0.2s ease-out;
+    }
+    .export-btn:hover { background-color: var(--accent-hover); }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <div class="brand-buttons">
+      <button class="brand-btn active" data-brand="kntr">KNT-R</button>
+      <button class="brand-btn" data-brand="kantor">K A N T O R</button>
+      <button class="brand-btn" data-brand="ok">Ø</button>
+      <button class="brand-btn" data-brand="terminal">olivr_kntr</button>
+      <input type="text" class="custom-input" placeholder="custom text" id="customInput">
+    </div>
+  </div>
+
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="physics">Zero-G Physics</button>
+    <button class="mode-tab" data-mode="kinetic">Kinetic Wave</button>
+    <button class="mode-tab" data-mode="3d">3D Spin</button>
+    <button class="mode-tab" data-mode="watermark">Watermark</button>
+  </div>
+
+  <div class="app-container">
+    <div class="canvas-area">
+      <div class="mode-content active" id="physics-content"><canvas id="physicsCanvas"></canvas></div>
+      <div class="mode-content" id="kinetic-content"><canvas id="kineticCanvas"></canvas></div>
+      <div class="mode-content" id="3d-content"><canvas id="3dCanvas"></canvas></div>
+      <div class="mode-content" id="watermark-content"><canvas id="watermarkCanvas"></canvas></div>
+    </div>
+
+    <div class="hud-panel">
+      <div class="hud-section">
+        <div class="hud-label">Physics</div>
+        <div class="slider-container">
+          <div class="slider-label"><span>Gravity</span><span id="gravityValue">1.0</span></div>
+          <input type="range" id="gravitySlider" min="-2" max="2" step="0.1" value="1">
+        </div>
+      </div>
+
+      <div class="hud-section">
+        <div class="hud-label">Typography</div>
+        <div class="slider-container">
+          <div class="slider-label"><span>Tracking</span><span id="trackingValue">20</span></div>
+          <input type="range" id="trackingSlider" min="0" max="60" step="5" value="20">
+        </div>
+        <div class="slider-container">
+          <div class="slider-label"><span>Weight</span><span id="weightValue">400</span></div>
+          <input type="range" id="weightSlider" min="300" max="800" step="100" value="400">
+        </div>
+      </div>
+
+      <div class="hud-section">
+        <div class="hud-label">Effects</div>
+        <div class="toggle-group">
+          <button class="toggle-btn" data-effect="scanlines">Scanlines</button>
+          <button class="toggle-btn" data-effect="grain">Grain</button>
+        </div>
+      </div>
+
+      <button class="export-btn" id="exportBtn">Export Frame</button>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      currentBrand: 'kntr',
+      currentMode: 'physics',
+      gravityMultiplier: 1,
+      tracking: 20,
+      fontWeight: 400,
+      scanlines: false,
+      grain: false,
+    };
+
+    const brandText = {
+      kntr: 'KNT-R',
+      kantor: 'K A N T O R',
+      ok: 'Ø',
+      terminal: 'olivr_kntr',
+    };
+
+    function getCurrentText() {
+      const custom = document.getElementById('customInput').value.trim();
+      return custom || brandText[state.currentBrand] || 'KANTOR';
+    }
+
+    // PHYSICS MODE - Simple gravity without Matter.js
+    const PhysicsMode = (() => {
+      let letters = [];
+      let canvas, ctx;
+      const gravity = 0.3;
+      const damping = 0.98;
+
+      function init() {
+        canvas = document.getElementById('physicsCanvas');
+        ctx = canvas.getContext('2d');
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        createLetters();
+        animate();
+      }
+
+      function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+      }
+
+      function createLetters() {
+        const text = getCurrentText();
+        letters = [];
+        const letterWidth = 40;
+        const startX = (canvas.width - text.length * letterWidth) / 2;
+
+        for (let i = 0; i < text.length; i++) {
+          letters.push({
+            char: text[i],
+            x: startX + i * letterWidth,
+            y: -50,
+            vx: (Math.random() - 0.5) * 2,
+            vy: 0,
+          });
+        }
+      }
+
+      function animate() {
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-panel');
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        letters.forEach(letter => {
+          letter.vy += gravity * state.gravityMultiplier;
+          letter.x += letter.vx;
+          letter.y += letter.vy;
+          letter.vx *= damping;
+          letter.vy *= damping;
+
+          // Bounce off walls
+          if (letter.x < 0) { letter.x = 0; letter.vx *= -0.8; }
+          if (letter.x > canvas.width - 40) { letter.x = canvas.width - 40; letter.vx *= -0.8; }
+          if (letter.y > canvas.height - 40) { letter.y = canvas.height - 40; letter.vy *= -0.8; }
+
+          ctx.font = `${state.fontWeight} 32px Space Mono`;
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-primary');
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(letter.char, letter.x + 20, letter.y + 20);
+        });
+
+        requestAnimationFrame(animate);
+      }
+
+      return { init, createLetters };
+    })();
+
+    // KINETIC WAVE MODE
+    const KineticMode = (() => {
+      let canvas, ctx, time = 0;
+
+      function init() {
+        canvas = document.getElementById('kineticCanvas');
+        ctx = canvas.getContext('2d');
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        animate();
+      }
+
+      function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+      }
+
+      function animate() {
+        time += 0.016;
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-panel');
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const text = getCurrentText();
+        const fontSize = 72;
+        ctx.font = `${state.fontWeight} ${fontSize}px Space Mono`;
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-primary');
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const letterWidth = fontSize * 0.6;
+        const totalWidth = text.length * letterWidth + state.tracking * text.length;
+        const startX = (canvas.width - totalWidth) / 2;
+
+        for (let i = 0; i < text.length; i++) {
+          const x = startX + i * (letterWidth + state.tracking);
+          const wave = Math.sin(time + i * 0.3) * 15;
+          const scale = 1 + Math.sin(time + i * 0.2) * 0.1;
+
+          ctx.save();
+          ctx.translate(x + letterWidth / 2, canvas.height / 2 + wave);
+          ctx.scale(scale, scale);
+          ctx.fillText(text[i], 0, 0);
+          ctx.restore();
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      return { init };
+    })();
+
+    // 3D SPIN MODE - Simple CSS-like 3D rotation
+    const Mode3D = (() => {
+      let canvas, ctx, time = 0;
+
+      function init() {
+        canvas = document.getElementById('3dCanvas');
+        ctx = canvas.getContext('2d');
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        animate();
+      }
+
+      function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+      }
+
+      function animate() {
+        time += 0.016;
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-panel');
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const text = getCurrentText();
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = 100;
+
+        for (let i = 0; i < text.length; i++) {
+          const angle = (time + i * (Math.PI * 2 / text.length)) % (Math.PI * 2);
+          const x = centerX + Math.cos(angle) * radius;
+          const y = centerY + Math.sin(angle) * radius * 0.3;
+          const scale = 0.5 + Math.cos(angle) * 0.5;
+          const alpha = 0.3 + Math.cos(angle) * 0.7;
+
+          ctx.font = `${state.fontWeight} 48px Space Mono`;
+          ctx.fillStyle = `rgba(242, 242, 242, ${alpha})`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(scale, scale);
+          ctx.fillText(text[i], 0, 0);
+          ctx.restore();
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      return { init };
+    })();
+
+    // WATERMARK MODE
+    const WatermarkMode = (() => {
+      let canvas, ctx;
+
+      function init() {
+        canvas = document.getElementById('watermarkCanvas');
+        ctx = canvas.getContext('2d');
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        animate();
+      }
+
+      function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+      }
+
+      function animate() {
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-panel');
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const text = getCurrentText();
+
+        ctx.font = `${state.fontWeight} 24px Space Mono`;
+        ctx.fillStyle = 'rgba(196, 255, 0, 0.15)';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(text, 12, 12);
+
+        ctx.fillText(text, canvas.width - ctx.measureText(text).width - 12, canvas.height - 36);
+
+        ctx.font = `${state.fontWeight} 72px Space Mono`;
+        ctx.fillStyle = 'rgba(196, 255, 0, 0.3)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+        requestAnimationFrame(animate);
+      }
+
+      return { init };
+    })();
+
+    // UI HANDLERS
+    document.querySelectorAll('.brand-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.brand-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.currentBrand = btn.dataset.brand;
+        PhysicsMode.createLetters();
+      });
+    });
+
+    document.getElementById('customInput').addEventListener('change', () => {
+      document.querySelectorAll('.brand-btn').forEach(b => b.classList.remove('active'));
+      PhysicsMode.createLetters();
+    });
+
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.mode-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        state.currentMode = tab.dataset.mode;
+        const modeMap = { physics: 'physics-content', kinetic: 'kinetic-content', '3d': '3d-content', watermark: 'watermark-content' };
+        document.getElementById(modeMap[state.currentMode]).classList.add('active');
+      });
+    });
+
+    document.getElementById('gravitySlider').addEventListener('input', (e) => {
+      state.gravityMultiplier = parseFloat(e.target.value);
+      document.getElementById('gravityValue').textContent = state.gravityMultiplier.toFixed(1);
+    });
+
+    document.getElementById('trackingSlider').addEventListener('input', (e) => {
+      state.tracking = parseInt(e.target.value);
+      document.getElementById('trackingValue').textContent = state.tracking;
+    });
+
+    document.getElementById('weightSlider').addEventListener('input', (e) => {
+      state.fontWeight = parseInt(e.target.value);
+      document.getElementById('weightValue').textContent = state.fontWeight;
+    });
+
+    document.querySelectorAll('.toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const effect = btn.dataset.effect;
+        state[effect] = !state[effect];
+        btn.classList.toggle('active', state[effect]);
+      });
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const canvas = document.querySelector('.mode-content.active canvas');
+      if (canvas) {
+        canvas.toBlob(blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `kantor-${state.currentMode}-${Date.now()}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+      }
+    });
+
+    PhysicsMode.init();
+    KineticMode.init();
+    Mode3D.init();
+    WatermarkMode.init();
+  </script>
+</body>
+</html>

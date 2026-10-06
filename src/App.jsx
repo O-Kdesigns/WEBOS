@@ -20,6 +20,7 @@ import { PortalDriver, portalFx } from './PortalTransition';
 import { useAiLive, useAiLiveTicker } from './AiLiveMode';
 import { FluidView } from './FluidView';
 import { BrandLogo } from './BrandLogo';
+import { BackPrompt } from './BackPrompt';
 import { DarkStudioBackground } from './DarkStudioBackground';
 import { VolumetricVideoBackground } from './VolumetricVideoBackground';
 import { CameraSpotLight } from './CameraSpotLight';
@@ -1222,6 +1223,8 @@ function App() {
       {/* Kinetic logo vlevo nahoře (src/BrandLogo.jsx, nastavení Editor → Globální → 🔠 Logo).
           AI živý render a náhled 2D vody jsou v hlavičce Editoru. */}
       <BrandLogo appConfig={appConfig} />
+      {/* "<- BACK TO INFO" vedle loga = zpět na WEBINFO (src/BackPrompt.jsx) */}
+      <BackPrompt appConfig={appConfig} />
 
       {isSuspended && (appConfig.powerSaving?.showBadge ?? true) && (
         <div 
