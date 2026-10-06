@@ -148,48 +148,26 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
       onWheel={(e) => e.stopPropagation()}
     >
       <div className={`editor-header ${isTransparent ? 'transparent-mode' : ''}`}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-          <div style={{ display: 'flex', gap: '5px', background: 'rgba(255,255,255,0.05)', padding: '5px', borderRadius: '8px' }}>
-            <button 
-              onClick={() => setEditorMode('orbit')}
-              style={{ background: editorMode === 'orbit' ? '#10b981' : 'transparent', color: editorMode === 'orbit' ? '#fff' : '#aaa', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              Globální (DNA / Orbit)
-            </button>
-            <button 
-              onClick={() => setEditorMode('inside')}
-              style={{ background: editorMode === 'inside' ? '#f59e0b' : 'transparent', color: editorMode === 'inside' ? '#fff' : '#aaa', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              Uvnitř (Detail / UI)
-            </button>
-            <button 
-              onClick={() => setEditorMode('pages')}
-              style={{ background: editorMode === 'pages' ? '#3b82f6' : 'transparent', color: editorMode === 'pages' ? '#fff' : '#aaa', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              Stránky Portfolia
-            </button>
-          </div>
-          <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#ccc' }}>
-            <input type="checkbox" checked={isTransparent} onChange={e => setIsTransparent(e.target.checked)} />
-            Průhledný režim (vidět scénu)
-          </label>
-          {/* AI živý render: plný render i bez fokusu / v neaktivním tabu (src/AiLiveMode.js). Jen tento prohlížeč, jde i přes ?ai=1 / ?ai=0. */}
-          <label
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#ccc' }}
-            title="Plný render i když okno nemá fokus nebo je tab na pozadí (pro práci s Claude). Vypnuto = platí powerSaving z configu. Pamatuje si to jen tento prohlížeč; jde i přes ?ai=1 / ?ai=0."
+        {/* Malé okno: záložky a Uložit/Zavřít zůstanou nahoře v jednom řádku, drobné přepínače se zalomí pod ně jako malé čipy */}
+        <div className="editor-tabs">
+          <button
+            onClick={() => setEditorMode('orbit')}
+            style={{ background: editorMode === 'orbit' ? '#10b981' : 'transparent', color: editorMode === 'orbit' ? '#fff' : '#aaa' }}
           >
-            <input type="checkbox" checked={aiLive} onChange={e => setAiLive(e.target.checked)} />
-            🤖 AI živý render
-          </label>
-          {/* Náhled 2D vody, ze které particly berou proud myši (src/FluidView.jsx). 0 = vypnuto, nic se nekreslí. */}
-          <label
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', color: '#ccc' }}
-            title="Průhlednost náhledu neviditelné 2D simulace vody (barva = směr proudu). Na 0 se vůbec nekreslí. Pamatuje si to jen tento prohlížeč."
+            Globální<span className="editor-tab-sub"> (DNA / Orbit)</span>
+          </button>
+          <button
+            onClick={() => setEditorMode('inside')}
+            style={{ background: editorMode === 'inside' ? '#f59e0b' : 'transparent', color: editorMode === 'inside' ? '#fff' : '#aaa' }}
           >
-            💧 2D voda
-            <input type="range" min={0} max={1} step={0.05} value={fluidView} onChange={e => setFluidView(e.target.value)} style={{ width: 90 }} />
-            <span style={{ width: 32, textAlign: 'right' }}>{Math.round(fluidView * 100)}%</span>
-          </label>
+            Uvnitř<span className="editor-tab-sub"> (Detail / UI)</span>
+          </button>
+          <button
+            onClick={() => setEditorMode('pages')}
+            style={{ background: editorMode === 'pages' ? '#3b82f6' : 'transparent', color: editorMode === 'pages' ? '#fff' : '#aaa' }}
+          >
+            Stránky<span className="editor-tab-sub"> (Portfolia)</span>
+          </button>
         </div>
         <div className="editor-actions">
           {editorMode === 'pages' && (
@@ -197,6 +175,29 @@ export function Editor({ onClose, pages, setPages, appConfig, setAppConfig, dnaH
           )}
           <button onClick={saveSettings} className="btn-save">{saving ? 'Ukládám...' : 'Uložit trvale'}</button>
           <button onClick={onClose} className="btn-close">Zavřít</button>
+        </div>
+        <div className="editor-chips">
+          <label className="editor-chip" title="Průhledné pozadí Editoru – vidět scénu za ním.">
+            <input type="checkbox" checked={isTransparent} onChange={e => setIsTransparent(e.target.checked)} />
+            Průhledný
+          </label>
+          {/* AI živý render: plný render i bez fokusu / v neaktivním tabu (src/AiLiveMode.js). Jen tento prohlížeč, jde i přes ?ai=1 / ?ai=0. */}
+          <label
+            className="editor-chip"
+            title="Plný render i když okno nemá fokus nebo je tab na pozadí (pro práci s Claude). Vypnuto = platí powerSaving z configu. Pamatuje si to jen tento prohlížeč; jde i přes ?ai=1 / ?ai=0."
+          >
+            <input type="checkbox" checked={aiLive} onChange={e => setAiLive(e.target.checked)} />
+            🤖 AI render
+          </label>
+          {/* Náhled 2D vody, ze které particly berou proud myši (src/FluidView.jsx). 0 = vypnuto, nic se nekreslí. */}
+          <label
+            className="editor-chip"
+            title="Průhlednost náhledu neviditelné 2D simulace vody (barva = směr proudu). Na 0 se vůbec nekreslí. Pamatuje si to jen tento prohlížeč."
+          >
+            💧 voda
+            <input type="range" min={0} max={1} step={0.05} value={fluidView} onChange={e => setFluidView(e.target.value)} style={{ width: 70 }} />
+            <span style={{ width: 30, textAlign: 'right' }}>{Math.round(fluidView * 100)}%</span>
+          </label>
         </div>
       </div>
       
