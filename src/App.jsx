@@ -76,8 +76,10 @@ function ensureVideoEntry(url, gl) {
   video.loop = true;
   video.muted = true;
   video.playsInline = true;
-  video.preload = 'auto';
-  
+  // Online (Cloudflare) by 5× preload='auto' stáhlo ~400 MB najednou a udusilo aktivní video i scénu.
+  // Neaktivní videa jen metadata + první snímek (poster, viz níže); naplno se načte až aktivní (VideoManager).
+  video.preload = 'metadata';
+
   const maxAniso = gl.capabilities?.getMaxAnisotropy ? Math.min(gl.capabilities.getMaxAnisotropy(), 16) : 1;
 
   // JedinĂˇ spoleÄŤnĂˇ VideoTexture pro danĂ© video (pro vĂˇlec, desku i vnitĹ™ek)
@@ -93,6 +95,12 @@ function ensureVideoEntry(url, gl) {
 
   // PĹ™ipravĂ­me prvnĂ­ snĂ­mek jako poster pro neaktivnĂ­ desky
   video.addEventListener('loadeddata', () => {
+    if (!entry.isActive && video.currentTime < 0.05) {
+      video.currentTime = 0.05;
+    }
+  }, { once: true });
+  // preload='metadata' nemusí vyvolat loadeddata -> první snímek vyžádáme přeskokem po načtení metadat
+  video.addEventListener('loadedmetadata', () => {
     if (!entry.isActive && video.currentTime < 0.05) {
       video.currentTime = 0.05;
     }
@@ -113,6 +121,13 @@ function VideoManager({ allUrls, activeUrl, viewMode, isPreloaded = true, childr
       ensureVideoEntry(url, gl);
     });
   }, [urlsKey, gl]);
+
+  // Aktivní video se načítá naplno hned (i před koncem preloaderu, ten hlídá jeho buffer); ostatní zůstávají na metadatech.
+  const activeKey = activeUrl ? resolveAssetUrl(activeUrl) : '';
+  useEffect(() => {
+    const entry = activeKey ? videoTextureCache.get(activeKey) : null;
+    if (entry && entry.video.preload !== 'auto') entry.video.preload = 'auto';
+  }, [activeKey, urlsKey]);
 
   // PosluchaÄŤe pro aktualizaci textur, kdyĹľ se video naÄŤte nebo rozebÄ›hne
   useEffect(() => {

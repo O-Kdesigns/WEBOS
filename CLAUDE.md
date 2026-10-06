@@ -32,7 +32,7 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 
 - **Remote:** `git@github.com:O-Kdesigns/WEBOS.git`
 - **SSH klíč:** `~/.ssh/github_webos` (O-Kdesigns účet)
-- **Workflow:** časté commity lokálně → push před odchodem → GitHub Pages pro cloud preview
+- **Workflow:** časté commity lokálně → push před odchodem → Cloudflare nasadí sám
 
 ---
 
@@ -51,7 +51,7 @@ Tento soubor Claude Code načte automaticky při každé nové session. Drží z
 - Kód pushnut na GitHub (force push po filter-repo)
 - `.gitignore` aktualizován: node_modules, dist, videa, blend soubory, debug logy
 - LFS nainstalován, ale nic nesleduje — videa jsou jen lokálně (a na Netlify)
-- **GitHub Pages živě** (od 2026-09-27): https://o-kdesigns.github.io/WEBOS/ – repo je veřejné, `.github/workflows/pages.yml` nasazuje každý push do `main`. Build s `GITHUB_PAGES=true` → `base: '/WEBOS/'`. Cesty k souborům z `public/` v JS vždy přes `withBase()` / `resolveAssetUrl()` z `src/assetUrl.js` (CSS a index.html Vite přepíše sám).
+- **Hosting = Cloudflare (od 2026-10-06), GitHub Pages zrušené** (workflow smazán): Workers Builds nasazuje každý push do `main` (`wrangler.jsonc`: assets `./dist` + `cf/worker.js`, build `npm run build`) → https://webos.qlopmr.workers.dev. Videa (nejsou v gitu, >25 MB) leží v R2 bucketu `brand-media` (klíče `video/<soubor>`), Worker je servíruje na `/obsah/video/*` (Range + kontrola Refereru, `ALLOWED_HOSTS` ve `wrangler.jsonc`). Nové/změněné video: `npx wrangler r2 object put "brand-media/video/<soubor>" --file <soubor> --content-type video/mp4 --remote` (bez tohohle se online nezmění). Videa držet malá (H.264, ≤ ~4 Mb/s, originály do `ASSETS/originals-video/`): online se stahují přes pomalé linky. Cesty k souborům z `public/` v JS přes `withBase()` / `resolveAssetUrl()` z `src/assetUrl.js`.
 - **Video fallback:** když se video nenačte (Pages je nemá), přepne se na `public/placeholder.mp4` (10 s, 118 KB) – `ensureVideoEntry` v `App.jsx` + náhled v editoru.
 - `WEBOS.bat` přepsán: Antigravity → Claude Code (Bionic → claude-desktop.exe); později nahrazen BRAND launcherem (všechny .bat smazány)
 - Browser pane funkční: Claude vidí a ovládá localhost:5173 přímo
