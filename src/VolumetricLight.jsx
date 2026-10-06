@@ -1567,7 +1567,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
         tvMesh.updateWorldMatrix(true, false);
         t.c.copy(part.center).applyMatrix4(tvMesh.matrixWorld);
         t.n.copy(part.axN).transformDirection(tvMesh.matrixWorld);
-        const radius = Math.max(part.half.x, part.half.y) * tvMesh.matrixWorld.getMaxScaleOnAxis();
+        const half = tvMesh.userData.tvHalf || part.half; // sklo přizpůsobené poměru stran videa (TvGlass)
+        const radius = Math.max(half.x, half.y) * tvMesh.matrixWorld.getMaxScaleOnAxis();
         t.e.copy(camWorldPosRef.current).sub(t.c);
         const camDist = t.e.length();
         t.e.divideScalar(Math.max(camDist, 1e-4));
@@ -1587,8 +1588,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
           out.set((t.q.x - t.p.x) * 0.5 * asp, (t.q.y - t.p.y) * 0.5);
         };
         const A = u.uTvAxA.value, B = u.uTvAxB.value;
-        edge(part.axA, part.half.x, A);
-        edge(part.axB, part.half.y, B);
+        edge(part.axA, half.x, A);
+        edge(part.axB, half.y, B);
         // TV z boku = obdélník se zplošťuje -> min. tloušťka kolmo na A, ať inverze nevybuchne
         let det = A.x * B.y - A.y * B.x;
         const minDet = 0.05 * A.length() * Math.max(B.length(), 0.02);
@@ -1606,8 +1607,8 @@ export function VolumetricLightPass({ appConfig, viewMode = 'ORBIT', videoTextur
           const sgn = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
           let ok = true;
           for (let k = 0; k < 4; k++) {
-            const v = P[k].copy(part.center).addScaledVector(part.axA, sgn[k][0] * part.half.x)
-              .addScaledVector(part.axB, sgn[k][1] * part.half.y).applyMatrix4(tvMesh.matrixWorld);
+            const v = P[k].copy(part.center).addScaledVector(part.axA, sgn[k][0] * half.x)
+              .addScaledVector(part.axB, sgn[k][1] * half.y).applyMatrix4(tvMesh.matrixWorld);
             if ((t.hv ??= new THREE.Vector3()).copy(v).applyMatrix4(camera.matrixWorldInverse).z > -1e-3) ok = false; // roh za kamerou
             v.project(camera);
             v.set((v.x + 1) * 0.5 * asp, (v.y + 1) * 0.5, 0);
