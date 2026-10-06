@@ -19,10 +19,10 @@ import { TEX_LOD0 } from './glslTexLod0';
 // Když hraje video: sklo je zamrzlé – na krajích plný led (ledové žilky lámou scénu a rozptylují světlo,
 // video tam není), ke středu led plynule ubývá a přibývá video (průhledné, tmavá místa propouštějí scénu).
 // Video se kreslí AŽ po tónování skla (sklo ho nebarví); sklo jde do barvy videa (rozmazané video, RT 16×9).
-//   tvVidOpacity (0.85 = krytí videa ve středu), tvVidFade (0.6 = šířka přechodu, podíl poloosy obrazu),
+//   tvVidOpacity (0.85 = krytí videa ve středu), tvVidFade (0.3 = šířka přechodu, podíl poloosy obrazu),
 //   tvIce (1 = síla ledu), tvIceScale (8 = hustota žilek), tvIceCenter (0.12 = zbytek ledu ve středu),
-//   tvVidTint (0.5 = sklo do barvy videa)
-//   DEV: window.__tvVidOverride = { opacity, fade, ice, iceScale, iceCenter, tint }
+//   tvVidTint (0.5 = sklo do barvy videa), tvIceGlow (0.9 = světlo videa rozptýlené ledem v okrajích)
+//   DEV: window.__tvVidOverride = { opacity, fade, ice, iceScale, iceCenter, tint, glow }
 
 const FBO_SCALE = 0.5;
 
@@ -60,7 +60,7 @@ const fragmentShader = `${TEX_LOD0}
   uniform vec3 uTint, uRim;
   uniform float uRimStrength, uMilk, uIor, uDistort, uFrost, uScratch, uBgLevel;
   uniform sampler2D tVidBlur;
-  uniform float uVidAmb, uVidTint, uVidOpacity, uVidFade, uIce, uIceScale, uIceCenter;
+  uniform float uVidAmb, uVidTint, uVidOpacity, uVidFade, uIce, uIceScale, uIceCenter, uIceGlow;
   varying vec3 vLocal;
   varying vec3 vLN;
   varying vec3 vN;
@@ -202,6 +202,13 @@ const fragmentShader = `${TEX_LOD0}
       vidM = vidIn * uVidOpacity * mix(0.55, 1.0, smoothstep(0.02, 0.4, lum));
       col = mix(col, vid, vidM);
     }
+    // světlo videa rozptýlené ledem: kde video ubývá, nezůstane černo – led ho rozmaže a láme (víc v žilkách),
+    // za hranou obrazu pomalu dohasíná (Oliver 2026-10-06: černé rámečky do ztracena)
+    if (ambK > 0.5 && uIceGlow > 0.0) {
+      vec3 lit = vidBlurAt(vuv + iceOff * 0.12);
+      float outF = exp(-max(sdVid, 0.0) / max(0.3 * min(uHalf.x, uHalf.y), 1e-3));
+      col += lit * uIceGlow * iceK * (1.0 - vidIn) * outF * (0.35 + 0.9 * iceRidge);
+    }
     // hřbety ledových žilek se lesknou
     col += uRim * smoothstep(0.8, 0.98, ice.z) * iceK * iceF * 0.05;
 
@@ -315,7 +322,7 @@ const BLUR_FRAG = `${TEX_LOD0}
     gl_FragColor = vec4(s / 36.0, 1.0);
   }
 `;
-const VID_DEFAULTS = { opacity: 0.85, fade: 0.6, ice: 1, iceScale: 8, iceCenter: 0.12, tint: 0.5 };
+const VID_DEFAULTS = { opacity: 0.85, fade: 0.3, glow: 0.9, ice: 1, iceScale: 8, iceCenter: 0.12, tint: 0.5 };
 
 function createVideoBlur() {
   const material = new THREE.ShaderMaterial({
@@ -470,6 +477,7 @@ export function useTvGlass(nodes, deskNode, fade) {
         if (vo.iceScale != null) mu.uIceScale.value = vo.iceScale;
         if (vo.iceCenter != null) mu.uIceCenter.value = vo.iceCenter;
         if (vo.tint != null) mu.uVidTint.value = vo.tint;
+        if (vo.glow != null) mu.uIceGlow.value = vo.glow;
       }
     }
     if ((frame & 255) === 0) vidBlur.prune(frame);
@@ -533,7 +541,8 @@ function makeMaterial(part, shared) {
       uVidFade: { value: ud.tvVidFade ?? VID_DEFAULTS.fade },
       uIce: { value: ud.tvIce ?? VID_DEFAULTS.ice },
       uIceScale: { value: ud.tvIceScale ?? VID_DEFAULTS.iceScale },
-      uIceCenter: { value: ud.tvIceCenter ?? VID_DEFAULTS.iceCenter }
+      uIceCenter: { value: ud.tvIceCenter ?? VID_DEFAULTS.iceCenter },
+      uIceGlow: { value: ud.tvIceGlow ?? VID_DEFAULTS.glow }
     },
     vertexShader,
     fragmentShader,
