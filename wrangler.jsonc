@@ -1,0 +1,12 @@
+{
+  "name": "webos",
+  "main": "cf/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/obsah/video/*"]
+  },
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "brand-media" }],
+  "vars": { "ALLOWED_HOSTS": "" }
+}
