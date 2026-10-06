@@ -4,7 +4,7 @@ import './HUD2D.css'; // font nbarchitekt + .hud-dark-floor
 // „<- BACK TO INFO“ vedle loga vlevo nahoře = cesta zpět na WEBINFO (prozatímní propojení webů).
 // Vzhled = spodní menu HUD2D (ui2d.bottomLeft: font, barvy, color-dodge, darkFloor).
 // Kam vede: ?back=<url> (posílá WEBINFO při vstupu, uloží se do sessionStorage) → config ui2d.backPrompt.url
-// → v DEV http://localhost:5180/. Bez adresy se nezobrazí. Pozice sleduje šířku textu loga
+// → v DEV http://localhost:5180/, online WEBINFO (adresa ve fallbacku níže – po koupi domény přepsat). Bez adresy se nezobrazí. Pozice sleduje šířku textu loga
 // (Ø/K ↔ ØLIVER KANTØR, morph `_m` uvnitř <kinetic-logo>) – posun přímo přes style, bez re-renderu.
 const BACK_KEY = 'webos.backUrl';
 
@@ -22,7 +22,7 @@ function readBackUrl(cfgUrl) {
     const saved = sessionStorage.getItem(BACK_KEY);
     if (saved) return saved;
   } catch { /* sessionStorage může být zakázaný */ }
-  return cfgUrl || (import.meta.env.DEV ? 'http://localhost:5180/' : '');
+  return cfgUrl || (import.meta.env.DEV ? 'http://localhost:5180/' : 'https://webinfo.qlopmr.workers.dev/');
 }
 
 export function BackPrompt({ appConfig = {} }) {
