@@ -915,6 +915,22 @@ function App() {
     return window.location.search.includes('editor=true');
   });
 
+  // Numpad 1 = otevřít / zavřít Editor (ne při psaní do pole)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.code !== 'Numpad1' || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || (t.tagName === 'INPUT' && !['checkbox', 'range', 'radio'].includes(t.type)) || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+      e.preventDefault();
+      setIsEditorOpen(open => {
+        if (open) window.history.pushState({}, '', window.location.pathname);
+        return !open;
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const wheelAccumulatorRef = useRef(0);
   const wheelTimeoutRef = useRef(null);
 
@@ -1263,7 +1279,11 @@ function App() {
       <DebugMonitorHUD
         actions={
           <button
-            onClick={() => setIsEditorOpen(true)}
+            // opětovné kliknutí Editor zase zavře (stejně jako Zavřít)
+            onClick={() => {
+              if (isEditorOpen) { setIsEditorOpen(false); window.history.pushState({}, '', window.location.pathname); }
+              else setIsEditorOpen(true);
+            }}
             style={{ background: 'rgba(15, 23, 42, 0.88)', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.18)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'monospace', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
           >
             ⚙️ Editor
