@@ -6,6 +6,7 @@ import { WANDER_DEFAULTS } from '../../particles/wander';
 import { BRAND_LOGO_DEFAULTS } from '../../../BrandLogo';
 import { DNA_GLOW_DEFAULTS } from '../../../DnaGlow';
 import { FLUID_DEFAULTS, pointerSpeedCm, fluidSpeed } from '../../particles/ParticleFluid';
+import { TV_GLASS_DEFAULTS } from '../../../TvGlass';
 
 export const DenseSlider = ({ label, desc, min, max, step, value, onChange, unit = '', color = '#10b981' }) => (
   <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 45px', gap: '10px', alignItems: 'center', marginBottom: '6px' }}>
@@ -90,6 +91,8 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
   const updateLogo = (field, value) => updateConfig('brandLogo', { ...logoCfg, [field]: value });
   const glow = { ...DNA_GLOW_DEFAULTS, ...(appConfig.dnaGlow || {}) };
   const updateGlow = (field, value) => updateConfig('dnaGlow', { ...(appConfig.dnaGlow || {}), [field]: value });
+  const tvg = { ...TV_GLASS_DEFAULTS, ...(appConfig.tvGlass || {}) };
+  const updateTvGlass = (field, value) => updateConfig('tvGlass', { ...(appConfig.tvGlass || {}), [field]: value });
   
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gridAutoRows: 'min-content', gap: '16px', width: '100%', height: '100%' }}>
@@ -182,6 +185,30 @@ export function OrbitSettingsPanel({ appConfig, updateConfig, updatePowerSaving,
         <DenseSlider desc="O kolik paprsky zeslábnou při rozvíření DNA myší (rozházené svítící particly jinak dělají paprsky přes celou obrazovku)." label="Útlum při víření" min={0} max={1} step={0.05} color="#22d3ee" value={vl.stirCut ?? 0.6} onChange={v => updateVL('stirCut', v)} />
         <DenseSlider desc="O kolik paprsky zeslábnou při scrollu (podle rychlosti jízdy kamery)." label="Útlum při scrollu" min={0} max={1} step={0.05} color="#22d3ee" value={vl.scrollCut ?? 0.5} onChange={v => updateVL('scrollCut', v)} />
         <DenseSlider desc="O kolik paprsky (i mlha z prachu) slábnou přes sklo aktivní televize – jinak kladou závoj přes video. 0 = jako dřív." label="Paprsky přes sklo TV" min={0} max={1} step={0.05} color="#22d3ee" value={appConfig.tvLight?.rayMask ?? 0.85} onChange={v => updateTvLight('rayMask', v)} />
+      </DashboardCard>
+
+      <DashboardCard title="Sklo televize" icon="📺" color="#f472b6">
+        <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 8 }}>Skleněné desky s videem. Televize sama převezme poměr stran videa. Co tu nastavíš, přebije custom properties z Blenderu.</div>
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#f472b6', marginBottom: '8px' }}>Video za sklem</div>
+        <DenseSlider desc="Jak moc je video vidět (zbytek = scéna za sklem)." label="Viditelnost videa" min={0} max={1} step={0.01} color="#f472b6" value={tvg.opacity} onChange={v => updateTvGlass('opacity', v)} />
+        <DenseSlider desc="Matnost skla: příměs rozmazaného videa. 0 = ostré video, 1 = úplně mléčné." label="Matnost" min={0} max={1} step={0.01} color="#f472b6" value={tvg.frost} onChange={v => updateTvGlass('frost', v)} />
+        <DenseSlider desc="Jak moc sklo převezme barvu svého videa (0 = barva skla z Blenderu)." label="Sklo do barvy videa" min={0} max={1} step={0.01} color="#f472b6" value={tvg.tint} onChange={v => updateTvGlass('tint', v)} />
+        <DenseSlider desc="Okraj čistého skla kolem obrazu (world). Mění i rozměr televize podle poměru stran." label="Okraj skla" min={0} max={0.2} step={0.005} color="#f472b6" value={tvg.inset} onChange={v => updateTvGlass('inset', v)} />
+        <DenseSlider desc="Měkkost hrany obrazu (podíl menší poloosy skla)." label="Měkkost hrany" min={0.01} max={0.5} step={0.01} color="#f472b6" value={tvg.edge} onChange={v => updateTvGlass('edge', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#f472b6', marginBottom: '8px' }}>Led na hranách (lom světla videa)</div>
+        <DenseSlider desc="Síla ledu: k hraně obrazu roste jemný ostrý lom, obraz se trhá na střepy s disperzí a hranice se ztratí pod lomeným světlem. 0 = vypnuto." label="Síla ledu" min={0} max={4} step={0.05} color="#f472b6" value={tvg.ice} onChange={v => updateTvGlass('ice', v)} />
+        <DenseSlider desc="Jak široký pás podél hran led zabírá (podíl menší poloosy skla)." label="Šířka pásu" min={0.05} max={1} step={0.01} color="#f472b6" value={tvg.iceBand} onChange={v => updateTvGlass('iceBand', v)} />
+        <DenseSlider desc="Hustota střepů. Víc = jemnější, drobnější lom." label="Jemnost střepů" min={4} max={60} step={1} color="#f472b6" value={tvg.iceScale} onChange={v => updateTvGlass('iceScale', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#f472b6', marginBottom: '8px' }}>Lom a duhový lesk</div>
+        <DenseSlider desc="Síla lomu v měkkých skvrnách skla (posun + rozklad barev). Moc = zdvojený text." label="Lom" min={0} max={4} step={0.05} color="#f472b6" value={tvg.refract} onChange={v => updateTvGlass('refract', v)} />
+        <DenseSlider desc="Duhový lesk (tenká vrstva) ve skvrnách a na hraně skla, svítí světlem videa." label="Duhový lesk" min={0} max={3} step={0.05} color="#f472b6" value={tvg.iri} onChange={v => updateTvGlass('iri', v)} />
+        <DenseSlider desc="Velikost skvrn lomu a lesku. Víc = menší, hustší skvrny." label="Hustota skvrn" min={0.3} max={6} step={0.05} color="#f472b6" value={tvg.iriScale} onChange={v => updateTvGlass('iriScale', v)} />
+        <div style={{ height: '8px' }} />
+        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#f472b6', marginBottom: '8px' }}>Sklo (všechny desky)</div>
+        <DenseSlider desc="Jas scény za sklem (průhlednost). Víc = víc vidět DNA za sklem, ale jasná DNA pak prosvítá i do paprsků." label="Scéna za sklem" min={0} max={2} step={0.05} color="#f472b6" value={tvg.bg} onChange={v => updateTvGlass('bg', v)} />
+        <DenseSlider desc="Mléčný rozptyl ve skle (závoj v barvě skla)." label="Mléčnost skla" min={0} max={1} step={0.01} color="#f472b6" value={tvg.milk} onChange={v => updateTvGlass('milk', v)} />
       </DashboardCard>
 
       <DashboardCard title="Světlo DNA a 2D voda (ORBIT)" icon="✨" color="#a78bfa">

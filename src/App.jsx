@@ -625,7 +625,7 @@ function BlenderScene({ visible, onSelect, appConfig, pagesData, textures, yStep
   }
 
   // skleněná televize (nody TV_* z Blenderu): sklo s lomem, video je portál uvnitř skla
-  const tv = useTvGlass(nodes, baseDeskNode, fade);
+  const tv = useTvGlass(nodes, baseDeskNode, fade, appConfig.tvGlass);
 
   // Rotace UV o 180Â° pĹ™Ă­mo na geometrii - eliminuje potĹ™ebu duplicitnĂ­ VideoTexture pro desky
   const deskGeometry = useMemo(() => {

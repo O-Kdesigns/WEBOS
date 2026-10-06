@@ -26,7 +26,8 @@ import { TEX_LOD0 } from './glslTexLod0';
 //   tvIriScale (1.4 = velikost skvrn), tvRefract (1.2 = síla lomu), tvVidEdge (0.12 = měkkost hrany obrazu),
 //   tvVidInset (0.035 = okraj skla kolem obrazu), tvVidTint (1 = sklo do barvy videa),
 //   tvIce (1.6 = led na hranách: jemný ostrý lom trhá obraz), tvIceBand (0.4 = šířka pásu), tvIceScale (18 = hustota střepů)
-//   DEV: window.__tvVidOverride = { opacity, frost, iri, iriScale, refract, edge, tint, ice, iceBand, iceScale, aspect (vynutí poměr stran) }
+//   Editor: Globální → 📺 Sklo televize (config `tvGlass`, stejné klíče + inset, bg, milk; přebíjí Blender).
+//   DEV: window.__tvVidOverride = { opacity, frost, iri, iriScale, refract, edge, tint, ice, iceBand, iceScale, inset, bg, milk, aspect (vynutí poměr stran) }
 
 const FBO_SCALE = 0.5;
 
@@ -381,7 +382,15 @@ const BLUR_FRAG = `${TEX_LOD0}
     gl_FragColor = vec4(s / 36.0, 1.0);
   }
 `;
+// Editor (Globální → 📺 Sklo televize) ukládá config `tvGlass`; přednost: DEV override > Editor > Blender (custom
+// properties tv*) > výchozí. bg/milk platí pro všechna skla, ostatní jen pro sklo s videem.
+const TV_GLASS_UNIFORMS = {
+  opacity: 'uVidOpacity', frost: 'uFrostBlur', iri: 'uIri', iriScale: 'uIriScale', refract: 'uRefract', edge: 'uVidEdge',
+  tint: 'uVidTint', ice: 'uIce', iceBand: 'uIceBand', iceScale: 'uIceScale', bg: 'uBgLevel', milk: 'uMilk'
+};
 const VID_DEFAULTS = { ice: 1.6, iceBand: 0.4, iceScale: 18, opacity: 0.8, frost: 0.35, iri: 1, iriScale: 1.4, refract: 1.2, edge: 0.12, inset: 0.035, tint: 1 };
+// pro Editor: výchozí hodnoty sliderů (bg/milk = hodnoty z Blenderu, newworldorder9ai)
+export const TV_GLASS_DEFAULTS = { ...VID_DEFAULTS, bg: 0.6, milk: 0.4 };
 
 function createVideoBlur() {
   const material = new THREE.ShaderMaterial({
@@ -433,7 +442,7 @@ function createVideoBlur() {
 }
 
 // Díly skla + sdílená textura se scénou bez skla (1/2 rozlišení, jen když je sklo vidět)
-export function useTvGlass(nodes, deskNode, fade) {
+export function useTvGlass(nodes, deskNode, fade, glassCfg) {
   const gl = useThree(s => s.gl);
   const size = useThree(s => s.size);
   const dpr = useThree(s => s.viewport.dpr);
@@ -531,18 +540,7 @@ export function useTvGlass(nodes, deskNode, fade) {
       const tex = mu.uHasVideo.value > 0.5 ? mu.tVideo.value : null;
       mu.uVidAmb.value = tex ? 1 : 0;
       if (tex) mu.tVidBlur.value = vidBlur.get(gl, tex, frame);
-      if (vo) {
-        if (vo.opacity != null) mu.uVidOpacity.value = vo.opacity;
-        if (vo.frost != null) mu.uFrostBlur.value = vo.frost;
-        if (vo.iri != null) mu.uIri.value = vo.iri;
-        if (vo.iriScale != null) mu.uIriScale.value = vo.iriScale;
-        if (vo.refract != null) mu.uRefract.value = vo.refract;
-        if (vo.edge != null) mu.uVidEdge.value = vo.edge;
-        if (vo.tint != null) mu.uVidTint.value = vo.tint;
-        if (vo.ice != null) mu.uIce.value = vo.ice;
-        if (vo.iceBand != null) mu.uIceBand.value = vo.iceBand;
-        if (vo.iceScale != null) mu.uIceScale.value = vo.iceScale;
-      }
+      applyGlassCfg(mesh, glassCfg, vo);
     }
     if ((frame & 255) === 0) vidBlur.prune(frame);
     if (!anyVisible) return;
@@ -571,6 +569,22 @@ export function useTvGlass(nodes, deskNode, fade) {
   });
 
   return useMemo(() => ({ parts, shared, hasVideo: parts.some(p => p.video) }), [parts, shared]);
+}
+
+// Nastavení z Editoru / DEV override -> uniformy (jen viditelná skla, pár přiřazení za snímek)
+function applyGlassCfg(mesh, cfg, vo) {
+  const mu = mesh.material.uniforms, base = mesh.material.userData.tvBase;
+  if (!base) return;
+  for (const k in TV_GLASS_UNIFORMS) {
+    const v = vo?.[k] ?? cfg?.[k] ?? base[k];
+    if (v != null) mu[TV_GLASS_UNIFORMS[k]].value = v;
+  }
+  const fit = mesh.userData.tvFit;
+  const inset = vo?.inset ?? cfg?.inset ?? base.inset;
+  if (fit && inset != null && inset !== fit.inset) {
+    fit.inset = inset; fit.aspect = 0; // přepočítat rozměr skla a mapu videa
+    mu.uVidRadius.value = Math.max(base.radius - inset, 0);
+  }
 }
 
 // Sklo s videem: plynule dojede na poměr stran zdroje (dokud ho metadata neřeknou, platí poměr GlassDesk).
@@ -603,7 +617,7 @@ function makeMaterial(part, shared) {
   const ud = part.userData;
   const v = part.video;
   const inset = ud.tvVidInset ?? VID_DEFAULTS.inset;
-  return new THREE.ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     uniforms: {
       ...shared.uniforms,
       tVideo: { value: null },
@@ -646,6 +660,11 @@ function makeMaterial(part, shared) {
     depthWrite: true,
     toneMapped: false
   });
+  // hodnoty z Blenderu / výchozí – platí, když Editor danou položku nenastavil
+  const base = { inset, radius: ud.tvRadius ?? 0.08 };
+  for (const k in TV_GLASS_UNIFORMS) base[k] = mat.uniforms[TV_GLASS_UNIFORMS[k]].value;
+  mat.userData.tvBase = base;
+  return mat;
 }
 
 function TvGlassMesh({ part, shared, videoTexture, active }) {
