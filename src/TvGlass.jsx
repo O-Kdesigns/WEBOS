@@ -24,8 +24,9 @@ import { TEX_LOD0 } from './glslTexLod0';
 // „contain“ do původního rozměru z Blenderu.
 //   tvVidOpacity (0.8 = krytí videa), tvFrostBlur (0.35 = matnost obrazu), tvIri (1 = duhový lesk),
 //   tvIriScale (1.4 = velikost skvrn), tvRefract (1.2 = síla lomu), tvVidEdge (0.12 = měkkost hrany obrazu),
-//   tvVidInset (0.035 = okraj skla kolem obrazu), tvVidTint (1 = sklo do barvy videa)
-//   DEV: window.__tvVidOverride = { opacity, frost, iri, iriScale, refract, edge, tint, aspect (vynutí poměr stran) }
+//   tvVidInset (0.035 = okraj skla kolem obrazu), tvVidTint (1 = sklo do barvy videa),
+//   tvIce (1.6 = led na hranách: jemný ostrý lom trhá obraz), tvIceBand (0.4 = šířka pásu), tvIceScale (18 = hustota střepů)
+//   DEV: window.__tvVidOverride = { opacity, frost, iri, iriScale, refract, edge, tint, ice, iceBand, iceScale, aspect (vynutí poměr stran) }
 
 const FBO_SCALE = 0.5;
 
@@ -75,7 +76,7 @@ const fragmentShader = `${TEX_LOD0}
   uniform vec3 uTint, uRim;
   uniform float uRimStrength, uMilk, uIor, uDistort, uFrost, uScratch, uBgLevel;
   uniform sampler2D tVidBlur;
-  uniform float uVidAmb, uVidTint, uVidOpacity, uFrostBlur, uIri, uIriScale, uRefract, uVidEdge, uVidRadius;
+  uniform float uVidAmb, uVidTint, uVidOpacity, uFrostBlur, uIri, uIriScale, uRefract, uVidEdge, uVidRadius, uIce, uIceBand, uIceScale;
   varying vec3 vLocal;
   varying vec3 vLN;
   varying vec3 vN;
@@ -201,17 +202,36 @@ const fragmentShader = `${TEX_LOD0}
     vec3 irid = vec3(0.0);
     if (vidK > 0.5) {
       float patchM = smoothstep(0.42, 0.8, n0);
-      vec2 vr = vuv + grad * 0.010 * uRefract;
-      vec2 dsp = grad * 0.004 * uRefract;
+      // led na hranách (Oliver 2026-10-06, Active Theory – spodní hrana „EXPERTS“): k hraně obrazu roste
+      // jemný ostrý lom – obraz se trhá na drobné střepy s disperzí a hranice se ztratí pod lomeným světlem
+      // videa (žádné rozmazání ani rámeček). Střepy protažené vodorovně, + zrno pro vysoký detail.
+      float eW = 1.0 - smoothstep(0.0, max(uIceBand * minH, 1e-3), -sdVid); // 1 = hrana obrazu, 0 = uvnitř
+      vec2 iceD = vec2(0.0);
+      float iceGlint = 0.0;
+      if (eW * uIce > 0.001) {
+        vec2 ip = q / minH * uIceScale;
+        vec2 d1 = vec2(noise(ip * vec2(1.0, 2.6) + 3.1), noise(ip * vec2(1.0, 2.6) + 9.2)) - 0.5;
+        vec2 d2 = vec2(noise(ip * 3.7 + 1.3), noise(ip * 3.7 + 7.7)) - 0.5;
+        vec2 cell = floor(ip * 22.0);
+        vec2 d3 = vec2(hash(cell), hash(cell + 17.0)) - 0.5;
+        float k = eW * eW * uIce;
+        iceD = (d1 + d2 * 0.6 + d3 * 0.35) * k * 0.06 * minH; // lokální jednotky skla
+        iceGlint = k * smoothstep(0.25, 0.6, length(d2 + d3 * 0.5));
+      }
+      vec2 iceUv = iceD * vScale;
+      float sdVidI = sdRR((vuv + iceUv - 0.5) / vScale, 0.5 / vScale, uVidRadius); // roztrhaná hranice
+      vec2 vr = vuv + grad * 0.010 * uRefract + iceUv;
+      vec2 dsp = grad * 0.004 * uRefract + iceUv * 0.3;
       vec3 vid = vec3(texture2D(tVideo, clamp(vr - dsp, 0.0, 1.0)).r,
                       texture2D(tVideo, clamp(vr, 0.0, 1.0)).g,
                       texture2D(tVideo, clamp(vr + dsp, 0.0, 1.0)).b);
       vec3 vblur = vidBlurAt(vr);
-      vid = mix(vid, vblur, uFrostBlur * (1.0 - 0.6 * patchM));
-      float inW = smoothstep(0.0, uVidEdge * minH, -sdVid);
+      vid = mix(vid, vblur, uFrostBlur * (1.0 - 0.6 * patchM) * (1.0 - 0.7 * eW * min(uIce, 1.0))); // v ledu ostré střepy
+      float inW = smoothstep(0.0, uVidEdge * minH, -sdVidI);
       vid = mix(vblur * 0.85, vid, inW);
-      vidM = uVidOpacity * mix(0.6, 1.0, inW) * exp(-max(sdVid, 0.0) / (0.05 * minH));
+      vidM = uVidOpacity * mix(0.6, 1.0, inW) * exp(-max(sdVidI, 0.0) / (0.05 * minH));
       col = mix(col, vid, vidM);
+      col += vid * iceGlint * 0.35 * vidM; // lom soustředí světlo videa do jisker
       // duhový lesk (thin-film): barva podle tloušťky vrstvy (pole) a úhlu pohledu, světlo bere z videa
       float tf = n0 * 2.2 + (1.0 - ndv) * 1.4 + uTime * 0.02;
       irid = 0.5 + 0.5 * cos(6.2831 * (tf + vec3(0.0, 0.33, 0.67)));
@@ -361,7 +381,7 @@ const BLUR_FRAG = `${TEX_LOD0}
     gl_FragColor = vec4(s / 36.0, 1.0);
   }
 `;
-const VID_DEFAULTS = { opacity: 0.8, frost: 0.35, iri: 1, iriScale: 1.4, refract: 1.2, edge: 0.12, inset: 0.035, tint: 1 };
+const VID_DEFAULTS = { ice: 1.6, iceBand: 0.4, iceScale: 18, opacity: 0.8, frost: 0.35, iri: 1, iriScale: 1.4, refract: 1.2, edge: 0.12, inset: 0.035, tint: 1 };
 
 function createVideoBlur() {
   const material = new THREE.ShaderMaterial({
@@ -519,6 +539,9 @@ export function useTvGlass(nodes, deskNode, fade) {
         if (vo.refract != null) mu.uRefract.value = vo.refract;
         if (vo.edge != null) mu.uVidEdge.value = vo.edge;
         if (vo.tint != null) mu.uVidTint.value = vo.tint;
+        if (vo.ice != null) mu.uIce.value = vo.ice;
+        if (vo.iceBand != null) mu.uIceBand.value = vo.iceBand;
+        if (vo.iceScale != null) mu.uIceScale.value = vo.iceScale;
       }
     }
     if ((frame & 255) === 0) vidBlur.prune(frame);
@@ -612,6 +635,9 @@ function makeMaterial(part, shared) {
       uIriScale: { value: ud.tvIriScale ?? VID_DEFAULTS.iriScale },
       uRefract: { value: ud.tvRefract ?? VID_DEFAULTS.refract },
       uVidEdge: { value: ud.tvVidEdge ?? VID_DEFAULTS.edge },
+      uIce: { value: ud.tvIce ?? VID_DEFAULTS.ice },
+      uIceBand: { value: ud.tvIceBand ?? VID_DEFAULTS.iceBand },
+      uIceScale: { value: ud.tvIceScale ?? VID_DEFAULTS.iceScale },
       uVidRadius: { value: Math.max((ud.tvRadius ?? 0.08) - inset, 0.0) }
     },
     vertexShader,
